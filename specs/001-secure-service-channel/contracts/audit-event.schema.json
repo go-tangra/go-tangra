@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://go-freya.dev/schemas/audit-event/v1.json",
+  "title": "Freya Audit Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["time", "type", "outcome", "reason", "local_id", "correlation_id"],
+  "properties": {
+    "time": { "type": "string", "format": "date-time", "description": "RFC 3339 with nanoseconds, UTC" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "authn_refused", "authz_refused", "authz_allowed",
+        "identity_issued", "identity_renewed", "identity_renewal_failed", "identity_expired",
+        "trust_bundle_updated", "policy_loaded", "policy_load_failed",
+        "insecure_mode_enabled", "limit_exceeded", "channel_refused_downgrade"
+      ]
+    },
+    "outcome": { "type": "string", "enum": ["refused", "ok", "failed"] },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "no_identity", "untrusted", "identity_expired", "identity_not_yet_valid", "identity_revoked",
+        "name_mismatch", "downgrade_refused", "explicit_allow", "explicit_deny", "no_matching_rule",
+        "no_policy", "limit_exceeded", "renewed", "issued", "provider_unavailable", "bundle_empty",
+        "policy_invalid", "policy_source_unavailable", "local_dev", "allow_all", "bundle_updated", "loaded"
+      ],
+      "description": "Closed vocabulary; never peer-supplied text."
+    },
+    "local_id": { "type": "string", "pattern": "^spiffe://" },
+    "claimed_peer_id": { "type": "string" },
+    "verified_peer_id": { "type": "string" },
+    "operation": { "type": "string", "maxLength": 256 },
+    "correlation_id": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$" },
+    "trace_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "rule_id": { "type": "string" },
+    "policy_version": { "type": "string" },
+    "remote_addr": { "type": "string" },
+    "attrs": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Passes through the redacting handler; forbidden keys are replaced with [REDACTED]."
+    }
+  },
+  "examples": [
+    {
+      "time": "2026-09-15T12:00:00.000000000Z",
+      "type": "authz_refused",
+      "outcome": "refused",
+      "reason": "no_matching_rule",
+      "local_id": "spiffe://example.org/svc/inventory",
+      "claimed_peer_id": "spiffe://example.org/svc/billing",
+      "verified_peer_id": "spiffe://example.org/svc/billing",
+      "operation": "/inventory.v1.Inventory/Reserve",
+      "correlation_id": "0190f7c2-6a3e-7c1a-9b2e-2f6f9d1b4c55",
+      "policy_version": "2026-09-15.1",
+      "remote_addr": "10.0.3.17:48122"
+    }
+  ]
+}

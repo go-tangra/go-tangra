@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://go-freya.dev/schemas/policy/v1.json",
+  "title": "Freya Authorization Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "rules"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Opaque policy version (e.g. git SHA); recorded in audit events."
+    },
+    "rules": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "from", "to", "effect"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]{1,64}$",
+          "description": "Unique within the document; surfaced in audit events only."
+        },
+        "from": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/spiffeGlob" },
+          "description": "Caller SPIFFE IDs or globs."
+        },
+        "to": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/serviceGlob" },
+          "description": "Callee service names or globs."
+        },
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "default": ["*"],
+          "items": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "description": "Method globs: '/pkg.Service/Method' for gRPC, 'VERB /path' for HTTP, '*' for all."
+        },
+        "effect": { "type": "string", "enum": ["allow", "deny"] }
+      }
+    },
+    "spiffeGlob": {
+      "type": "string",
+      "pattern": "^spiffe://[a-z0-9.-]{1,255}/svc/[a-z0-9*?-]{1,63}$"
+    },
+    "serviceGlob": {
+      "type": "string",
+      "pattern": "^[a-z0-9*?-]{1,63}$"
+    }
+  },
+  "examples": [
+    {
+      "version": "2026-09-15.1",
+      "rules": [
+        { "id": "orders-to-inventory", "from": ["spiffe://example.org/svc/orders"], "to": ["inventory"], "operations": ["/inventory.v1.Inventory/Reserve"], "effect": "allow" },
+        { "id": "block-legacy", "from": ["spiffe://example.org/svc/legacy-*"], "to": ["*"], "effect": "deny" }
+      ]
+    }
+  ]
+}

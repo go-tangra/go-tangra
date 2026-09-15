@@ -1,0 +1,9 @@
+# Authorization policy for the example: orders may reserve from inventory,
+# nothing else is allowed (deny by default).
+version: quickstart
+rules:
+  - id: orders-to-inventory
+    from: ["spiffe://example.org/svc/orders"]
+    to: ["inventory"]
+    operations: ["/inventory.v1.Inventory/Reserve"]
+    effect: allow

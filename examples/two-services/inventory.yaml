@@ -1,0 +1,17 @@
+# Inventory service (callee). Run `make testca` first to create .dev/ca/.
+service_name: inventory
+trust_domain: example.org
+env: dev
+identity:
+  provider: file
+  file:
+    cert: .dev/ca/inventory.pem
+    key: .dev/ca/inventory.key
+    bundle: .dev/ca/ca.pem
+authz:
+  source: file
+  path: examples/two-services/policy.yaml
+server:
+  grpc_addr: 127.0.0.1:9443
+admin:
+  addr: 127.0.0.1:9090

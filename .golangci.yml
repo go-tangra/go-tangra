@@ -1,0 +1,35 @@
+version: "2"
+run:
+  timeout: 5m
+  build-tags: [integration, bench]
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - gosec
+    - errcheck
+    - gocritic
+    - revive
+    - ineffassign
+    - unused
+    - bodyclose
+    - noctx
+  settings:
+    gosec:
+      severity: medium
+      confidence: medium
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+    gocritic:
+      enabled-tags: [diagnostic, performance]
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [gosec, noctx]
+      - path: identity/localdev/
+        text: "G401|G402|G404"
+formatters:
+  enable: [gofmt, goimports]

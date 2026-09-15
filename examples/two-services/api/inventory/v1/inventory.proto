@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package inventory.v1;
+
+option go_package = "github.com/go-freya/freya/examples/two-services/api/inventory/v1;inventoryv1";
+
+// Inventory reserves stock for orders. It is intentionally tiny: the point of
+// the example is the secure channel, not the domain.
+service Inventory {
+  rpc Reserve(ReserveRequest) returns (ReserveResponse);
+}
+
+message ReserveRequest {
+  string sku = 1;
+  int32 quantity = 2;
+}
+
+message ReserveResponse {
+  string reservation_id = 1;
+  // reserved_by is the verified SPIFFE service name of the caller.
+  string reserved_by = 2;
+}

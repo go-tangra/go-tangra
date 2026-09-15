@@ -1,0 +1,5 @@
+version: v2
+modules:
+  - path: examples/two-services/api
+lint:
+  use: [STANDARD]

@@ -1,0 +1,20 @@
+# Orders service (caller).
+service_name: orders
+trust_domain: example.org
+env: dev
+identity:
+  provider: file
+  file:
+    cert: .dev/ca/orders.pem
+    key: .dev/ca/orders.key
+    bundle: .dev/ca/ca.pem
+authz:
+  source: file
+  path: examples/two-services/policy.yaml
+server:
+  grpc_addr: 127.0.0.1:9444
+admin:
+  addr: 127.0.0.1:9091
+discovery:
+  static:
+    inventory: ["127.0.0.1:9443"]

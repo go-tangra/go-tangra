@@ -1,0 +1,43 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: { goarch: [amd64, arm64] }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - run: go mod verify
+      - run: GOARCH=${{ matrix.goarch }} go build -trimpath ./...
+      - name: reproducible build
+        run: |
+          GOARCH=${{ matrix.goarch }} go build -trimpath -o /tmp/a ./cmd/freya-devca
+          GOARCH=${{ matrix.goarch }} go build -trimpath -o /tmp/b ./cmd/freya-devca
+          cmp /tmp/a /tmp/b
+      - if: matrix.goarch == 'amd64'
+        run: make tools
+      - if: matrix.goarch == 'amd64'
+        run: make lint
+      - if: matrix.goarch == 'amd64'
+        run: make vuln
+      - if: matrix.goarch == 'amd64'
+        run: make test
+      - if: matrix.goarch == 'amd64'
+        run: make cover
+      - if: matrix.goarch == 'amd64'
+        run: go test -run xxx -fuzz=FuzzParseSPIFFEID -fuzztime=10s ./tests/fuzz/
+  contrib:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - run: |
+          for m in contrib/audit-timescale contrib/policy-valkey; do
+            if [ -f "$m/go.mod" ]; then (cd "$m" && go test -tags integration -count=1 ./...); fi
+          done
