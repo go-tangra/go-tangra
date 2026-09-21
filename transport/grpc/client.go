@@ -88,9 +88,12 @@ func (p *Pool) Conn(ctx context.Context, service string) (*grpc.ClientConn, erro
 	return conn, nil
 }
 
-// Rotate is called when the local identity changed: existing connections are
-// drained (closed after the request timeout so in-flight calls finish) and the
-// next Conn dials with the new credential.
+// Rotate drains the pool: existing connections are closed after the request
+// timeout (so in-flight calls finish) and the next Conn dials fresh. It is
+// used ONLY when the trust bundle changes (a root added or removed) so peers
+// are re-verified against the new root set. Leaf renewal must NOT call this:
+// tlsconf serves the renewed cert per-handshake, so closing live connections
+// would needlessly drop long-lived streams on every rotation.
 func (p *Pool) Rotate() {
 	p.mu.Lock()
 	old := p.conns

@@ -82,6 +82,12 @@ var _ transport.Runtime = (*Runtime)(nil)
 // New builds a runtime for service name using ca, with an allow-all authorizer.
 func New(t *testing.T, ca *testutil.CA, name string) *Runtime {
 	t.Helper()
+	return NewTB(t, ca, name)
+}
+
+// NewTB is New for any testing.TB (fuzz and benchmark harnesses).
+func NewTB(tb testing.TB, ca *testutil.CA, name string) *Runtime {
+	tb.Helper()
 	crt := ca.MustIssue(name, testutil.IssueOptions{})
 	logs := &testutil.LogCapture{}
 	log := slog.New(audit.NewRedactingHandler(logs.Handler()))

@@ -15,7 +15,7 @@ import (
 const Redacted = "[REDACTED]"
 
 // forbiddenKeyParts are matched case-insensitively as substrings of attribute keys.
-var forbiddenKeyParts = []string{"key", "private", "secret", "token", "password", "authorization"}
+var forbiddenKeyParts = []string{"key", "private", "secret", "token", "password", "authorization", "phone"}
 
 type redactingHandler struct{ inner slog.Handler }
 

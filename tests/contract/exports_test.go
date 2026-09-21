@@ -2,6 +2,7 @@ package contract
 
 import (
 	"github.com/go-freya/freya"
+	"github.com/go-freya/freya/transport/edge"
 	tgrpc "github.com/go-freya/freya/transport/grpc"
 	thttp "github.com/go-freya/freya/transport/http"
 )
@@ -46,5 +47,19 @@ func httpExports() map[string]any {
 		"WithMiddleware": thttp.WithMiddleware,
 		"WithTimeout":    thttp.WithTimeout,
 		"Server":         thttp.Server{},
+		"NewClient":      thttp.NewClient,
+		"RequestTimeout": thttp.RequestTimeout,
+	}
+}
+
+func edgeExports() map[string]any {
+	return map[string]any{
+		"NewServer":       edge.NewServer,
+		"WithMiddleware":  edge.WithMiddleware,
+		"IssueCSRFCookie": edge.IssueCSRFCookie,
+		"Nonce":           edge.Nonce,
+		"WithNonce":       edge.WithNonce,
+		"Server":          edge.Server{},
+		"Config":          edge.Config{},
 	}
 }

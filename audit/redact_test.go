@@ -25,9 +25,9 @@ func TestRedactsForbiddenKeys(t *testing.T) {
 	log, buf := capture(t)
 	log.Info("x",
 		"api_key", "AKIA123", "Private_Key", "pk", "client_secret", "s3", "TOKEN", "tok",
-		"password", "pw", "Authorization", "Bearer abc", "x-request-id", "keep-me", "peer", "keep-too")
+		"password", "pw", "Authorization", "Bearer abc", "x-request-id", "keep-me", "peer", "keep-too", "phone", "+385911234567", "phone_number", "+1415")
 	out := buf.String()
-	for _, leaked := range []string{"AKIA123", `"pk"`, `"s3"`, `"tok"`, `"pw"`, "Bearer abc"} {
+	for _, leaked := range []string{"AKIA123", `"pk"`, `"s3"`, `"tok"`, `"pw"`, "Bearer abc", "+385", "+1415"} {
 		if strings.Contains(out, leaked) {
 			t.Errorf("leaked %q in %s", leaked, out)
 		}
@@ -37,8 +37,8 @@ func TestRedactsForbiddenKeys(t *testing.T) {
 			t.Errorf("wrongly redacted %q in %s", kept, out)
 		}
 	}
-	if strings.Count(out, Redacted) < 6 {
-		t.Errorf("expected at least 6 redactions: %s", out)
+	if strings.Count(out, Redacted) < 8 {
+		t.Errorf("expected at least 8 redactions: %s", out)
 	}
 }
 

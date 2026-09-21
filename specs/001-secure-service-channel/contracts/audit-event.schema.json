@@ -23,7 +23,7 @@
         "no_identity", "untrusted", "identity_expired", "identity_not_yet_valid", "identity_revoked",
         "name_mismatch", "downgrade_refused", "explicit_allow", "explicit_deny", "no_matching_rule",
         "no_policy", "limit_exceeded", "renewed", "issued", "provider_unavailable", "bundle_empty",
-        "policy_invalid", "policy_source_unavailable", "local_dev", "allow_all", "bundle_updated", "loaded"
+        "policy_invalid", "policy_source_unavailable", "local_dev", "allow_all", "bundle_updated", "loaded", "csrf_refused"
       ],
       "description": "Closed vocabulary; never peer-supplied text."
     },

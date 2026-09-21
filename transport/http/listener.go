@@ -26,6 +26,12 @@ type tlsListener struct {
 	errMu   sync.Mutex
 }
 
+// NewTLSListener wraps inner with eager, concurrent TLS handshakes; refused
+// handshakes are audited with the remote address (used by transport/edge too).
+func NewTLSListener(inner net.Listener, cfg *tls.Config, timeout time.Duration, rt transport.Runtime) net.Listener {
+	return newTLSListener(inner, cfg, timeout, rt)
+}
+
 func newTLSListener(inner net.Listener, cfg *tls.Config, timeout time.Duration, rt transport.Runtime) *tlsListener {
 	return &tlsListener{Listener: inner, cfg: cfg, timeout: timeout, rt: rt, conns: make(chan net.Conn), done: make(chan struct{})}
 }

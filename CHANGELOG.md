@@ -1,5 +1,114 @@
 # Changelog
 
+## 0.2.0 — unreleased
+
+### Added
+
+- `services/notification`: notification & messaging module (spec `006-notification-service`):
+  multi-channel channels (email over SMTP; sms/slack/sse declared) with
+  encrypted settings, Go-template rendering, a notification log, Zanzibar-style
+  access with `use`, internal messages with a scheduler and a per-user inbox, a
+  gateway-relayed live SSE stream with a header bell, tenant backups, statistics
+  and audit; `notification.v1` gRPC for services and a federated remote.
+- `services/warden`: credential vault module (spec `005-warden-secrets`):
+  folders, versioned secrets with material in HashiCorp Vault KV v2 and
+  references in TimescaleDB, Zanzibar-style grants evaluated in SQL, Bitwarden
+  import/export, tenant backups, statistics, health, password generator and
+  external email shares; federated remote for the platform shell.
+- `services/gateway`: manifest routes may set `client_address: true`; the
+  dispatcher then forwards the client IP as `X-Gateway-Client-Addr` and every
+  inbound `X-Gateway-*` header is dropped (`gatewayclient.Route.ClientAddress`).
+- `services/auth`: member-level `GET /api/v1/users?q=` (public profile search)
+  and `GET /api/v1/roles` (slug + display name) for subject pickers;
+  `Authorization/RegisterPermissions` accepts `builtin_grants` so a module
+  can grant its own permissions to built-in roles.
+- `services/warden`: share links carry the token in the URL fragment
+  (`/warden/share#<token>`) so it never reaches a request log; transfer and
+  backup routes declare a 120 s gateway timeout.
+- `services/gateway/shell`, `services/auth/console`: Materio design system
+  (palette, Inter, detached top bar, module-grouped navigation menus, light and
+  dark themes with a switch); the sign-in page follows it.
+- `services/warden`: the Secrets and Folders views merge into one explorer
+  (folder pane with new/rename/move/delete on the left, breadcrumb, subfolders
+  and secrets on the right); `/warden/folders` redirects to `/warden`
+  (manifest 1.1.0).
+- `services/warden`: the audit trail and permission views show names: audit
+  reads resolve secret, folder and share subjects (`subject_name`), and the UI
+  resolves user ids and role slugs through the auth module (batch profile
+  lookup, role list) for audit actors, grants and effective-access sources.
+
+- `transport/edge`: browser-facing TLS 1.3 listener (server auth only) with
+  security headers and CSP nonces, CSRF double-submit + Origin checks, per-IP
+  and per-route token buckets, body limits, certificate hot reload and a
+  development self-signed certificate outside production.
+- `services/auth`: tenant authentication and authorization service (spec
+  `002-tenant-auth-service`) with its console, `pkg/authclient` verifier
+  library and `auth.v1` service API.
+- `audit.ReasonCSRFRefused` in the closed audit vocabulary.
+- `freya.App.AddServer`, `transport/edge.ClientIP`, `internal/testrt.NewTB`.
+- `transport/http.NewClient(rt, expectedID)`: an `*http.Client` that presents the
+  service SVID, pins the peer SPIFFE ID (TLS 1.3, chain + SAN verification, no
+  hostname trust), never follows redirects, applies the runtime limits as
+  timeouts and audits refused handshakes as `authn_refused`. Used by the
+  application gateway (`services/gateway`, spec `003-application-gateway`) to
+  forward HTTP traffic to modules.
+- `transport/edge.Config.CSRFExempt`: a hook that lets a listener skip the
+  double-submit check for state-changing requests that carry no cookie
+  credential (bearer-token API clients through the gateway).
+- `transport/edge.RateLimit` fields carry `yaml`/`json` tags (`per_second`,
+  `burst`, `routes`).
+- `services/gateway`: the application gateway (spec `003-application-gateway`):
+  single public edge, module registration over mTLS with an allow-list and
+  leases, per-route/method permission enforcement through the auth module,
+  HTTP / gRPC / gRPC-web forwarding over the pinned channel, CASL abilities
+  derived from API permissions, a Module Federation shell, operations API and
+  UI, health circuit breaking, `pkg/gatewayclient` module SDK and a hello
+  example module.
+- `services/auth`: user groups and user profiles (spec
+  `004-groups-user-profiles`): flat tenant groups carrying roles (OpenFGA
+  `role.assignee: [user, group#member]`), effective roles in sessions and
+  tokens, group administration API and console screens, profiles (first/last
+  name, phone, avatar) with a content-validated avatar pipeline
+  (`golang.org/x/image`), `auth.v1.Profiles/Lookup`, invitations into groups.
+  Migrations `0005_groups_profiles`, `0006_session_reasons`.
+- `services/gateway`: `/gateway/v1/me` carries `display_name` and
+  `avatar_url`; the dispatcher honours `X-Freya-Identity-Refresh` from the auth
+  module; the shell header shows the signed-in person.
+- `services/auth`: gateway mode (`gateway.enabled`) serving the browser API
+  and the federated console remote (`npm run build:remote`, `/ui/`) on the
+  Freya HTTP server; `Sessions/Exchange` and `Sessions/MintToken` RPCs
+  (audited as `token_exchanged`); console permissions registered and granted
+  to builtin roles; `pkg/authmanifest`.
+
+### Security
+
+- `google.golang.org/grpc` upgraded to v1.83.2: `govulncheck` reported two
+  advisories reachable from `transport/grpc` in v1.82.x.
+- `identity` jitter falls back to the midpoint deterministically when the
+  randomness source fails (now covered by a test).
+- `audit` log redaction now also masks attributes whose key contains `phone`
+  (PII introduced by the auth service's user profiles, spec
+  `004-groups-user-profiles`).
+
+### Fixed
+
+- `transport/edge`: `WithNonce` attaches a CSP nonce to a context. The gateway
+  relays its edge nonce to modules in `X-CSP-Nonce` (client values dropped) and
+  the auth console uses it in gateway mode: Vuetify's inline theme stylesheet
+  was blocked by the gateway's CSP, leaving hover and focus states black.
+- `services/auth` console and `services/gateway` shell: the Material Design
+  Icons webfont (`@mdi/font`) is now bundled; Vuetify's default icon set
+  needs it, so checkboxes, navigation and chip icons were invisible.
+- `services/auth`: key rotation retires the active key before inserting its
+  successor (the store allows one active key); `RevokeUser` with a kept
+  session lists live sessions before marking them so the others' cached views
+  are evicted; the session revocation vocabulary matches the database check.
+- `services/auth`: audit rows are inserted with batched `INSERT`s — `COPY` is
+  refused on row-level-security tables — and OpenFGA permission objects use
+  `permission:<tenant>/<resource>~<action>` (object ids cannot contain `:`);
+  permission registration is idempotent; the bootstrap command binds
+  ephemeral ports so it runs beside a live service.
+
 ## 0.1.0 — unreleased
 
 Initial implementation of the secure service-to-service channel
@@ -37,7 +146,19 @@ Initial implementation of the secure service-to-service channel
 - Handshake refusal events carry the operator hint (e.g. clock-skew tolerance)
   in `attrs.detail`; the `reason` vocabulary stays closed.
 
+- `transport/edge`: browser-facing listener — server-authenticated TLS 1.3 only
+  (generated dev certificate refused in production), strict security headers with
+  per-request CSP nonces, double-submit CSRF with Origin/Sec-Fetch-Site checks,
+  per-IP/per-route rate limits (audited as `limit_exceeded`), body limits; new
+  audit reason `csrf_refused`.
+
 ### Added
+- `freya.App.AddServer` attaches extra Kratos transports (for example a
+  `transport/edge` listener) to the application lifecycle.
+- `transport/edge.ClientIP` exposes the proxy-aware client address the rate
+  limiter attributed a request to.
+- `internal/testrt.NewTB` builds the test runtime for any `testing.TB` (fuzz
+  and benchmark harnesses).
 
 - `freya.New/App` with `GRPC()`, `HTTP()`, `Client()`, `Identity()`, `Ready()`,
   `AdminURL()`, `IdentityState()`.

@@ -89,4 +89,5 @@ func TestNoPlaintextConstructor(t *testing.T) {
 	checkValues(t, "freya", freyaExports())
 	checkValues(t, "transport/grpc", grpcExports())
 	checkValues(t, "transport/http", httpExports())
+	checkValues(t, "transport/edge", edgeExports())
 }

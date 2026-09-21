@@ -66,6 +66,16 @@ examples/           two-services demo
 tests/              contract, integration, fuzz
 ```
 
+## Services
+
+`services/auth` is a multi-tenant authentication and authorization service
+built on Freya: console sign-in (password + TOTP), EdDSA tokens verified
+offline by other services (`services/auth/pkg/authclient`), OpenFGA-backed
+decisions, tenant administration and platform operators. It is its own Go
+module and is designed to move to a separate repository; see
+`services/auth/README.md`. The browser-facing `transport/edge` listener it
+uses is part of the framework.
+
 ## Development
 
 ```bash
@@ -78,3 +88,14 @@ make bench                     # SC-006: mTLS overhead vs plaintext
 See [docs/security-model.md](docs/security-model.md),
 [docs/configuration.md](docs/configuration.md),
 [docs/dependencies.md](docs/dependencies.md) and [SECURITY.md](SECURITY.md).
+
+## Application gateway (`services/gateway`)
+
+The platform's single public entry point: modules register their routes,
+permissions and federated user interfaces with it over the Freya channel; the
+gateway enforces permissions with the auth module and composes the shell. See
+`services/gateway/README.md`, `docs/security-model.md` and the module author
+guide `services/gateway/docs/module-guide.md`.
+
+- `services/notification`: the notification & messaging module (spec `006-notification-service`): channels, templates, a notification log, Zanzibar-style access, internal messages with a live inbox stream, backups, and `notification.v1` gRPC for services.
+- `services/warden`: the credential vault module (spec `005-warden-secrets`): folders, versioned secrets with material in HashiCorp Vault, Zanzibar-style sharing, Bitwarden transfer, backups, external shares.

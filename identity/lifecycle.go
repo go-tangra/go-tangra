@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"io"
 	"sync"
 	"time"
 )
@@ -82,10 +83,14 @@ func RenewTime(notBefore, notAfter time.Time, at, jitter float64) time.Time {
 	return notBefore.Add(point)
 }
 
-// randomUnit returns a uniformly distributed float in [0,1) from crypto/rand.
+// randReader is crypto/rand unless a test injects a failing source.
+var randReader io.Reader = rand.Reader
+
+// randomUnit returns a uniformly distributed float in [0,1) from crypto/rand;
+// without entropy the jitter degrades to the midpoint rather than failing.
 func randomUnit() float64 {
 	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
+	if _, err := io.ReadFull(randReader, b[:]); err != nil {
 		return 0.5
 	}
 	return float64(binary.BigEndian.Uint64(b[:])>>11) / (1 << 53)

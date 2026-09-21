@@ -1,0 +1,10 @@
+# build artifacts and vendored deps rebuilt inside the image
+**/node_modules
+**/dist
+**/dist-remote
+**/bin
+**/.artifacts
+**/coverage.out
+.dev
+.git
+**/*.log

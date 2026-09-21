@@ -66,6 +66,7 @@ const (
 	ReasonAllowAll                Reason = "allow_all"
 	ReasonBundleUpdated           Reason = "bundle_updated"
 	ReasonLoaded                  Reason = "loaded"
+	ReasonCSRFRefused             Reason = "csrf_refused"
 )
 
 var (
@@ -80,6 +81,7 @@ var (
 		ReasonExplicitDeny, ReasonNoMatchingRule, ReasonNoPolicy, ReasonLimitExceeded, ReasonRenewed,
 		ReasonIssued, ReasonProviderUnavailable, ReasonBundleEmpty, ReasonPolicyInvalid,
 		ReasonPolicySourceUnavailable, ReasonLocalDev, ReasonAllowAll, ReasonBundleUpdated, ReasonLoaded,
+		ReasonCSRFRefused,
 	}
 	typeSet    = toSet(allTypes)
 	reasonSet  = toSet(allReasons)

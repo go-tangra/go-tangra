@@ -35,7 +35,7 @@ cover:
 	./scripts/coverage-gate.sh $(COVER_OUT)
 
 testca:
-	$(GO) run ./cmd/freya-devca -out .dev/ca -trust-domain example.org -services orders,inventory,billing
+	cd services/lcm && $(GO) run ./cmd/lcm-devca -out ../../.dev/ca -trust-domain example.org -services orders,inventory,billing,auth,gateway,hello,warden,notification,lcm
 
 redaction-scan:
 	./scripts/redaction-scan.sh

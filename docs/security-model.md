@@ -36,6 +36,16 @@ TLS 1.3 handshake  →  recover  →  local identity guard  →  correlation  �
 - **authz**: evaluates the policy for (peer, callee, operation); deny wins; no
   policy = deny; refusals carry rule id and policy version in the audit event.
 
+## Browser edge (`transport/edge`)
+
+Browsers cannot present SPIFFE identities, so user-facing services expose a
+separate listener: TLS 1.3 only with a public certificate (hot-reloaded), no
+peer stage — the application authenticates end users itself. The chain is
+recover → correlation → tracing → instrumentation → rate limit → security
+headers → CSRF (double-submit + Origin/Sec-Fetch-Site) → body limit → handler.
+Refused handshakes, CSRF failures and limit violations are audited. See
+`specs/002-tenant-auth-service/contracts/edge-listener.md`.
+
 ## Wire contract
 
 See `specs/001-secure-service-channel/contracts/wire-protocol.md` for headers,

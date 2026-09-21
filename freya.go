@@ -36,6 +36,7 @@ import (
 
 // App is a configured Freya application. Obtain one with New.
 type App struct {
+	extra     []ktransport.Server
 	cfg       config.Config
 	log       *slog.Logger
 	emitter   *audit.Emitter
@@ -150,8 +151,13 @@ func (a *App) servers() []ktransport.Server {
 	if a.httpSrv != nil {
 		srvs = append(srvs, a.httpSrv)
 	}
-	return srvs
+	return append(srvs, a.extra...)
 }
+
+// AddServer attaches additional Kratos transports (for example a
+// transport/edge listener) to the application lifecycle. It must be called
+// before Run.
+func (a *App) AddServer(s ...ktransport.Server) { a.extra = append(a.extra, s...) }
 
 func (a *App) initIdentity(o options) error {
 	cfg := a.cfg
@@ -228,9 +234,14 @@ func (a *App) onIdentityEvent(e identity.LifecycleEvent) {
 			a.log.Info("identity renewed", "serial", attrs["serial"], "not_after", attrs["not_after"])
 			a.metrics.IdentityRenewal("ok")
 			a.audit(audit.Event{Type: audit.TypeIdentityRenewed, Outcome: audit.OutcomeOK, Reason: audit.ReasonRenewed, Attrs: attrs})
-			if a.pool != nil {
-				a.pool.Rotate()
-			}
+			// The renewed leaf is served per-handshake by tlsconf's
+			// GetClientCertificate/GetCertificate callbacks, so pooled
+			// connections keep working and new handshakes present the new
+			// cert. We deliberately do NOT drain the connection pool here:
+			// closing live *grpc.ClientConns would drop long-lived streams
+			// (registration leases, token verifier, revocation feed) on every
+			// rotation. Only a trust-bundle change (StateBundleUpdated) forces
+			// re-verification and drains the pool.
 		}
 	case identity.StateRenewing:
 		a.log.Debug("identity renewal started")
@@ -252,6 +263,13 @@ func (a *App) onIdentityEvent(e identity.LifecycleEvent) {
 		}
 		a.log.Info("trust bundle updated", "bundle_version", attrs["bundle_version"], "roots", attrs["roots"])
 		a.audit(audit.Event{Type: audit.TypeTrustBundleUpdated, Outcome: audit.OutcomeOK, Reason: audit.ReasonBundleUpdated, Attrs: attrs})
+		// A change to the trust roots (a root added or, more importantly,
+		// rotated out) is the one case where existing peers must be
+		// re-verified against the new root set, so drain the pool. This is
+		// rare: leaf renewal under a stable root does not fire here.
+		if a.pool != nil {
+			a.pool.Rotate()
+		}
 	}
 }
 
