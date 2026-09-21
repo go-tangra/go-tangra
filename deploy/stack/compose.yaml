@@ -1,0 +1,487 @@
+# Full containerized platform stack, bootstrapped end to end by lcm as the CA.
+# One command brings it up from a clean machine (builds images, plants the CA +
+# SVIDs, applies the gateway allow-list, seeds the operator); the only manual
+# step left is accepting the operator invite (password + TOTP). Workstation
+# credentials only.  Bring up:
+#   OPERATOR_EMAIL=you@example.org \
+#     docker compose -p freya-stack -f deploy/stack/compose.yaml up -d --build
+# Integrity (short-lived-SVID) mode: prefix CERT_TTL=5m RENEW_INTERVAL=210.
+# (warden is omitted here: its Vault AppRole bootstrap is a separate concern.)
+name: freya-stack
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    environment: { POSTGRES_PASSWORD: dev, POSTGRES_DB: postgres }
+    volumes: ["./init-db.sql:/docker-entrypoint-initdb.d/10-init.sql:ro"]
+    healthcheck: { test: ["CMD","pg_isready","-U","postgres","-h","127.0.0.1","-p","5432"], interval: 3s, timeout: 3s, retries: 60, start_period: 5s }
+  valkey:
+    image: valkey/valkey:8
+    command: ["valkey-server", "--requirepass", "dev", "--user", "gateway", "on", ">dev", "~*", "&*", "+@all", "--user", "auth", "on", ">dev", "~*", "&*", "+@all", "--user", "lcm", "on", ">dev", "~*", "&*", "+@all", "--user", "notification", "on", ">dev", "~*", "&*", "+@all", "--user", "warden", "on", ">dev", "~*", "&*", "+@all", "--user", "deployer", "on", ">dev", "~*", "&*", "+@all", "--user", "paperless", "on", ">dev", "~*", "&*", "+@all", "--user", "inventory", "on", ">dev", "~*", "&*", "+@all", "--user", "ipam", "on", ">dev", "~*", "&*", "+@all", "--user", "asset", "on", ">dev", "~*", "&*", "+@all"]
+    healthcheck: { test: ["CMD","valkey-cli","-a","dev","ping"], interval: 3s, timeout: 3s, retries: 40 }
+  openfga-migrate:
+    image: openfga/openfga:v1.20.0
+    command: ["migrate"]
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://postgres:dev@timescaledb:5432/openfga?sslmode=disable
+    depends_on: { timescaledb: { condition: service_healthy } }
+  openfga:
+    image: openfga/openfga:v1.20.0
+    command: ["run"]
+    environment:
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://postgres:dev@timescaledb:5432/openfga?sslmode=disable
+      OPENFGA_AUTHN_METHOD: preshared
+      OPENFGA_AUTHN_PRESHARED_KEYS: dev-openfga-key
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      openfga-migrate: { condition: service_completed_successfully }
+  mailpit:
+    image: axllent/mailpit:latest
+
+  # --- paperless document store: RustFS (S3-compatible) holds document bytes;
+  # Tika extracts text/metadata; Gotenberg converts office formats to PDF for
+  # preview. All three are plain-HTTP infra sidecars reached by hostname (not
+  # mesh peers). paperless self-provisions its bucket on startup (blob.EnsureBucket),
+  # so no bucket-init sidecar is needed.
+  rustfs:
+    image: rustfs/rustfs:latest
+    environment: { RUSTFS_ACCESS_KEY: paperless, RUSTFS_SECRET_KEY: paperless-dev-secret, RUSTFS_VOLUMES: /data }
+    volumes: ["rustfs-data:/data"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9000/health"], interval: 4s, timeout: 3s, retries: 40, start_period: 5s }
+  tika:
+    image: apache/tika:latest-full
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9998/tika"], interval: 5s, timeout: 3s, retries: 40, start_period: 10s }
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    command: ["gotenberg","--api-port=3000"]
+    healthcheck: { test: ["CMD","curl","-sf","http://127.0.0.1:3000/health"], interval: 5s, timeout: 3s, retries: 40, start_period: 10s }
+
+  # --- ACME demo: Pebble is a tiny test ACME CA for the generic-certificate
+  # flow (no real CA reachable in the dev network). PEBBLE_VA_ALWAYS_VALID makes
+  # its validation authority skip the real DNS-01 check, so lcm's "manual" DNS
+  # provider issues end to end. pebble-certs mints a listener cert with SAN
+  # "pebble" so lcm verifies Pebble's TLS via the normal system trust pool.
+  pebble-certs:
+    image: alpine:3.20
+    user: "0:0"
+    entrypoint: ["sh","/gen-certs.sh"]
+    volumes:
+      - "pebble-certs:/certs"
+      - "./pebble/gen-certs.sh:/gen-certs.sh:ro"
+
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:latest
+    command: ["-config","/pebble/config.json"]
+    environment:
+      PEBBLE_VA_ALWAYS_VALID: "1"
+      PEBBLE_VA_NOSLEEP: "1"
+      PEBBLE_WFE_NONCEREJECT: "0"
+    volumes:
+      - "pebble-certs:/certs:ro"
+      - "./pebble/config.json:/pebble/config.json:ro"
+    ports: ["14000:14000"]
+    depends_on:
+      pebble-certs: { condition: service_completed_successfully }
+
+  # Vault backs warden's secrets. Dev mode (auto-unsealed, root token dev-root).
+  vault:
+    image: hashicorp/vault:1.18
+    cap_add: [IPC_LOCK]
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: dev-root
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_ADDR: http://127.0.0.1:8200
+    healthcheck: { test: ["CMD","vault","status"], interval: 3s, timeout: 3s, retries: 40 }
+
+  # Set up warden's KV mount, policy and AppRole; write role_id/secret_id to the
+  # shared vault-creds volume warden reads.
+  vault-init:
+    image: hashicorp/vault:1.18
+    entrypoint: ["sh","/vault-init.sh"]
+    environment: { VAULT_ADDR: "http://vault:8200", VAULT_TOKEN: dev-root, OUT: /vault-creds }
+    volumes: ["vault-creds:/vault-creds","./vault-init.sh:/vault-init.sh:ro"]
+    restart: "no"
+    depends_on: { vault: { condition: service_healthy } }
+
+  # Fresh volume is root-owned; hand it to the app uid the images run as.
+  certs-init:
+    image: alpine:3.20
+    user: "0:0"
+    entrypoint: ["sh","-c","chown -R 10001:10001 /certs && chmod 0755 /certs"]
+    volumes: ["certs:/certs"]
+
+  # Ensure the ONE DB-sealed mesh root and mint a leaf SVID per file-provider
+  # service into the shared volume (ca.pem = the trust bundle). lcm self-issues
+  # its own identity from the same root at startup, so the whole mesh chains to
+  # one root. Idempotent; needs the DB + KEK (runs as root to read both).
+  lcm-bootstrap:
+    image: freya/lcm:dev
+    user: "0:0"
+    command: ["bootstrap","-config","deploy/container.yaml","-out","/certs","-services","gateway,auth,lcm,notification","-ttl","${CERT_TTL:-12h}"]
+    volumes: ["certs:/certs","./configs/lcm.yaml:/app/deploy/container.yaml:ro"]
+    depends_on:
+      certs-init: { condition: service_completed_successfully }
+      timescaledb: { condition: service_healthy }
+
+  # Re-issue leaf SVIDs before expiry so the file providers hot-reload without
+  # the mesh ever lapsing (renew-before-expiry). Rotation is non-disruptive:
+  # tlsconf serves the new leaf per-handshake and freya no longer drains the
+  # gRPC pool on renewal, so long-lived streams survive. Runs by default.
+  # It renews FIRST, then sleeps, so a container restart/host-resume refreshes
+  # certs immediately (no expiry gap). Defaults: 12h certs refreshed every 6h;
+  # integrity test overrides CERT_TTL=5m RENEW_INTERVAL=210.
+  renewer:
+    image: freya/lcm:dev
+    user: "0:0"
+    entrypoint: ["sh","-c"]
+    command: ["while true; do lcmsvc bootstrap -config deploy/container.yaml -out /certs -services gateway,auth,lcm,notification -ttl ${CERT_TTL:-12h} && echo renewed $$(date -u +%H:%M:%S); sleep ${RENEW_INTERVAL:-21600}; done"]
+    volumes: ["certs:/certs","./configs/lcm.yaml:/app/deploy/container.yaml:ro"]
+    depends_on: { lcm-bootstrap: { condition: service_completed_successfully } }
+
+  # Seed the gateway route allow-list (module SPIFFE id -> route prefixes; name)
+  # directly into the gateway DB. Idempotent per row; runs on every up so the
+  # allow-list is never "lost" after a DB reset. Replaces apply-allow.sh.
+  gateway-bootstrap:
+    image: freya/gateway:dev
+    command: ["bootstrap","-config","deploy/container.yaml",
+      "-allow","spiffe://example.org/svc/auth=/api/v1,/authorize,/.well-known,/console;auth",
+      "-allow","spiffe://example.org/svc/lcm=/api/lcm;lcm",
+      "-allow","spiffe://example.org/svc/notification=/api/notification;notification",
+      "-allow","spiffe://example.org/svc/warden=/api/warden,/warden/share;warden",
+      "-allow","spiffe://example.org/svc/deployer=/api/deployer;deployer",
+      "-allow","spiffe://example.org/svc/paperless=/api/paperless;paperless",
+      "-allow","spiffe://example.org/svc/inventory=/api/inventory;inventory",
+      "-allow","spiffe://example.org/svc/ipam=/api/ipam;ipam",
+      "-allow","spiffe://example.org/svc/asset=/api/asset;asset"]
+    volumes: ["certs:/certs:ro","./configs/gateway.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+
+  # Seed the platform tenant, builtin roles, signing key and the first operator
+  # invitation (idempotent: reuses a pending invite, skips if already accepted).
+  # The accept URL is printed to this container's logs and emailed to mailpit.
+  auth-bootstrap:
+    image: freya/auth:dev
+    user: "0:0"
+    command: ["bootstrap","-config","deploy/container.yaml","-operator-email","${OPERATOR_EMAIL:-admin@example.org}"]
+    volumes: ["certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      lcm-bootstrap: { condition: service_completed_successfully }
+
+  lcm:
+    image: freya/lcm:dev
+    build: { context: ../.., dockerfile: services/lcm/Dockerfile }
+    user: "0:0"
+    command: ["-config","deploy/container.yaml"]
+    # SSL_CERT_FILE points Go's system trust pool at the base OS roots plus the
+    # Pebble dev CA, so lcm can verify the Pebble ACME directory over TLS for the
+    # generic-cert demo without disabling verification. mTLS to auth/gateway uses
+    # its own SPIFFE roots and is unaffected.
+    environment:
+      SSL_CERT_FILE: /pebble-ca/bundle.pem
+    volumes:
+      - "./configs/lcm.yaml:/app/deploy/container.yaml:ro"
+      - "../../services/lcm/deploy/policy.yaml:/app/deploy/policy.yaml:ro"
+      - "pebble-certs:/pebble-ca:ro"
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9591/readyz"], interval: 5s, timeout: 3s, retries: 40, start_period: 5s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      pebble-certs: { condition: service_completed_successfully }
+
+  auth:
+    image: freya/auth:dev
+    build: { context: ../.., dockerfile: services/auth/Dockerfile }
+    user: "0:0"
+    command: ["-config","deploy/container.yaml"]
+    volumes: ["certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9190/readyz"], interval: 5s, timeout: 3s, retries: 40, start_period: 5s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      auth-bootstrap: { condition: service_completed_successfully }
+
+  # Mint the gateway's single-use join token (it enrolls direct to lcm's keyless
+  # listener, since it cannot enroll through itself).
+  gateway-token:
+    image: freya/auth:dev
+    user: "0:0"
+    command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/gateway","-ttl","30m","-out","/tokens/gateway.token"]
+    volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      auth-bootstrap: { condition: service_completed_successfully }
+
+  gateway:
+    image: freya/gateway:dev
+    build: { context: ../.., dockerfile: services/gateway/Dockerfile }
+    user: "0:0"
+    ports: ["8443:8443"]
+    command: ["-config","deploy/container.yaml"]
+    volumes: ["tokens:/tokens:ro","gateway-state:/state","./configs/gateway.yaml:/app/deploy/container.yaml:ro"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9290/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      auth: { condition: service_healthy }
+      lcm: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      gateway-bootstrap: { condition: service_completed_successfully }
+      gateway-token: { condition: service_completed_successfully }
+
+  # Mint notification's single-use join token (offline, same signing keys as the
+  # running auth) into the shared tokens volume. Demonstrates the multi-host
+  # bootstrap: in production the gateway/console mints these per workload.
+  notification-token:
+    image: freya/auth:dev
+    user: "0:0"
+    command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/notification","-ttl","30m","-out","/tokens/notification.token"]
+    volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      auth-bootstrap: { condition: service_completed_successfully }
+
+  # notification enrolls over the network (no /certs mount): first SVID via the
+  # public HTTP enroll route with its join token, then mTLS renewal direct to lcm.
+  notification:
+    image: freya/notification:dev
+    build: { context: ../.., dockerfile: services/notification/Dockerfile }
+    user: "0:0"
+    command: ["-config","deploy/container.yaml"]
+    volumes: ["tokens:/tokens:ro","notification-state:/state","./configs/notification.yaml:/app/deploy/container.yaml:ro"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9590/readyz"], interval: 5s, timeout: 3s, retries: 40, start_period: 5s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      gateway: { condition: service_healthy }
+      lcm: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      notification-token: { condition: service_completed_successfully }
+
+  # Mint warden's join token (workload; enrolls via the gateway edge like notification).
+  warden-token:
+    image: freya/auth:dev
+    user: "0:0"
+    command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/warden","-ttl","30m","-out","/tokens/warden.token"]
+    volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      auth-bootstrap: { condition: service_completed_successfully }
+
+  warden:
+    image: freya/warden:dev
+    build: { context: ../.., dockerfile: services/warden/Dockerfile }
+    user: "0:0"
+    command: ["-config","deploy/container.yaml"]
+    volumes: ["tokens:/tokens:ro","warden-state:/state","vault-creds:/vault-creds:ro","./configs/warden.yaml:/app/deploy/container.yaml:ro","../../services/warden/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9490/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      vault-init: { condition: service_completed_successfully }
+      gateway: { condition: service_healthy }
+      lcm: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      warden-token: { condition: service_completed_successfully }
+
+  # Mint the deployer's single-use join token (enrolls via the gateway edge).
+  deployer-token:
+    image: freya/auth:dev
+    user: "0:0"
+    command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/deployer","-ttl","30m","-out","/tokens/deployer.token"]
+    volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      auth-bootstrap: { condition: service_completed_successfully }
+
+  # deployer enrolls over the network (no /certs mount): first SVID via the
+  # public HTTP enroll route with its join token, then mTLS renewal to lcm.
+  # It distributes lcm-issued certs to endpoints via pluggable providers.
+  deployer:
+    image: freya/deployer:dev
+    build: { context: ../.., dockerfile: services/deployer/Dockerfile }
+    user: "0:0"
+    command: ["-config","deploy/container.yaml"]
+    volumes: ["tokens:/tokens:ro","deployer-state:/state","./configs/deployer.yaml:/app/deploy/container.yaml:ro","../../services/deployer/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9690/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      gateway: { condition: service_healthy }
+      lcm: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      deployer-token: { condition: service_completed_successfully }
+
+  # Mint paperless's single-use join token (enrolls via the gateway edge).
+  paperless-token:
+    image: freya/auth:dev
+    user: "0:0"
+    command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/paperless","-ttl","30m","-out","/tokens/paperless.token"]
+    volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      auth-bootstrap: { condition: service_completed_successfully }
+
+  # paperless enrolls over the network (no /certs mount): first SVID via the
+  # public HTTP enroll route with its join token, then mTLS renewal to lcm. It
+  # stores document bytes in RustFS, extracts via Tika/Gotenberg, and publishes
+  # processing events to the platform bus.
+  paperless:
+    image: freya/paperless:dev
+    build: { context: ../.., dockerfile: services/paperless/Dockerfile }
+    user: "0:0"
+    command: ["-config","deploy/container.yaml"]
+    volumes: ["tokens:/tokens:ro","paperless-state:/state","./configs/paperless.yaml:/app/deploy/container.yaml:ro","../../services/paperless/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9790/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      gateway: { condition: service_healthy }
+      lcm: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      paperless-token: { condition: service_completed_successfully }
+      rustfs: { condition: service_healthy }
+      tika: { condition: service_healthy }
+      gotenberg: { condition: service_healthy }
+
+  # Mint inventory's single-use join token (the SERVER enrolls via the gateway edge
+  # for its own mesh SVID; endpoint AGENTS enroll separately at the ingest edge).
+  inventory-token:
+    image: freya/auth:dev
+    user: "0:0"
+    command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/inventory","-ttl","30m","-out","/tokens/inventory.token"]
+    volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      auth-bootstrap: { condition: service_completed_successfully }
+
+  # inventory: the asset-inventory SERVER. Enrolls over the network for its mesh
+  # SVID; serves the browser/query API via the gateway and the module gRPC surface,
+  # AND a separate off-mesh INGEST EDGE (:9977) that authenticated endpoint agents
+  # post snapshots to. The ingest port is published for agents outside the mesh.
+  inventory:
+    image: freya/inventory:dev
+    build: { context: ../.., dockerfile: services/inventory/Dockerfile }
+    user: "0:0"
+    command: ["-config","deploy/container.yaml"]
+    volumes: ["tokens:/tokens:ro","inventory-state:/state","./configs/inventory.yaml:/app/deploy/container.yaml:ro","../../services/inventory/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    ports: ["9977:9977"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9810/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      gateway: { condition: service_healthy }
+      lcm: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      inventory-token: { condition: service_completed_successfully }
+
+  # Mint ipam's single-use join token (enrolls via the gateway edge for its mesh SVID).
+  ipam-token:
+    image: freya/auth:dev
+    user: "0:0"
+    command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/ipam","-ttl","30m","-out","/tokens/ipam.token"]
+    volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      auth-bootstrap: { condition: service_completed_successfully }
+
+  # ipam: IP Address Management. Serves the browser/query API via the gateway and
+  # the module gRPC surface, runs the active-network-operations subsystem (ICMP
+  # scanning needs NET_RAW; SNMP/TCP/IPMI/KVM reach lab hosts), and references BMC/
+  # SNMP secrets via warden. The KVM console proxy is mounted at /bmc/ (token-gated).
+  ipam:
+    image: freya/ipam:dev
+    build: { context: ../.., dockerfile: services/ipam/Dockerfile }
+    user: "0:0"
+    cap_add: ["NET_RAW"]
+    command: ["-config","deploy/container.yaml"]
+    volumes: ["tokens:/tokens:ro","ipam-state:/state","./configs/ipam.yaml:/app/deploy/container.yaml:ro","../../services/ipam/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9820/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      gateway: { condition: service_healthy }
+      lcm: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      warden: { condition: service_healthy }
+      ipam-token: { condition: service_completed_successfully }
+
+  # Mint asset's single-use join token (enrolls via the gateway edge for its mesh SVID).
+  asset-token:
+    image: freya/auth:dev
+    user: "0:0"
+    command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/asset","-ttl","30m","-out","/tokens/asset.token"]
+    volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      auth-bootstrap: { condition: service_completed_successfully }
+
+  # asset: IT Asset Management (assets + assign/unassign lifecycle, photos and
+  # documents in RustFS, categories/locations/suppliers, consumables/licenses/
+  # insurance, DDB depreciation, lifecycle scheduler, inventory-sync against the
+  # inventory module over SPIFFE mTLS). Enrolls over the network for its mesh SVID.
+  asset:
+    image: freya/asset:dev
+    build: { context: ../.., dockerfile: services/asset/Dockerfile }
+    user: "0:0"
+    command: ["-config","deploy/container.yaml"]
+    volumes: ["tokens:/tokens:ro","asset-state:/state","./configs/asset.yaml:/app/deploy/container.yaml:ro","../../services/asset/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9830/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      gateway: { condition: service_healthy }
+      lcm: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      asset-token: { condition: service_completed_successfully }
+      rustfs: { condition: service_healthy }
+      inventory: { condition: service_healthy }
+
+volumes:
+  certs:
+  pebble-certs:
+  tokens:
+  vault-creds:
+  notification-state:
+  gateway-state:
+  warden-state:
+  deployer-state:
+  paperless-state:
+  inventory-state:
+  ipam-state:
+  asset-state:
+  rustfs-data:
