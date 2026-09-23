@@ -50,6 +50,10 @@
 - [T017 claude] `CheckURL` returns `ErrTargetRefused` (can be wrapped) when the port is not allowed, including the scheme's default port, or when an IP-literal host is refused by the policy. Hostnames are not resolved.
 - [T017 claude] `Control` fails closed with `ErrTargetRefused` for any network other than tcp/tcp4/tcp6, an address that isn't `IP:numeric-port`, a zoned address, a disallowed port or a disallowed IP. IPv4-mapped addresses are unmapped before the always-deny and CIDR checks.
 - [T017 claude] Errors must never contain URL userinfo or a password.
+- [T018 claude] `ErrTargetRefused` and `ErrInvalidURL` are declared in `policy.go`. T022's `errors.go` must not declare them again.
+- [T018 claude] Error wrapping uses fixed reason text only (`%w: reason`), never the input URL or address. The `url.Error` from `url.Parse` is never wrapped because it quotes the input, which may contain a password.
+- [T018 claude] `0.0.0.0/8` is part of the always-denied set. An IPv4 address is also matched against IPv4-mapped IPv6 prefixes, so `::/0` and `::ffff:10.0.0.0/104` cover it.
+- [T018 claude] Hostnames must use letters, digits, `-` and `_`, with labels of 1–63 bytes and at most 253 bytes in total. A trailing dot is allowed, but an all-digit last label is refused. Non-ASCII names are refused, so internationalised names must be entered in punycode.
 
 ## Interfaces
 
@@ -92,6 +96,8 @@
 - [T017 claude] `type Endpoint struct{ Scheme, Host string; Port int }`, compared with `==`. `Host` has no brackets for IPv6, and `Scheme` is lowercased (`LDAPS://` is accepted).
 - [T017 claude] `func (e Endpoint) Addr() string` = `net.JoinHostPort(Host, strconv.Itoa(Port))`.
 - [T017 claude] `NewTargetPolicy(config.DirectoryTargets) (*TargetPolicy, error)`; `(*TargetPolicy).CheckURL(string) (Endpoint, error)`; `(*TargetPolicy).Control(network, address string, _ syscall.RawConn) error`; `ErrTargetRefused`, `ErrInvalidURL`.
+- [T018 claude] `func (p *TargetPolicy) Dialer(timeout time.Duration) *net.Dialer`: returns a dialer with `Control: p.Control`. T022 should use it with go-ldap's `DialWithDialer`.
+- [T018 claude] `CheckURL` returns `Endpoint{Scheme, Host, Port}`; call `Endpoint.Addr()` to get the address to dial.
 
 ## Gotchas
 
@@ -130,3 +136,5 @@
 - [T017 claude] `url.Parse` also accepts `ldap://::1` and `host:389:636`. Refuse unbracketed hosts that contain `:`.
 - [T017 claude] A `%25` zone must be refused as `ErrInvalidURL` before any IP check (the test uses `2001:db8::1%25eth0`).
 - [T017 claude] `netip.Prefix.Contains` does not match across address families. Unmap the address first, and for a v4 address also match against v6 prefixes, e.g. deny `::ffff:10.1.2.3` when `10.0.0.0/8` is denied.
+- [T018 claude] `url.Parse` already refuses an unterminated `[`, so the matching branch in `splitURLHost` is covered by calling that function directly in `policy_extra_test.go`.
+- [T018 claude] `scripts/coverage-gate.sh` expects an existing `coverage.out` in `services/auth`. Generate the profile first, or it exits with "open coverage.out: no such file".
