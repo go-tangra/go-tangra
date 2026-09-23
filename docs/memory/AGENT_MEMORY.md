@@ -39,6 +39,7 @@
 - [T011 claude] `UpsertLink` returns `ErrNotFound` for a missing user or connection, where the SQL foreign key would raise its own error.
 - [T011 claude] Memstore invitations have no `created_at`, so the "most recent pending invitation" is the one with the latest `ExpiresAt`; ties go to the smaller id.
 - [T011 claude] `DeleteImportedUser` also removes the user's role bindings, role map, recovery codes, sessions, group memberships and avatar, to match the SQL cascades.
+- [T014 claude] `u` is reset to `store.User{}` for imported rows, not just `known=false`. Otherwise the account rate-limit branch (runs before the `known` checks) would record the imported user's ID in its attempt row and reveal the account. This departs from T013's note that `u` would keep the imported row.
 
 ## Interfaces
 
@@ -105,3 +106,4 @@
 - [T013 claude] In the unknown branch, `u` still holds the imported row after T014's fix. That is harmless only because the unknown branch never uses `u.ID`, so keep it that way.
 - [T011 claude] `UpdateImportedUser` moves the user to a new map key when the e-mail changes, because `Users` is keyed by tenant and lower-cased e-mail.
 - [T011 claude] Connections are returned as copies (the `BindPasswordEnc` slice is copied), so tests can't change stored ciphertext through a returned value.
+- [T014 claude] Any new sign-in branch that reads `u` before checking `known` now gets a zero user for imported accounts. That is intended, so keep it that way.
