@@ -109,6 +109,20 @@ To issue a generic certificate from the UI:
 Pebble's ACME directory is also exposed on the host at
 <https://localhost:14000/dir> (self-signed; dev only).
 
+## Web UI
+
+Every module's UI is a federated remote on the shared kit `@freya/ui`
+(`ui/kit`, FlyonUI + Zod — see `docs/frontend.md`). Images build the kit and the
+module UI inside the Dockerfile's workspace stage, so a UI change needs an image
+rebuild: `docker compose -p freya-stack -f deploy/stack/compose.yaml build <service>`
+then `up -d <service>`. The shell lists a module in its navigation once the
+module registers (`registered:true` in its health output); a remote built against
+another kit major shows an error card with a retry in its own area only.
+
+Browser flows (`services/<module>/ui/tests/e2e/*-flow.spec.ts`, `a11y.spec.ts`)
+run against this stack with `E2E_OPERATOR_EMAIL` / `E2E_OPERATOR_PASSWORD`
+(`PW_CHANNEL=chrome` to use the system Chrome).
+
 ## Reset / teardown
 
 ```sh

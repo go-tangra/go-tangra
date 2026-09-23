@@ -1,0 +1,25 @@
+{
+  "name": "freya-frontends",
+  "private": true,
+  "description": "npm workspace for the Freya platform front-ends: the shared UI kit (@freya/ui), the gateway shell, the auth console and every module remote.",
+  "workspaces": [
+    "ui/kit",
+    "services/gateway/shell",
+    "services/auth/console",
+    "services/*/ui"
+  ],
+  "scripts": {
+    "kit": "npm run build -w ui/kit",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test:unit --workspaces --if-present",
+    "build": "npm run kit && npm run build --workspaces --if-present",
+    "check": "node ui/scripts/check-duplicates.mjs && node ui/scripts/check-no-legacy.mjs",
+    "check:self": "node --test ui/scripts/tests/checks.spec.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "adm-zip": "^0.6.1"
+  }
+}

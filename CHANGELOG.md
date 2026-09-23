@@ -4,6 +4,31 @@
 
 ### Added
 
+- `services/ipam` feature parity with go-tangra-ipam: IP/host group CRUD with
+  member editing (new `PUT /host-groups/{id}/members/{mid}`), manual subnet
+  create/edit/add-child, subnet split (`POST /subnets/{id}/split`, dry-run
+  preview, skips taken blocks), location CRUD with typed locations and a rack
+  elevation (device placement by unit/height, overlap + fit checks), device
+  create/edit with rack fields. Subnet overlap checks are now hierarchy-aware
+  (a child must sit inside its parent; ancestors/descendants are not overlaps).
+- Right-hand drawers replace centred dialogs for create/edit forms and record
+  views across all modules (subnets get a go-tangra-style detail drawer that
+  carries scan/split/add-child/edit/delete); only yes/no confirmations stay
+  dialogs. `UiRecordDrawer` gains `close-on-save`; drawers no longer dim the page.
+- `@freya/ui/vite` `breakpointSpecificity()` build plugin, used by every remote:
+  responsive utilities outrank plain ones regardless of which module stylesheet
+  loads last (fixes layouts collapsing depending on remote load order).
+
+- `ui/kit` (`@freya/ui`), every front-end (spec `013-flyonui-frontend-rework`):
+  one shared component kit on FlyonUI 2 / Tailwind 4 with Zod 4 form
+  validation replaces Vuetify in the gateway shell, the auth console and the
+  eight module remotes. Kit: 60 components, `useZodForm` / `zodToFields` /
+  `UiRecordDialog` form recipe, `createApi` transport, two themes, a catalogue
+  with screenshot + axe baselines at 320/768/1280, coverage gate (forms/api
+  100 %). Remotes carry only their own code (`import: false` singletons) —
+  shell + asset bundles are 58 % of the Vuetify baseline. Static checks
+  (`check-duplicates`, `check-no-legacy`, `check-bundle-size`) with self-tests;
+  Vuetify, `vite-plugin-vuetify` and `@mdi/font` are gone from the lockfile.
 - `services/notification`: notification & messaging module (spec `006-notification-service`):
   multi-channel channels (email over SMTP; sms/slack/sse declared) with
   encrypted settings, Go-template rendering, a notification log, Zanzibar-style
@@ -80,6 +105,7 @@
   (audited as `token_exchanged`); console permissions registered and granted
   to builtin roles; `pkg/authmanifest`.
 
+
 ### Security
 
 - `google.golang.org/grpc` upgraded to v1.83.2: `govulncheck` reported two
@@ -92,6 +118,13 @@
 
 ### Fixed
 
+- `services/ipam` UI: response-shape mismatches with the API — subnet/location
+  trees (`tree`), check-IP (`matching_groups`), suggest (`suggestions`), search
+  (`query`), dashboard stats, BMC power/sensors; subnet scan now follows the
+  async job to completion; ping shows progress and its result in place; the
+  device "Sync" button no longer wipes a device's package list.
+- `@freya/ui`: `UiDropdownMenu` opens in the top layer (no longer clipped by
+  scrolling tables); missing icons added to the safelist.
 - `transport/edge`: `WithNonce` attaches a CSP nonce to a context. The gateway
   relays its edge nonce to modules in `X-CSP-Nonce` (client values dropped) and
   the auth console uses it in gateway mode: Vuetify's inline theme stylesheet

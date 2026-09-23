@@ -41,6 +41,23 @@ jobs:
           for m in contrib/audit-timescale contrib/policy-valkey; do
             if [ -f "$m/go.mod" ]; then (cd "$m" && go test -tags integration -count=1 ./...); fi
           done
+  ui-kit:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: package-lock.json }
+      - run: npm ci
+      - run: npm run -w ui/kit lint
+      - run: npm run -w ui/kit test:coverage   # ≥80% statements; src/forms and src/api 100%
+      - run: npm run -w ui/kit build
+      - run: node ui/scripts/check-duplicates.mjs
+      - run: node ui/scripts/check-no-legacy.mjs
+      - run: node --test ui/scripts/tests/checks.spec.mjs
+      - run: npm audit --audit-level=high --workspaces --include-workspace-root
+      - run: npx playwright install --with-deps chromium && npx playwright test -c catalogue/playwright.config.ts
+        working-directory: ui/kit
   auth-service:
     runs-on: ubuntu-latest
     needs: verify
@@ -50,7 +67,7 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version-file: services/auth/go.mod }
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: services/auth/console/package-lock.json }
+        with: { node-version: 22, cache: npm, cache-dependency-path: package-lock.json }
       - run: go mod verify
       - run: make -C ../.. tools
       - run: make lint
@@ -58,7 +75,8 @@ jobs:
       - run: make test
       - run: make cover
       - run: go test ./tests/fuzz -run xxx -fuzz FuzzAvatarDecode -fuzztime 20s
-      - run: cd console && npm ci && npm run lint && npm run test:unit && npm run build && npm audit --audit-level=high
+      - run: npm ci --prefix ../.. && npm run -w ui/kit build --prefix ../..
+      - run: cd console && npm run lint && npm run test:unit && npm run build
   auth-service-integration:
     runs-on: ubuntu-latest
     needs: auth-service
@@ -70,7 +88,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: go test -tags integration -count=1 ./tests/integration/...
-      - run: docker compose -f deploy/compose.yaml up -d && cd console && npm ci && npx playwright install --with-deps chromium && npx playwright test
+      - run: npm ci --prefix ../.. && npm run -w ui/kit build --prefix ../..
+      - run: docker compose -f deploy/compose.yaml up -d && cd console && npx playwright install --with-deps chromium && npx playwright test
   gateway-service:
     runs-on: ubuntu-latest
     needs: verify
@@ -80,14 +99,17 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version-file: services/gateway/go.mod }
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: services/gateway/shell/package-lock.json }
+        with: { node-version: 22, cache: npm, cache-dependency-path: package-lock.json }
       - run: go mod verify
       - run: make -C ../.. tools
       - run: make lint
       - run: make vuln
       - run: make test
       - run: make cover
-      - run: cd shell && npm ci && npm run lint && npm run test:unit && npm run build && npm audit --audit-level=high
+      - run: npm ci --prefix ../.. && npm run -w ui/kit build --prefix ../..
+      - run: cd shell && npm run lint && npm run test:unit && npm run build
+      # SC-007: shell + asset ≤ 75 % of the pre-migration baseline (ui/MIGRATION.md).
+      - run: npm run -w services/asset/ui build --prefix ../.. && node ../../ui/scripts/check-bundle-size.mjs
   gateway-service-integration:
     runs-on: ubuntu-latest
     needs: gateway-service
@@ -99,7 +121,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: go test -tags integration -count=1 ./tests/integration/...
-      - run: docker compose -f deploy/compose.yaml up -d && cd shell && npm ci && npx playwright install --with-deps chromium && npx playwright test
+      - run: npm ci --prefix ../.. && npm run -w ui/kit build --prefix ../..
+      - run: docker compose -f deploy/compose.yaml up -d && cd shell && npx playwright install --with-deps chromium && npx playwright test
   warden-service:
     runs-on: ubuntu-latest
     needs: verify
@@ -109,14 +132,15 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version-file: services/warden/go.mod }
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: services/warden/ui/package-lock.json }
+        with: { node-version: 22, cache: npm, cache-dependency-path: package-lock.json }
       - run: go mod verify
       - run: make -C ../.. tools
       - run: make lint
       - run: make vuln
       - run: make test
       - run: make cover
-      - run: cd ui && npm ci && npm run lint && npm run test:unit && npm run build && npm audit --audit-level=high
+      - run: npm ci --prefix ../.. && npm run -w ui/kit build --prefix ../..
+      - run: cd ui && npm run lint && npm run test:unit && npm run build
   warden-service-integration:
     runs-on: ubuntu-latest
     needs: warden-service
@@ -128,7 +152,8 @@ jobs:
       - run: go run ./tests/testdata/bitwarden -out tests/testdata/bitwarden
       - run: make redaction-scan   # runs the integration suite (testcontainers) and scans its capture for material
       - run: for f in FuzzFolderName FuzzSecretInput FuzzTotpSeed FuzzPathBuilder FuzzBitwarden FuzzBackup FuzzGenerator FuzzShareToken; do go test ./tests/fuzz -run xxx -fuzz "$f" -fuzztime 10s || exit 1; done
-      - run: cd ui && npm ci && npx playwright install --with-deps chromium && npx playwright test   # skips without E2E_OPERATOR_PASSWORD
+      - run: npm ci --prefix ../.. && npm run -w ui/kit build --prefix ../..
+      - run: cd ui && npx playwright install --with-deps chromium && npx playwright test   # skips without E2E_OPERATOR_PASSWORD
   notification-service:
     runs-on: ubuntu-latest
     needs: verify
@@ -138,14 +163,15 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version-file: services/notification/go.mod }
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: services/notification/ui/package-lock.json }
+        with: { node-version: 22, cache: npm, cache-dependency-path: package-lock.json }
       - run: go mod verify
       - run: make -C ../.. tools
       - run: make lint
       - run: make vuln
       - run: make test
       - run: make cover
-      - run: cd ui && npm ci && npm run gen:api && npm run lint && npm run test:unit && npm run build && npm audit --audit-level=high
+      - run: npm ci --prefix ../.. && npm run -w ui/kit build --prefix ../..
+      - run: cd ui && npm run gen:api && npm run lint && npm run test:unit && npm run build
   notification-service-integration:
     runs-on: ubuntu-latest
     needs: notification-service
@@ -156,4 +182,5 @@ jobs:
         with: { go-version-file: services/notification/go.mod }
       - run: make redaction-scan   # runs the integration suite (testcontainers) and scans its capture for material
       - run: for f in FuzzHeaderValue FuzzRecipient FuzzTemplate FuzzVariables FuzzSSEFrame FuzzBackup; do go test ./tests/fuzz -run xxx -fuzz "$f" -fuzztime 10s || exit 1; done
-      - run: cd ui && npm ci && npm run gen:api && npx playwright install --with-deps chromium && npx playwright test   # skips without E2E_OPERATOR_PASSWORD
+      - run: npm ci --prefix ../.. && npm run -w ui/kit build --prefix ../..
+      - run: cd ui && npm run gen:api && npx playwright install --with-deps chromium && npx playwright test   # skips without E2E_OPERATOR_PASSWORD

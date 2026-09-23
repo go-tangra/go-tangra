@@ -1,0 +1,109 @@
+/*
+ * Freya platform theme. Imported by every front-end's main.css AFTER
+ * `@import "tailwindcss"`. Two daisyUI/FlyonUI themes, selected with
+ * data-theme on <html> (set by useTheme in the shell / console).
+ * Everything here is static CSS served from 'self' — CSP safe.
+ */
+@plugin "flyonui" {
+  themes: false;
+}
+@import "flyonui/variants.css";
+@plugin "@iconify/tailwind4";
+
+@plugin "flyonui/theme" {
+  name: "freya-light";
+  default: true;
+  color-scheme: light;
+  --color-base-100: oklch(100% 0 0);
+  --color-base-200: oklch(97% 0.006 264);
+  --color-base-300: oklch(93% 0.01 264);
+  --color-base-content: oklch(25% 0.02 264);
+  --color-primary: oklch(55% 0.2 275);
+  --color-primary-content: oklch(98% 0.01 275);
+  --color-secondary: oklch(60% 0.12 200);
+  --color-secondary-content: oklch(98% 0.01 200);
+  --color-accent: oklch(70% 0.16 150);
+  --color-accent-content: oklch(20% 0.02 150);
+  --color-neutral: oklch(35% 0.02 264);
+  --color-neutral-content: oklch(98% 0 0);
+  --color-info: oklch(65% 0.15 240);
+  --color-info-content: oklch(15% 0.02 240);
+  --color-success: oklch(65% 0.17 150);
+  --color-success-content: oklch(15% 0.02 150);
+  --color-warning: oklch(78% 0.16 80);
+  --color-warning-content: oklch(20% 0.03 80);
+  --color-error: oklch(55% 0.22 25);
+  --color-error-content: oklch(98% 0.01 25);
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+@plugin "flyonui/theme" {
+  name: "freya-dark";
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+  --color-base-100: oklch(22% 0.02 264);
+  --color-base-200: oklch(19% 0.02 264);
+  --color-base-300: oklch(16% 0.02 264);
+  --color-base-content: oklch(92% 0.01 264);
+  --color-primary: oklch(70% 0.17 275);
+  --color-primary-content: oklch(15% 0.02 275);
+  --color-secondary: oklch(70% 0.11 200);
+  --color-secondary-content: oklch(15% 0.02 200);
+  --color-accent: oklch(75% 0.15 150);
+  --color-accent-content: oklch(15% 0.02 150);
+  --color-neutral: oklch(30% 0.02 264);
+  --color-neutral-content: oklch(95% 0 0);
+  --color-info: oklch(72% 0.13 240);
+  --color-info-content: oklch(15% 0.02 240);
+  --color-success: oklch(72% 0.15 150);
+  --color-success-content: oklch(15% 0.02 150);
+  --color-warning: oklch(82% 0.15 80);
+  --color-warning-content: oklch(20% 0.03 80);
+  --color-error: oklch(68% 0.2 25);
+  --color-error-content: oklch(15% 0.02 25);
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* Soft badges/alerts: FlyonUI inks them with the raw colour on a 10 % tint, which
+ * fails WCAG AA for the warm colours. Mix the ink towards black (light) or white
+ * (dark) so every soft variant reaches 4.5:1; the tint background stays as is. */
+:root, [data-theme="freya-light"] { --soft-ink-with: black; --soft-ink-keep: 45%; }
+[data-theme="freya-dark"] { --soft-ink-with: white; --soft-ink-keep: 55%; }
+.badge.badge-soft { --badge-fg: color-mix(in oklab, var(--badge-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
+.alert.alert-soft { color: color-mix(in oklab, var(--alert-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
+
+/* Collapsible menu groups (UiNavDrawer) follow FlyonUI's accordion-in-menu
+ * pattern: the toggle is a plain button row, the group list is block flow. */
+.menu li.accordion-item { display: block; }
+.menu li.accordion-item > .accordion-toggle { width: 100%; border-radius: var(--radius-field); cursor: pointer; }
+.menu li.accordion-item > .accordion-toggle:hover { background-color: var(--menu-hover-bg); color: var(--menu-hover-fg); }
+/* Dark theme: an active menu row is solid primary (dashboard-template rule). */
+[data-theme="freya-dark"] .menu li:not(.menu-title, .menu-disabled) > :not(ul, .menu-title, .collapse, .accordion-content, .btn).menu-active {
+  background-color: var(--color-primary);
+  color: var(--color-primary-content);
+}
+
+@layer base {
+  html, body { height: 100%; }
+  /* The dashboard template inks body text at 80 % opacity; the platform keeps
+   * full base-content so every page stays WCAG AA (SC-006). */
+  body { @apply bg-base-200 text-base-content antialiased; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+}

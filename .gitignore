@@ -42,3 +42,10 @@ services/inventory/inventory-agent
 services/lcm/lcm-devca
 services/lcm/lcmsvc
 services/paperless/paperlesssvc
+# shared UI kit / npm workspace
+node_modules/
+ui/kit/dist/
+ui/kit/coverage/
+ui/kit/catalogue/dist/
+ui/kit/test-results/
+ui/kit/playwright-report/
