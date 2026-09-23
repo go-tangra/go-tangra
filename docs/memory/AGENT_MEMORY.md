@@ -32,6 +32,7 @@
 - [T010 claude] `UpdateImportedUser` / `DeleteImportedUser` return `ErrNotFound` when the user is missing or is not `imported`. The service loads the user first to tell 404 from 409 (invalid_state).
 - [T010 claude] `UpdateDirectoryConnection` keeps the stored password when `BindPasswordEnc` is empty. It does not change the test result, `created_by` or `created_at`. It sets `updated_by`.
 - [T010 claude] Store functions pass structs by value, like the rest of the package (gocritic hugeParam warnings accepted).
+- [T012 claude] No `user_activated` event type. Per research D14, activation is emitted as `audit.InviteCreated` with `Reason: "activation"` and `SubjectID` set to the user.
 
 ## Interfaces
 
@@ -64,6 +65,7 @@
 - [T010 claude] `UpsertLink(ctx, tx, DirectoryLink) error`: upserts on user_id and keeps `first_imported_at`. The same uid already linked to another user gives ErrConflict.
 - [T010 claude] `UpdateImportedUser(ctx, tx, tenantID, userID, ImportedProfile{Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool}) error`: an e-mail already in use gives ErrConflict. `DeleteImportedUser(ctx, tx, tenantID, userID) error`.
 - [T010 claude] `DirectoryConnection.CAPEM` is "" for NULL. `LastTestOutcome`, `LastTestAt`, `CreatedBy`, `UpdatedBy` and `DirectoryLink.ConnectionID` / `ImportedBy` are pointers.
+- [T012 claude] `audit.DirectoryConnectionCreated`, `audit.DirectoryConnectionUpdated`, `audit.DirectoryConnectionDeleted`, `audit.DirectoryConnectionTested`, `audit.DirectorySearched`, `audit.DirectoryImported`, `audit.ImportedUserDeleted` (all `audit.EventType`).
 
 ## Gotchas
 
@@ -88,3 +90,5 @@
 - [T009 claude] Run the integration tests with `sg docker -c 'go test -tags integration ./internal/store/'`.
 - [T010 claude] citext comparisons with a Go `[]string` need `$n::text[]::citext[]`. A plain `text[]` compares case-sensitively.
 - [T010 claude] `DirectoryConnection` includes `BindPasswordEnc`. API views must drop it.
+- [T012 claude] `audit.Row` redacts any detail key whose name contains `password|secret|token|key|code|cookie|authorization|phone|first_name|last_name|display_name|email_address`. Avoid detail keys like `search_key`, `status_code` or `error_code`; use `reason` or plain names such as `connection_id`, `filter`, `count`, `truncated`, `created`, `updated`, `user_ids`.
+- [T012 claude] There is no database CHECK on `event_type`, so the Go `known` map is the only thing that enforces the vocabulary.
