@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T013 claude] "Dummy verify executed" is checked in two ways. An imported row that has a stray `PasswordHash` still refuses the correct password, and an imported sign-in must cost 0.5–2× an unknown one (best of 3 runs, pad disabled), the same bound `password_test.go` uses.
-- [T013 claude] The invite test inserts the invitation directly with `ms.InsertInvitation` rather than calling `CreateWith`. D10 will change `CreateWith` to turn an imported e-mail into an activation, and that would conflict with this test.
-- [T011 claude] The memstore methods have the same names as the `store` package functions, without the `tx` argument, e.g. `(m *Store) InsertDirectoryConnection(ctx, c)`. T032's `directorydb` and the `directory.Store` interface should use these names so memstore satisfies the interface directly.
-- [T011 claude] `UpsertLink` returns `ErrNotFound` for a missing user or connection, where the SQL foreign key would raise its own error.
-- [T011 claude] Memstore invitations have no `created_at`, so the "most recent pending invitation" is the one with the latest `ExpiresAt`; ties go to the smaller id.
 - [T011 claude] `DeleteImportedUser` also removes the user's role bindings, role map, recovery codes, sessions, group memberships and avatar, to match the SQL cascades.
 - [T014 claude] `u` is reset to `store.User{}` for imported rows, not just `known=false`. Otherwise the account rate-limit branch (runs before the `known` checks) would record the imported user's ID in its attempt row and reveal the account. This departs from T013's note that `u` would keep the imported row.
 - [T015 claude] The store test expects `ErrNotFound` from `AddGroupMembers` for an imported user, which is what the planned `u.status <> 'imported'` filter produces with the existing "not a user" fallback. Mapping it to `invalid_state` belongs in the service/HTTP layer, not the store.
@@ -56,13 +51,14 @@
 - [T024 claude] Plain mode is refused whenever `Production` is set, even with `AllowPlaintext`, and also in dev without the opt-out. The refusal is audited as `directory_connection_created`, outcome refused, reason `insecure_transport`. A `target_refused` create is audited the same way.
 - [T024 claude] Defaults: size limit is min(500, `MaxSizeLimit`) and time limit is min(15, `MaxTimeLimit` in seconds). Values above the deployment maximum are refused. The base filter is stored in canonical form (`DecompileFilter(CompileFilter)`), and an empty filter stays `""`. Setting `CAPEM: ""` on update clears the CA.
 - [T024 claude] Presets are filled into any empty `Mapping` fields. AD uses objectGUID/mail/displayName/givenName/sn. OpenLDAP uses entryUUID/mail/(cn or displayName)/givenName/sn; the test accepts either display-name value so it doesn't conflict with T039. `other` has no uid preset, so the uid attribute is required; its email attribute defaults to `mail`.
+- [T025 claude] Two methods, not one: `Test(ctx, actor tenantctx.Actor, tenantID string, in Input, connID string)` for unsaved settings (connID only supplies the stored password, never persists last_test) and `TestSaved(ctx, actor, tenantID, id string)` for `POST /{id}/test` (persists last_test). The contract lists only `Test`, so this is a deviation.
+- [T025 claude] A failing step is a `TestResult` with a nil error. Target refused (literal IP or port outside policy, found by `CheckURL`) is a result `{step: connect, reason: target_refused}` with no connection attempt, since the test route has no 422. Refused before connecting and returned as errors: malformed URL or scheme/TLS-mode mismatch (`ldapdir.ErrInvalidURL`), bad CA (`ldapdir.ErrInvalidCA`), unknown tl…
+- [T025 claude] Step mapping: `Open` error `ErrTLS` → tls, any other `Open` error → connect; an ldaps/starttls session whose `TLSState()` reports no completed handshake → tls/tls_failed with no bind; Bind → bind; BaseExists → search_base. Reason = `ldapdir.Reason(err)`. last_test outcome = "ok" or the reason.
+- [T025 claude] A typed `BindPassword` wins over the stored one; nil plus `connID` means reuse the stored password; `""` is always refused.
+- [T025 claude] Audit `directory_connection_tested`: outcome ok/failed/refused(rate_limited), `Reason` = reason, details `step` (on failure) and `connection_id` (saved tests). A cross-tenant id also emits `cross_tenant_refused`; the test accepts either tenant id on that row.
 
 ## Interfaces
 
-- [T007 claude] `config.Directory{Enabled, AllowPlaintext bool; Targets DirectoryTargets; DialTimeout time.Duration; MaxSizeLimit int; MaxTimeLimit time.Duration; RatePerMinute, MaxConnectionsPerTenant int}`
-- [T007 claude] `config.DirectoryTargets{DenyCIDRs, AllowCIDRs []string; AllowedPorts []int}`. CIDRs are stored as strings that are known to parse, so consumers call `netip.ParsePrefix` again (it cannot fail after `Validate`).
-- [T007 claude] Warning texts: `directory connections may use ldap:// without TLS (directory.allow_plaintext)` and `directory.targets.allow_cidrs overrides deny_cidrs for: <cidrs joined by ", ">`.
-- [T008 claude] T009 must produce: constraint named exactly `users_status_check` (drop and re-add; only one status CHECK on users), index `users_imported_idx`, one policy named `tenant_isolation` per new table.
 - [T008 claude] Minimum insert columns the test uses: `directory_connections(id, tenant_id, name, kind='openldap', url, tls_mode='ldaps', bind_dn, bind_password_enc, base_dn, attr_uid='entryUUID', attr_email='mail', attr_display_name='cn')`. Any other column needs a DEFAULT or a nullable type, and T009's CHECKs must accept these values (url `ldaps://h`, bind_dn `cn=a`, base_dn `dc=a` also appear).
 - [T008 claude] `user_directory_links(user_id, tenant_id, connection_id, connection_name, directory_uid, directory_dn, first_imported_at, last_imported_at)`.
 - [T008 claude] Added helper `sqlState(err) string` in the store package's integration test files.
@@ -109,13 +105,13 @@
 - [T024 claude] `type Input struct{ Name, Kind, URL, TLSMode *string; AllowTLS12 *bool; CAPEM *string; BindDN, BindPassword *string; BaseDN, BaseFilter *string; Attributes *Mapping; SizeLimit, TimeLimitSeconds *int }`. A nil field means keep (on update) or default (on create).
 - [T024 claude] `type Mapping struct{ UID, Email, DisplayName, FirstName, LastName string }` with json tags `uid,email,display_name,first_name,last_name`.
 - [T024 claude] `View` has json tags that exactly match the contract's `DirectoryConnection` (the List view key set is asserted), plus `ca_pem,omitempty`, which only `Get` fills. Go fields: `ID, Name, Kind, URL, TLSMode, AllowTLS12, CAPEMSet, CAPEM, BindDN, BindPasswordSet, BaseDN, BaseFilter, Attributes Mapping, SizeLimit, TimeLimitSeconds, LastTest *LastTest{At, Outcome}, CreatedAt, UpdatedAt`. No `[]byte` fiel…
+- [T025 claude] `New(Deps) *Service` with `Deps{Store, Directory ldapdir.Directory, Envelope *crypto.Envelope, Policy *ldapdir.TargetPolicy, Cache *cache.Cache, Audit *audit.Writer, Config config.Directory, Production bool}`. `Deps.Store` must accept `*memstore.Store`.
+- [T025 claude] `Input{Name, Kind, URL, TLSMode string; AllowTLS12 bool; CAPEM, BindDN string; BindPassword *string; BaseDN string}` (more fields allowed).
+- [T025 claude] `TestResult{OK bool; Step, Reason string; TLS *TLSInfo; DurationMS int64}`; `TLSInfo{Version string /* tls.VersionName */; PeerSubject string}`.
+- [T025 claude] Sentinels whose `Error()` equals the reason: `ErrValidation`, `ErrNotFound`, `ErrRateLimited` ("rate_limited"), `ErrInsecureTransport` ("insecure_transport").
 
 ## Gotchas
 
-- [T004 kimi] Empty filter input is grammar-rejected by ldap.CompileFilter(""); D6 defaulting to (objectClass=*) happens in freya code before compilation — valid-empty.txt is 0 bytes by design.
-- [T004 kimi] go-ldap's grammar accepts things policy must refuse: raw NUL in values, `(bad_attr=x)`, `(&)`, deep nesting >16, >64 components — hence the policy-* prefix.
-- [T004 kimi] `ldap://::1` parses as hostname ":" port "1"; `ldap://host:389:636` as hostname "host:389" — parsing alone is never sufficient for CheckURL.
-- [T004 kimi] policy-deep-nesting-16 vs -20 straddle the depth-16 cap; which is accepted depends on how T044 counts depth (fuzz-only seeds, no outcome claimed).
 - [T003 kimi] docker on this machine: socket is root:docker and the login session is stale — use `sg docker -c '...'` (jadmin IS in the docker group per /etc/group).
 - [T003 kimi] cn=config bootstrap: slaptest/slapadd -F need pre-created dirs; slaptest must run schema-only (a database section makes it try to open mdb and fail); slaptest-generated schema ldifs have relative DNs and no blank-line separators (the Dockerfile sed-rewrites the DN and inserts separators); slapadd rejects changetype: modify — use slapmodify; busybox awk has no paragraph mode.
 - [T003 kimi] Entry timestamps are slapadd build time — tests must not assert on them; any people.ldif/slapd.ldif change requires an image rebuild (T064 FromDockerfile rebuilds automatically).
@@ -162,3 +158,7 @@
 - [T024 claude] Test helper names start with `crud`/`newCRUD` (plus `sp`, `ip`, `bp`, `actorOf`, `validInput`, `capture`, `assertNoSecret`, `testCAPEM`, `bindAD`) so they don't collide with T025's `test_test.go` in the same package.
 - [T024 claude] The fixture uses `DenyCIDRs: 10.0.0.0/8`, so `ldaps://10.1.2.3` is expected to return `ErrTargetRefused`.
 - [T024 claude] Mapping `store.ErrConflict` to `ErrDuplicate` also has to happen on Update (renaming onto another connection's name).
+- [T025 claude] The test seeds connections directly into memstore, sealed with AD `ldap-bind:<tid>:<id>`. The service must decrypt using the tenant id and connection id.
+- [T025 claude] `TestTestStoreFailure` uses `ms.FailNext("SetDirectoryConnectionTest")`, so the memstore adapter must end up calling that memstore method.
+- [T025 claude] Plaintext must be refused when `Production` is true even if `AllowPlaintext` is set.
+- [T025 claude] The service must itself check the scheme against `TLSMode` and parse the CA before `Open`, because ldapfake's `Open` validates nothing.
