@@ -24,6 +24,9 @@
 - [T007 claude] `deny_cidrs` defaults to empty. The always-denied set (loopback, link-local/metadata, unspecified, multicast) must be enforced in code by the `ldapdir` target policy (D5), not through config. Private ranges are not denied by default because customer directories are often on private networks.
 - [T007 claude] Validation order: `allow_plaintext` (production only), then deny CIDRs, allow CIDRs, ports, dial timeout, size limit, time limit, rate, connections. The first failure is returned.
 - [T008 claude] The test uses raw SQL for the new tables, not store helpers, so it does not depend on T010. It runs as `auth_app` through `st.Tx` (RLS applies) and checks results through the admin connection.
+- [T009 claude] No separate `(tenant_id, connection_id)` index on `user_directory_links`. The unique index `user_directory_links_source_uid (tenant_id, connection_id, directory_uid)` has those columns first, so it serves the same lookups.
+- [T009 claude] `user_directory_links.tenant_id` has no FK to tenants, like `group_members`. `directory_connections.tenant_id` does reference `tenants(id)`.
+- [T009 claude] The Down migration first runs `set_config('app.system','on',true)`, because `users` has FORCE RLS. It then deletes users with status `imported` (their dependent rows go too, via cascades), restores the three-value CHECK and drops both tables.
 
 ## Interfaces
 
@@ -46,6 +49,11 @@
 - [T008 claude] Minimum insert columns the test uses: `directory_connections(id, tenant_id, name, kind='openldap', url, tls_mode='ldaps', bind_dn, bind_password_enc, base_dn, attr_uid='entryUUID', attr_email='mail', attr_display_name='cn')`. Any other column needs a DEFAULT or a nullable type, and T009's CHECKs must accept these values (url `ldaps://h`, bind_dn `cn=a`, base_dn `dc=a` also appear).
 - [T008 claude] `user_directory_links(user_id, tenant_id, connection_id, connection_name, directory_uid, directory_dn, first_imported_at, last_imported_at)`.
 - [T008 claude] Added helper `sqlState(err) string` in the store package's integration test files.
+- [T009 claude] Index and constraint names:
+- [T009 claude] `directory_connections_tenant_name` (unique on `tenant_id, lower(name)`) → a duplicate name gives 23505.
+- [T009 claude] `user_directory_links_source_uid` (unique) → a repeat import of the same source uid gives 23505.
+- [T009 claude] `users_status_check`, `users_imported_idx`.
+- [T009 claude] DB CHECKs, all giving 23514:
 
 ## Gotchas
 
@@ -66,3 +74,5 @@
 - [T007 claude] golangci-lint still reports `hugeParam` on the existing `Config.Validate` and `Config.Warnings` value receivers. That's not from this task, so I left it.
 - [T008 claude] Run with `sg docker -c 'go test -tags integration -run TestMigration0008LDAPImport ./internal/store/'` (the docker group isn't active in the stale login session).
 - [T008 claude] FK checks ignore RLS, so a cross-tenant link insert is refused only by the policy's WITH CHECK on `tenant_id`, which is how the test checks it.
+- [T009 claude] The URL CHECK refuses anything with userinfo, a path, a query or a fragment, including a trailing `/`. The service should normalise the URL (e.g. strip a trailing slash) before inserting.
+- [T009 claude] Run the integration tests with `sg docker -c 'go test -tags integration ./internal/store/'`.
