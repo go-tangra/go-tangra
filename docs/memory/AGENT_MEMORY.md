@@ -27,6 +27,11 @@
 - [T009 claude] No separate `(tenant_id, connection_id)` index on `user_directory_links`. The unique index `user_directory_links_source_uid (tenant_id, connection_id, directory_uid)` has those columns first, so it serves the same lookups.
 - [T009 claude] `user_directory_links.tenant_id` has no FK to tenants, like `group_members`. `directory_connections.tenant_id` does reference `tenants(id)`.
 - [T009 claude] The Down migration first runs `set_config('app.system','on',true)`, because `users` has FORCE RLS. It then deletes users with status `imported` (their dependent rows go too, via cascades), restores the three-value CHECK and drops both tables.
+- [T010 claude] `ListUsers` signature is unchanged. It fills two new `store.User` fields, `Directory *DirectoryLink` and `InvitationID *string`, and no other query sets them. This avoids breaking memstore, userdb and admin before T011/T050.
+- [T010 claude] A pending invitation means not accepted and not revoked, including expired ones, because Resend works on expired invitations. It is only looked up for `status='invited'`, and the most recent one wins.
+- [T010 claude] `UpdateImportedUser` / `DeleteImportedUser` return `ErrNotFound` when the user is missing or is not `imported`. The service loads the user first to tell 404 from 409 (invalid_state).
+- [T010 claude] `UpdateDirectoryConnection` keeps the stored password when `BindPasswordEnc` is empty. It does not change the test result, `created_by` or `created_at`. It sets `updated_by`.
+- [T010 claude] Store functions pass structs by value, like the rest of the package (gocritic hugeParam warnings accepted).
 
 ## Interfaces
 
@@ -54,6 +59,11 @@
 - [T009 claude] `user_directory_links_source_uid` (unique) → a repeat import of the same source uid gives 23505.
 - [T009 claude] `users_status_check`, `users_imported_idx`.
 - [T009 claude] DB CHECKs, all giving 23514:
+- [T010 claude] `InsertDirectoryConnection(ctx, tx, DirectoryConnection) error` (duplicate name → ErrConflict); `GetDirectoryConnection(ctx, tx, tenantID, id)`; `GetDirectoryConnectionAnyTenant(ctx, tx, id)` (system scope); `ListDirectoryConnections(ctx, tx, tenantID)` (ordered by lower(name)); `CountDirectoryConnections(ctx, tx, tenantID) (int, error)`; `UpdateDirectoryConnection(ctx, tx, DirectoryConnection) …
+- [T010 claude] `UsersByEmails(ctx, tx, tenantID, []string) (map[string]User, error)`: matching is case-insensitive (citext) and the map is keyed by the stored e-mail. `LinksByUIDs(ctx, tx, tenantID, connID, []string) (map[string]DirectoryLink, error)` is keyed by directory uid.
+- [T010 claude] `UpsertLink(ctx, tx, DirectoryLink) error`: upserts on user_id and keeps `first_imported_at`. The same uid already linked to another user gives ErrConflict.
+- [T010 claude] `UpdateImportedUser(ctx, tx, tenantID, userID, ImportedProfile{Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool}) error`: an e-mail already in use gives ErrConflict. `DeleteImportedUser(ctx, tx, tenantID, userID) error`.
+- [T010 claude] `DirectoryConnection.CAPEM` is "" for NULL. `LastTestOutcome`, `LastTestAt`, `CreatedBy`, `UpdatedBy` and `DirectoryLink.ConnectionID` / `ImportedBy` are pointers.
 
 ## Gotchas
 
@@ -76,3 +86,5 @@
 - [T008 claude] FK checks ignore RLS, so a cross-tenant link insert is refused only by the policy's WITH CHECK on `tenant_id`, which is how the test checks it.
 - [T009 claude] The URL CHECK refuses anything with userinfo, a path, a query or a fragment, including a trailing `/`. The service should normalise the URL (e.g. strip a trailing slash) before inserting.
 - [T009 claude] Run the integration tests with `sg docker -c 'go test -tags integration ./internal/store/'`.
+- [T010 claude] citext comparisons with a Go `[]string` need `$n::text[]::citext[]`. A plain `text[]` compares case-sensitively.
+- [T010 claude] `DirectoryConnection` includes `BindPasswordEnc`. API views must drop it.
