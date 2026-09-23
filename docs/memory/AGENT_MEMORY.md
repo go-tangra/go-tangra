@@ -33,6 +33,8 @@
 - [T010 claude] `UpdateDirectoryConnection` keeps the stored password when `BindPasswordEnc` is empty. It does not change the test result, `created_by` or `created_at`. It sets `updated_by`.
 - [T010 claude] Store functions pass structs by value, like the rest of the package (gocritic hugeParam warnings accepted).
 - [T012 claude] No `user_activated` event type. Per research D14, activation is emitted as `audit.InviteCreated` with `Reason: "activation"` and `SubjectID` set to the user.
+- [T013 claude] "Dummy verify executed" is checked in two ways. An imported row that has a stray `PasswordHash` still refuses the correct password, and an imported sign-in must cost 0.5–2× an unknown one (best of 3 runs, pad disabled), the same bound `password_test.go` uses.
+- [T013 claude] The invite test inserts the invitation directly with `ms.InsertInvitation` rather than calling `CreateWith`. D10 will change `CreateWith` to turn an imported e-mail into an activation, and that would conflict with this test.
 
 ## Interfaces
 
@@ -66,6 +68,7 @@
 - [T010 claude] `UpdateImportedUser(ctx, tx, tenantID, userID, ImportedProfile{Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool}) error`: an e-mail already in use gives ErrConflict. `DeleteImportedUser(ctx, tx, tenantID, userID) error`.
 - [T010 claude] `DirectoryConnection.CAPEM` is "" for NULL. `LastTestOutcome`, `LastTestAt`, `CreatedBy`, `UpdatedBy` and `DirectoryLink.ConnectionID` / `ImportedBy` are pointers.
 - [T012 claude] `audit.DirectoryConnectionCreated`, `audit.DirectoryConnectionUpdated`, `audit.DirectoryConnectionDeleted`, `audit.DirectoryConnectionTested`, `audit.DirectorySearched`, `audit.DirectoryImported`, `audit.ImportedUserDeleted` (all `audit.EventType`).
+- [T013 claude] The sign-in test expects imported attempts to be recorded as `memstore.Attempt{UserID: "", Outcome: "refused", Reason: "unknown_account"}`. `signin_failed` audit rows must have `ActorUserID == nil` and `Reason == "unknown_account"`. There must be no `lockout` event and no `cache.RateKey("fail", uid)` key.
 
 ## Gotchas
 
@@ -92,3 +95,4 @@
 - [T010 claude] `DirectoryConnection` includes `BindPasswordEnc`. API views must drop it.
 - [T012 claude] `audit.Row` redacts any detail key whose name contains `password|secret|token|key|code|cookie|authorization|phone|first_name|last_name|display_name|email_address`. Avoid detail keys like `search_key`, `status_code` or `error_code`; use `reason` or plain names such as `connection_id`, `filter`, `count`, `truncated`, `created`, `updated`, `user_ids`.
 - [T012 claude] There is no database CHECK on `event_type`, so the Go `known` map is the only thing that enforces the vocabulary.
+- [T013 claude] In the unknown branch, `u` still holds the imported row after T014's fix. That is harmless only because the unknown branch never uses `u.ID`, so keep it that way.
