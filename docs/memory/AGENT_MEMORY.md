@@ -17,6 +17,10 @@
 - [T003 kimi] TLS contract for T064/T067: harness mounts server.crt + server.key at /tls (env TLS_DIR); entrypoint stages them ldap-owned into /run/openldap/tls and slapd.ldif points there — mounts of any mode/ownership work. StartTLS on 389, ldaps on 636, both requiring the per-run test CA.
 - [T003 kimi] Fixture layout: no-mail (uid=eng4) and shared-mail twins (uid=eng6/eng7) live under ou=Engineering (the connection base) so quickstart Scenario 2's import math (created: 4) works; uid=eng-outlier has departmentNumber: 7 as the base-filter (departmentNumber=42) trap; the 1 MiB description is generated at build time and intentionally kept out of people.ldif.
 - [T003 kimi] Bind DN for all tests: cn=reader,dc=example,dc=test / reader-password; cn=admin/admin-password (root DN) is debugging-only.
+- [T006 claude] Bounds: `dial_timeout` in (0, 30s]; `max_size_limit` in [1, 1000]; `max_time_limit` in [1s, 60s] (matching the data-model CHECKs 1..1000 and 1..60); `rate_per_minute` and `max_connections_per_tenant` must be > 0, with no upper cap. An empty `allowed_ports` is refused, and ports must be 1..65535.
+- [T006 claude] CIDRs must parse as prefixes (a bare IP like `10.0.0.1` is refused; `netip.ParsePrefix` behaves this way). Directory fields are validated even when `enabled: false`.
+- [T006 claude] `allow_plaintext` is refused only when `env: production`. `Warnings()` must mention `directory`, `allow_plaintext`, `allow_cidrs` and each allow CIDR string verbatim. `deny_cidrs` produces no directory warning. With defaults, the production shape must give zero warnings.
+- [T006 claude] Default `AllowCIDRs` is empty. The default `DenyCIDRs` is not asserted, so T007 may choose it.
 
 ## Interfaces
 
@@ -29,6 +33,9 @@
 - [T003 kimi] Image path for testcontainers FromDockerfile (T064) and compose build (T067): services/auth/tests/integration/testdata/openldap/.
 - [T003 kimi] Env knobs: TLS_DIR (default /tls), SLAPD_LOGLEVEL (default stats); container exposes 389/636, slapd runs as user ldap.
 - [T003 kimi] Seed facts tests can rely on: base ou=Engineering,dc=example,dc=test; alias cn=eng-secret-alias → cn=hidden,ou=Secret; referral ou=Partners (ref ldap://directory.example.invalid); eng5 description = exactly 1048576 bytes.
+- [T006 claude] `Config.Directory Directory` (yaml `directory`). `Directory{Enabled bool; AllowPlaintext bool; Targets DirectoryTargets; DialTimeout time.Duration; MaxSizeLimit int; MaxTimeLimit time.Duration; RatePerMinute int; MaxConnectionsPerTenant int}`, with yaml keys `enabled, allow_plaintext, targets, dial_timeout, max_size_limit, max_time_limit, rate_per_minute, max_connections_per_tenant`.
+- [T006 claude] `DirectoryTargets{DenyCIDRs []string; AllowCIDRs []string; AllowedPorts []int}`, with yaml keys `deny_cidrs, allow_cidrs, allowed_ports`.
+- [T006 claude] Validate error messages must contain the full dotted key, e.g. `directory.targets.allow_cidrs`, `directory.targets.allowed_ports`, `directory.dial_timeout`, `directory.max_size_limit`, `directory.max_time_limit`, `directory.rate_per_minute`, `directory.max_connections_per_tenant`, `directory.allow_plaintext`.
 
 ## Gotchas
 
@@ -45,3 +52,4 @@
 - [T003 kimi] docker on this machine: socket is root:docker and the login session is stale — use `sg docker -c '...'` (jadmin IS in the docker group per /etc/group).
 - [T003 kimi] cn=config bootstrap: slaptest/slapadd -F need pre-created dirs; slaptest must run schema-only (a database section makes it try to open mdb and fail); slaptest-generated schema ldifs have relative DNs and no blank-line separators (the Dockerfile sed-rewrites the DN and inserts separators); slapadd rejects changetype: modify — use slapmodify; busybox awk has no paragraph mode.
 - [T003 kimi] Entry timestamps are slapadd build time — tests must not assert on them; any people.ldif/slapd.ldif change requires an image rebuild (T064 FromDockerfile rebuilds automatically).
+- [T006 claude] `AllowedPorts` must be `[]int`, because the tests compare it with `slices.Equal` against `[]int{...}`.
