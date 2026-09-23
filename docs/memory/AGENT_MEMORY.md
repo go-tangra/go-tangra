@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T011 claude] `DeleteImportedUser` also removes the user's role bindings, role map, recovery codes, sessions, group memberships and avatar, to match the SQL cascades.
-- [T014 claude] `u` is reset to `store.User{}` for imported rows, not just `known=false`. Otherwise the account rate-limit branch (runs before the `known` checks) would record the imported user's ID in its attempt row and reveal the account. This departs from T013's note that `u` would keep the imported row.
-- [T015 claude] The store test expects `ErrNotFound` from `AddGroupMembers` for an imported user, which is what the planned `u.status <> 'imported'` filter produces with the existing "not a user" fallback. Mapping it to `invalid_state` belongs in the service/HTTP layer, not the store.
-- [T015 claude] The admin guard must run right after `lookup`, before the last-owner check, the status update and `RevokeUser`, and it must emit no audit row with outcome ok.
-- [T016 claude] The `setUserRoles` refusal happens in the handler: it checks the status of the user returned by `Admin.Lookup` before `AssignRoles`. `authz.Assigner` is unchanged.
 - [T016 claude] The memstore `AddGroupMembers` also filters `Status == "imported"` (→ `ErrNotFound`), to match SQL for service-level tests.
 - [T016 claude] Adding an imported user to a group gives 404 `not_found`, not 409; the store-level fallback was kept, per T015's decision.
 - [T017 claude] `NewTargetPolicy` must return an error for a bad CIDR, a bare IP used as a CIDR, an empty `AllowedPorts`, or a port outside 1..65535. It repeats the config validation as a defence.
@@ -56,14 +51,14 @@
 - [T025 claude] Step mapping: `Open` error `ErrTLS` → tls, any other `Open` error → connect; an ldaps/starttls session whose `TLSState()` reports no completed handshake → tls/tls_failed with no bind; Bind → bind; BaseExists → search_base. Reason = `ldapdir.Reason(err)`. last_test outcome = "ok" or the reason.
 - [T025 claude] A typed `BindPassword` wins over the stored one; nil plus `connID` means reuse the stored password; `""` is always refused.
 - [T025 claude] Audit `directory_connection_tested`: outcome ok/failed/refused(rate_limited), `Reason` = reason, details `step` (on failure) and `connection_id` (saved tests). A cross-tenant id also emits `cross_tenant_refused`; the test accepts either tenant id on that row.
+- [T026 claude] The handlers depend on an interface, not on `*directory.Service`, so the tests use a fake and don't depend on T024/T025's constructor.
+- [T026 claude] Every service method takes `(ctx, actor tenantctx.Actor, tenantID string, …)` and the handler always passes `a.TenantID`; the fake fails the test otherwise.
+- [T026 claude] Saved-connection test calls `Test(ctx, a, a.TenantID, directory.Input{}, id)`. A zero `Input` means "use the stored settings and persist last_test", following the single `Test` in contracts §C. Unsaved test passes the decoded body plus `connection_id` (empty if absent).
+- [T026 claude] Owner/admin pass without an authz call. Any other role needs `Allowed(...)==true`. An authz error means refused (fail closed).
+- [T026 claude] `Enabled:false` → every directory route answers 404 `{"reason":"not_found"}` before authentication or authz. T034 must register with `Enabled: cfg.Directory.Enabled` and not skip registration: a declared but unregistered route answers 501.
 
 ## Interfaces
 
-- [T008 claude] Minimum insert columns the test uses: `directory_connections(id, tenant_id, name, kind='openldap', url, tls_mode='ldaps', bind_dn, bind_password_enc, base_dn, attr_uid='entryUUID', attr_email='mail', attr_display_name='cn')`. Any other column needs a DEFAULT or a nullable type, and T009's CHECKs must accept these values (url `ldaps://h`, bind_dn `cn=a`, base_dn `dc=a` also appear).
-- [T008 claude] `user_directory_links(user_id, tenant_id, connection_id, connection_name, directory_uid, directory_dn, first_imported_at, last_imported_at)`.
-- [T008 claude] Added helper `sqlState(err) string` in the store package's integration test files.
-- [T009 claude] Index and constraint names:
-- [T009 claude] `directory_connections_tenant_name` (unique on `tenant_id, lower(name)`) → a duplicate name gives 23505.
 - [T009 claude] `user_directory_links_source_uid` (unique) → a repeat import of the same source uid gives 23505.
 - [T009 claude] `users_status_check`, `users_imported_idx`.
 - [T009 claude] DB CHECKs, all giving 23514:
@@ -109,13 +104,14 @@
 - [T025 claude] `Input{Name, Kind, URL, TLSMode string; AllowTLS12 bool; CAPEM, BindDN string; BindPassword *string; BaseDN string}` (more fields allowed).
 - [T025 claude] `TestResult{OK bool; Step, Reason string; TLS *TLSInfo; DurationMS int64}`; `TLSInfo{Version string /* tls.VersionName */; PeerSubject string}`.
 - [T025 claude] Sentinels whose `Error()` equals the reason: `ErrValidation`, `ErrNotFound`, `ErrRateLimited` ("rate_limited"), `ErrInsecureTransport` ("insecure_transport").
+- [T026 claude] `httpapi.DirectoryService`: `List(ctx, a, tid) ([]directory.Connection, error)`; `Get(ctx, a, tid, id) (directory.Connection, error)`; `Create(ctx, a, tid, directory.Input) (directory.Connection, error)`; `Update(ctx, a, tid, id, directory.Input) (directory.Connection, error)`; `Remove(ctx, a, tid, id) error`; `Test(ctx, a, tid, directory.Input, connID string) (directory.TestResult, error)`.
+- [T026 claude] `httpapi.PermissionChecker{ Allowed(ctx, tid, uid string, p authz.PermissionRef) (bool, error) }` (`*authz.Client` satisfies it); `RequirePermission(r *http.Request, az PermissionChecker, perm string) (tenantctx.Actor, error)` with perm `"directory:manage"`.
+- [T026 claude] `httpapi.DirectoryDeps{Enabled bool; Directories DirectoryService; Authz PermissionChecker}`; `(*Server).RegisterDirectory(DirectoryDeps)`.
+- [T026 claude] `directory.Input`, `directory.Connection` and `directory.TestResult` must JSON-encode/decode exactly the contracts §A wire names. The tests build values through `json.Unmarshal` and read `Input` back through `json.Marshal`, so for example `name`, `url`, `base_dn`, `allow_tls12` must round-trip. The handler decodes the body strictly into `directory.Input`, plus `connection_id` for `/directories/te…
+- [T026 claude] Sentinels the tests use: `directory.ErrValidation` (400 validation_failed), `ErrInsecureTransport` (400), `ErrDuplicate` (409 duplicate), `ErrLimitReached` (409 limit_reached), `ErrRateLimited` (429).
 
 ## Gotchas
 
-- [T003 kimi] docker on this machine: socket is root:docker and the login session is stale — use `sg docker -c '...'` (jadmin IS in the docker group per /etc/group).
-- [T003 kimi] cn=config bootstrap: slaptest/slapadd -F need pre-created dirs; slaptest must run schema-only (a database section makes it try to open mdb and fail); slaptest-generated schema ldifs have relative DNs and no blank-line separators (the Dockerfile sed-rewrites the DN and inserts separators); slapadd rejects changetype: modify — use slapmodify; busybox awk has no paragraph mode.
-- [T003 kimi] Entry timestamps are slapadd build time — tests must not assert on them; any people.ldif/slapd.ldif change requires an image rebuild (T064 FromDockerfile rebuilds automatically).
-- [T006 claude] `AllowedPorts` must be `[]int`, because the tests compare it with `slices.Equal` against `[]int{...}`.
 - [T007 claude] golangci-lint still reports `hugeParam` on the existing `Config.Validate` and `Config.Warnings` value receivers. That's not from this task, so I left it.
 - [T008 claude] Run with `sg docker -c 'go test -tags integration -run TestMigration0008LDAPImport ./internal/store/'` (the docker group isn't active in the stale login session).
 - [T008 claude] FK checks ignore RLS, so a cross-tenant link insert is refused only by the policy's WITH CHECK on `tenant_id`, which is how the test checks it.
@@ -162,3 +158,7 @@
 - [T025 claude] `TestTestStoreFailure` uses `ms.FailNext("SetDirectoryConnectionTest")`, so the memstore adapter must end up calling that memstore method.
 - [T025 claude] Plaintext must be refused when `Production` is true even if `AllowPlaintext` is set.
 - [T025 claude] The service must itself check the scheme against `TLSMode` and parse the CA before `Open`, because ldapfake's `Open` validates nothing.
+- [T026 claude] The whole `internal/httpapi` test package fails to compile until T030 (types and sentinels), T033 (handlers) and T028 (routes in console.yaml) all land. `MustHandle` panics on undeclared routes.
+- [T026 claude] A missing CSRF header is refused by the OpenAPI validator (required header parameter → 400) before the handler runs, so T028 must declare `#/components/parameters/csrf` on every mutation.
+- [T026 claude] `directory.Connection` must not have any JSON field whose key contains "password" other than `bind_password_set`, and must ignore unknown keys when decoding. The fixture offers `bind_password`, `bind_password_enc` and similar keys on purpose.
+- [T026 claude] Never print a recorded `dirCall.Input` with `%+v`: it holds the password. Use `dirOps(calls)`, because the redaction scan runs with `-v`.
