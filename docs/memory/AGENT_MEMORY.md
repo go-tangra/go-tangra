@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T008 claude] The test uses raw SQL for the new tables, not store helpers, so it does not depend on T010. It runs as `auth_app` through `st.Tx` (RLS applies) and checks results through the admin connection.
-- [T009 claude] No separate `(tenant_id, connection_id)` index on `user_directory_links`. The unique index `user_directory_links_source_uid (tenant_id, connection_id, directory_uid)` has those columns first, so it serves the same lookups.
-- [T009 claude] `user_directory_links.tenant_id` has no FK to tenants, like `group_members`. `directory_connections.tenant_id` does reference `tenants(id)`.
-- [T009 claude] The Down migration first runs `set_config('app.system','on',true)`, because `users` has FORCE RLS. It then deletes users with status `imported` (their dependent rows go too, via cascades), restores the three-value CHECK and drops both tables.
-- [T010 claude] `ListUsers` signature is unchanged. It fills two new `store.User` fields, `Directory *DirectoryLink` and `InvitationID *string`, and no other query sets them. This avoids breaking memstore, userdb and admin before T011/T050.
 - [T010 claude] A pending invitation means not accepted and not revoked, including expired ones, because Resend works on expired invitations. It is only looked up for `status='invited'`, and the most recent one wins.
 - [T010 claude] `UpdateImportedUser` / `DeleteImportedUser` return `ErrNotFound` when the user is missing or is not `imported`. The service loads the user first to tell 404 from 409 (invalid_state).
 - [T010 claude] `UpdateDirectoryConnection` keeps the stored password when `BindPasswordEnc` is empty. It does not change the test result, `created_by` or `created_at`. It sets `updated_by`.
@@ -56,13 +51,14 @@
 - [T022 claude] Search uses the synchronous `conn.Search` with `EnforceSizeLimit=true`, so memory stays bounded to SizeLimit+1 entries even if the server ignores the limit. Results with code 3 or 4, or `ldap.ErrSizeLimitExceeded`, return as Truncated with no error. A panic inside go-ldap while decoding a hostile response is recovered and returned as `&DirectoryError{}`.
 - [T022 claude] Invalid queries (unknown Scope, empty Attributes, SizeLimit < 1, negative TimeLimit) return an error wrapping `ErrDirectory` ("invalid query"), and nothing is sent. TimeLimit is rounded up to whole seconds, so sub-second limits become 1.
 - [T022 claude] `mapError` also maps go-ldap 201/202 (filter compile/decompile) to `ErrInvalidFilter`. Closed sentinels are returned bare, dropping any wrapping text. Open returns the fixed-text `CheckURL`/`NewTLSConfig` errors unchanged.
+- [T023 claude] Filters are compiled with `ldap.CompileFilter` and evaluated in the fake, so escaping is real (`(uid=\2a)` matches only a literal `*`). Matching ignores case for valid UTF-8 and compares non-UTF-8 values byte for byte (objectGUID). AD bit rules 803/804 and rule-less `:=` are supported; any other extensible rule gives `DirectoryError{Code:53}`. Invalid filter → `ErrInvalidFilter`.
+- [T023 claude] `Query` has no deref field, so the client always asks for NeverDerefAliases. The fake honours this by default: an alias comes back as the alias object itself. `SetDerefAliases(true)` models a misbehaving server that swaps in the alias target, even one outside the base. T041 uses this for its "alias target dropped" check.
+- [T023 claude] A referral object in scope is counted in `Page.Referrals` and never returned as an entry. A search or base check at or below a referral gives `DirectoryError{Code:10}`.
+- [T023 claude] Parents are not created automatically. A base DN exists only if an entry was added for it, so tests must `Add` the base and OU entries.
+- [T023 claude] Every Search call is recorded, including invalid queries and ones that get an injected error. To test "zero directory calls", assert `len(d.Searches())==0`.
 
 ## Interfaces
 
-- [T004 kimi] Directory layout: testdata/ldap/{filters,dns,urls,objectguid}/; .bin = non-UTF-8/binary, .txt = UTF-8. Regenerate: `cd services/auth/tests/fuzz/testdata/ldap && go run gen.go`.
-- [T004 kimi] Documented expected GUID decodes: valid-sequential.bin → 03020100-0504-0706-0809-0a0b0c0d0e0f, valid-ad-example.bin → 3f78f21c-a23e-4c71-9b4e-2d6f9c1a7b55.
-- [T004 kimi] Consumers: T037–T039 table tests and T040 fuzz targets (FuzzCompileUserFilter, FuzzCombine, FuzzScopeBase, FuzzCheckURL, FuzzDecodeEntry) — load whole subdirs as f.Add seeds.
-- [T003 kimi] Image path for testcontainers FromDockerfile (T064) and compose build (T067): services/auth/tests/integration/testdata/openldap/.
 - [T003 kimi] Env knobs: TLS_DIR (default /tls), SLAPD_LOGLEVEL (default stats); container exposes 389/636, slapd runs as user ldap.
 - [T003 kimi] Seed facts tests can rely on: base ou=Engineering,dc=example,dc=test; alias cn=eng-secret-alias → cn=hidden,ou=Secret; referral ou=Partners (ref ldap://directory.example.invalid); eng5 description = exactly 1048576 bytes.
 - [T006 claude] `Config.Directory Directory` (yaml `directory`). `Directory{Enabled bool; AllowPlaintext bool; Targets DirectoryTargets; DialTimeout time.Duration; MaxSizeLimit int; MaxTimeLimit time.Duration; RatePerMinute int; MaxConnectionsPerTenant int}`, with yaml keys `enabled, allow_plaintext, targets, dial_timeout, max_size_limit, max_time_limit, rate_per_minute, max_connections_per_tenant`.
@@ -109,11 +105,13 @@
 - [T022 claude] `const TLSModeLDAPS = "ldaps"`, `TLSModeStartTLS = "starttls"`, `TLSModePlain = "plain"`; `DefaultDialTimeout = 5s`; `MaxBERPacketBytes = 8 MiB` (set in `init()`).
 - [T022 claude] Errors: `ErrUnreachable`, `ErrTimeout`, `ErrTLS`, `ErrInvalidCredentials`, `ErrBaseNotFound`, `ErrDirectory`, `ErrInvalidFilter`, `ErrInvalidBase` (in `errors.go`); `type DirectoryError struct{ Code int }` (matches `ErrDirectory`); `func Reason(err error) string` returns target_refused, unreachable, timeout, tls_failed, invalid_credentials, base_not_found, invalid_filter, invalid_base, invalid_url…
 - [T022 claude] `mapError(err) error` is unexported; T023's fake should return the exported sentinels or `*DirectoryError` directly.
+- [T023 claude] `ldapfake.New() *Directory` (implements `ldapdir.Directory`, safe for concurrent use); `type Entry struct{DN string; Attrs map[string][][]byte}`; `func Vals(...string) [][]byte`.
+- [T023 claude] Fixtures: `Add(Entry)` (panics on a bad DN), `AddAlias(dn, target)`, `AddReferral(dn, url)`, `SetCredentials(dn, pw)`, `SetDerefAliases(bool)`, `SetServerSizeLimit(n)` (0 = none), `SetTimeLimitAfter(n)` (negative = off, which is the default; otherwise returns n entries, Truncated), `SetDelay(d)`, `SetTLSVersion(v)` (default TLS 1.3; plain sessions report `ok=false`).
+- [T023 claude] `InjectError(op Op, errs ...error)` with `OpOpen|OpBind|OpBaseExists|OpSearch`; errors are used in order, one per call, and a nil entry lets that call run normally.
+- [T023 claude] Records: `Opens() []ldapdir.ConnParams`, `Binds() []BindCall{DN, Password}`, `BaseChecks() []string`, `Searches() []SearchCall{Query; Deref int (always ldap.NeverDerefAliases); WireSizeLimit (=SizeLimit+1); WireTimeLimit (whole seconds, rounded up)}`, `OpenSessions() int`.
 
 ## Gotchas
 
-- [T001 claude] `make vuln` runs `govulncheck ./...` without the `tools` tag, so it won't scan go-ldap until real code imports it. Use `govulncheck -tags tools ./tools/` in the meantime.
-- [T001 claude] `make lint` already fails with 57 findings (revive/staticcheck/gosec/goimports) in files this task didn't touch. None are in tools/ or LDAP code.
 - [T002 claude] The packages contain no statements yet, so the 100 % coverage gate for `ldapdir` (a later task adds it to SECURITY_PKGS) applies once real code lands.
 - [T005 claude] The scan uses grep's basic regular expressions (`grep -rc`, no `-E`). Keep it that way: switching to `-E` would change how existing patterns like `+38591` and `\$argon2id\$` are read.
 - [T005 claude] A test that fails in those packages makes `make redaction-scan` fail.
@@ -161,3 +159,6 @@
 - [T022 claude] The ldapdir test run takes about 18s, mostly the existing `TestHandshakeBehaviour` in `tlsconf_test.go` (three 5s subtests), not the client tests.
 - [T022 claude] `scripts/coverage-gate.sh` still needs a `coverage.out` generated first.
 - [T022 claude] `client_extra_test.go` builds a raw hostile packet that assumes message ID 1 for the first request on a plain session.
+- [T023 claude] A ctx timeout during the delay, or an injected `ErrTimeout`, leaves the session unusable. Any later call, and any call after Close, returns `ErrUnreachable`.
+- [T023 claude] `BindCall.Password` keeps a copy of the password so tests can assert which one was used. Don't print it in tests: the redaction scan runs this suite with `-v`.
+- [T023 claude] `Open` doesn't check the URL, the TLS mode or the target policy. Inject errors on `OpOpen` to test those paths.
