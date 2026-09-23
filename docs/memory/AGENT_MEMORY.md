@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T004 kimi] DN scoping expectations are relative to base dc=example,dc=test, case-insensitive RDN compare (matches people.ldif from T003).
-- [T003 kimi] TLS contract for T064/T067: harness mounts server.crt + server.key at /tls (env TLS_DIR); entrypoint stages them ldap-owned into /run/openldap/tls and slapd.ldif points there — mounts of any mode/ownership work. StartTLS on 389, ldaps on 636, both requiring the per-run test CA.
-- [T003 kimi] Fixture layout: no-mail (uid=eng4) and shared-mail twins (uid=eng6/eng7) live under ou=Engineering (the connection base) so quickstart Scenario 2's import math (created: 4) works; uid=eng-outlier has departmentNumber: 7 as the base-filter (departmentNumber=42) trap; the 1 MiB description is generated at build time and intentionally kept out of people.ldif.
-- [T003 kimi] Bind DN for all tests: cn=reader,dc=example,dc=test / reader-password; cn=admin/admin-password (root DN) is debugging-only.
-- [T006 claude] Bounds: `dial_timeout` in (0, 30s]; `max_size_limit` in [1, 1000]; `max_time_limit` in [1s, 60s] (matching the data-model CHECKs 1..1000 and 1..60); `rate_per_minute` and `max_connections_per_tenant` must be > 0, with no upper cap. An empty `allowed_ports` is refused, and ports must be 1..65535.
 - [T006 claude] CIDRs must parse as prefixes (a bare IP like `10.0.0.1` is refused; `netip.ParsePrefix` behaves this way). Directory fields are validated even when `enabled: false`.
 - [T006 claude] `allow_plaintext` is refused only when `env: production`. `Warnings()` must mention `directory`, `allow_plaintext`, `allow_cidrs` and each allow CIDR string verbatim. `deny_cidrs` produces no directory warning. With defaults, the production shape must give zero warnings.
 - [T006 claude] Default `AllowCIDRs` is empty. The default `DenyCIDRs` is not asserted, so T007 may choose it.
@@ -56,6 +51,11 @@
 - [T020 claude] Only an exactly empty CA string means system roots. A whitespace-only string gives `ErrInvalidCA`.
 - [T020 claude] An empty `Endpoint.Host` returns an error wrapping `ErrInvalidURL`. No new error variable was added.
 - [T020 claude] Error texts are fixed and never echo the PEM input.
+- [T021 claude] Test seam: `Client` has an unexported field `dialer func(time.Duration) *net.Dialer`. It defaults to `policy.Dialer`. Tests replace it with a plain dialer because loopback is always denied.
+- [T021 claude] `Open` validates before dialling: `CheckURL`, then scheme vs `TLSMode` (`ldaps`↔`ldaps://`; `starttls`/`plain`↔`ldap://`; mismatch, empty or unknown → `ErrInvalidURL`), then `NewTLSConfig` (`ErrInvalidCA`). Only after that does it dial.
+- [T021 claude] Any StartTLS failure gives `ErrTLS`, and the connection is closed with no fallback. The one exception: if the ctx deadline expires, the result is `ErrTimeout`.
+- [T021 claude] `Session` methods must honour the ctx deadline (Open's StartTLS, Bind, BaseExists, Search), returning `ErrTimeout` promptly. go-ldap has no ctx, so close the connection on ctx done (`context.AfterFunc`).
+- [T021 claude] Search sends `SizeLimit+1`, `TimeLimit` in whole seconds, `NeverDerefAliases`, `TypesOnly=false`, and the attribute list exactly. It returns at most `SizeLimit` entries. Truncated=true if more arrive, or if the result code is 4 or 3 (the entries received so far are kept, with no error). Referrals are counted, never followed. An empty `Attributes` is refused with a closed error before anything is s…
 
 ## Interfaces
 
@@ -102,6 +102,11 @@
 - [T018 claude] `CheckURL` returns `Endpoint{Scheme, Host, Port}`; call `Endpoint.Addr()` to get the address to dial.
 - [T019 claude] `var ErrInvalidCA` (declare it in `tlsconf.go`; T022's `errors.go` must not declare it again), `const MaxCAPEMBytes = 64 << 10`, `func ParseCA(pem string) (*x509.CertPool, error)`, `func NewTLSConfig(ep Endpoint, caPEM string, allowTLS12 bool) (*tls.Config, error)`.
 - [T020 claude] Each call returns a new config with its own copy of the cipher list, so callers may keep or change it.
+- [T021 claude] `type Client`; `func NewClient(p *TargetPolicy) *Client` (implements `Directory`); `const DefaultDialTimeout = 5 * time.Second` (used when `DialTimeout == 0`); `const MaxBERPacketBytes = 8 << 20`. `ber.MaxPacketLengthBytes` must equal it once `NewClient` has been called (setting it in `init()` works).
+- [T021 claude] `type ConnParams struct{ URL, TLSMode, CAPEM string; AllowTLS12 bool; DialTimeout time.Duration }`. TLSMode is one of the literal strings "ldaps", "starttls" or "plain".
+- [T021 claude] `type Scope int` with `ScopeSub` (zero value, sent as wholeSubtree) and `ScopeOne` (sent as singleLevel).
+- [T021 claude] `type Query struct{ BaseDN string; Scope Scope; Filter string; Attributes []string; SizeLimit int; TimeLimit time.Duration }`.
+- [T021 claude] `type RawEntry struct{ DN string; Attrs map[string][][]byte }`. Attribute keys are lower-cased.
 
 ## Gotchas
 
@@ -146,3 +151,8 @@
 - [T019 claude] `pool.Subjects()` is deprecated, so the test uses it under a `//nolint:staticcheck`.
 - [T020 claude] To keep 100% coverage, the malformed-block-before-a-valid-certificate case is tested in `tlsconf_extra_test.go`.
 - [T020 claude] To pass golangci-lint, I changed `tlsconf_test.go`: `handshake` now takes `*testPKI`, deferred `Close` calls are wrapped, and one boolean expression was rewritten.
+- [T021 claude] go-ldap's `StartTLS` formats the handshake error with `%v`, so the x509 cause is lost. Classify by step: any StartTLS error means ErrTLS.
+- [T021 claude] When a server refuses TLS 1.3, the error is a `*net.OpError{Op:"remote error"}` wrapping an unexported alert type, not `tls.AlertError`. Without the Op check it maps to Unreachable.
+- [T021 claude] golangci-lint's gocritic flags `hugeParam` on `Search(ctx, q Query)` (80 bytes). The contract fixes it by value, so T022 needs a `//nolint:gocritic` on that function.
+- [T021 claude] errcheck flags `conn.Close()` calls in go-ldap. Use `_ =`.
+- [T021 claude] The test helpers reuse `newCA` from `tlsconf_test.go`, plus `mustPolicy`/`defaultTargets` from `policy_test.go`.
