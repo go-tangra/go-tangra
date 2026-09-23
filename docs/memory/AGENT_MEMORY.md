@@ -23,6 +23,7 @@
 - [T006 claude] Default `AllowCIDRs` is empty. The default `DenyCIDRs` is not asserted, so T007 may choose it.
 - [T007 claude] `deny_cidrs` defaults to empty. The always-denied set (loopback, link-local/metadata, unspecified, multicast) must be enforced in code by the `ldapdir` target policy (D5), not through config. Private ranges are not denied by default because customer directories are often on private networks.
 - [T007 claude] Validation order: `allow_plaintext` (production only), then deny CIDRs, allow CIDRs, ports, dial timeout, size limit, time limit, rate, connections. The first failure is returned.
+- [T008 claude] The test uses raw SQL for the new tables, not store helpers, so it does not depend on T010. It runs as `auth_app` through `st.Tx` (RLS applies) and checks results through the admin connection.
 
 ## Interfaces
 
@@ -41,6 +42,10 @@
 - [T007 claude] `config.Directory{Enabled, AllowPlaintext bool; Targets DirectoryTargets; DialTimeout time.Duration; MaxSizeLimit int; MaxTimeLimit time.Duration; RatePerMinute, MaxConnectionsPerTenant int}`
 - [T007 claude] `config.DirectoryTargets{DenyCIDRs, AllowCIDRs []string; AllowedPorts []int}`. CIDRs are stored as strings that are known to parse, so consumers call `netip.ParsePrefix` again (it cannot fail after `Validate`).
 - [T007 claude] Warning texts: `directory connections may use ldap:// without TLS (directory.allow_plaintext)` and `directory.targets.allow_cidrs overrides deny_cidrs for: <cidrs joined by ", ">`.
+- [T008 claude] T009 must produce: constraint named exactly `users_status_check` (drop and re-add; only one status CHECK on users), index `users_imported_idx`, one policy named `tenant_isolation` per new table.
+- [T008 claude] Minimum insert columns the test uses: `directory_connections(id, tenant_id, name, kind='openldap', url, tls_mode='ldaps', bind_dn, bind_password_enc, base_dn, attr_uid='entryUUID', attr_email='mail', attr_display_name='cn')`. Any other column needs a DEFAULT or a nullable type, and T009's CHECKs must accept these values (url `ldaps://h`, bind_dn `cn=a`, base_dn `dc=a` also appear).
+- [T008 claude] `user_directory_links(user_id, tenant_id, connection_id, connection_name, directory_uid, directory_dn, first_imported_at, last_imported_at)`.
+- [T008 claude] Added helper `sqlState(err) string` in the store package's integration test files.
 
 ## Gotchas
 
@@ -59,3 +64,5 @@
 - [T003 kimi] Entry timestamps are slapadd build time — tests must not assert on them; any people.ldif/slapd.ldif change requires an image rebuild (T064 FromDockerfile rebuilds automatically).
 - [T006 claude] `AllowedPorts` must be `[]int`, because the tests compare it with `slices.Equal` against `[]int{...}`.
 - [T007 claude] golangci-lint still reports `hugeParam` on the existing `Config.Validate` and `Config.Warnings` value receivers. That's not from this task, so I left it.
+- [T008 claude] Run with `sg docker -c 'go test -tags integration -run TestMigration0008LDAPImport ./internal/store/'` (the docker group isn't active in the stale login session).
+- [T008 claude] FK checks ignore RLS, so a cross-tenant link insert is refused only by the policy's WITH CHECK on `tenant_id`, which is how the test checks it.
