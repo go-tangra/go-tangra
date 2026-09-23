@@ -11,3 +11,8 @@ indent_style = space
 indent_size = 2
 [Makefile]
 indent_style = tab
+# LDAP fuzz/table corpus: files are the exact parser input — a trailing
+# newline would invalidate the valid-* fixtures (see testdata/ldap/README.md).
+[services/auth/tests/fuzz/testdata/ldap/**]
+insert_final_newline = false
+trim_trailing_whitespace = false
