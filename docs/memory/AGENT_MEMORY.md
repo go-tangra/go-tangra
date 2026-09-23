@@ -35,6 +35,10 @@
 - [T012 claude] No `user_activated` event type. Per research D14, activation is emitted as `audit.InviteCreated` with `Reason: "activation"` and `SubjectID` set to the user.
 - [T013 claude] "Dummy verify executed" is checked in two ways. An imported row that has a stray `PasswordHash` still refuses the correct password, and an imported sign-in must cost 0.5–2× an unknown one (best of 3 runs, pad disabled), the same bound `password_test.go` uses.
 - [T013 claude] The invite test inserts the invitation directly with `ms.InsertInvitation` rather than calling `CreateWith`. D10 will change `CreateWith` to turn an imported e-mail into an activation, and that would conflict with this test.
+- [T011 claude] The memstore methods have the same names as the `store` package functions, without the `tx` argument, e.g. `(m *Store) InsertDirectoryConnection(ctx, c)`. T032's `directorydb` and the `directory.Store` interface should use these names so memstore satisfies the interface directly.
+- [T011 claude] `UpsertLink` returns `ErrNotFound` for a missing user or connection, where the SQL foreign key would raise its own error.
+- [T011 claude] Memstore invitations have no `created_at`, so the "most recent pending invitation" is the one with the latest `ExpiresAt`; ties go to the smaller id.
+- [T011 claude] `DeleteImportedUser` also removes the user's role bindings, role map, recovery codes, sessions, group memberships and avatar, to match the SQL cascades.
 
 ## Interfaces
 
@@ -69,6 +73,9 @@
 - [T010 claude] `DirectoryConnection.CAPEM` is "" for NULL. `LastTestOutcome`, `LastTestAt`, `CreatedBy`, `UpdatedBy` and `DirectoryLink.ConnectionID` / `ImportedBy` are pointers.
 - [T012 claude] `audit.DirectoryConnectionCreated`, `audit.DirectoryConnectionUpdated`, `audit.DirectoryConnectionDeleted`, `audit.DirectoryConnectionTested`, `audit.DirectorySearched`, `audit.DirectoryImported`, `audit.ImportedUserDeleted` (all `audit.EventType`).
 - [T013 claude] The sign-in test expects imported attempts to be recorded as `memstore.Attempt{UserID: "", Outcome: "refused", Reason: "unknown_account"}`. `signin_failed` audit rows must have `ActorUserID == nil` and `Reason == "unknown_account"`. There must be no `lockout` event and no `cache.RateKey("fail", uid)` key.
+- [T011 claude] `(m *Store) InsertDirectoryConnection(ctx, store.DirectoryConnection) error`; `GetDirectoryConnection(ctx, tid, id)`; `GetDirectoryConnectionAnyTenant(ctx, id)`; `ListDirectoryConnections(ctx, tid)`; `CountDirectoryConnections(ctx, tid) (int, error)`; `UpdateDirectoryConnection(ctx, c) error`; `SetDirectoryConnectionTest(ctx, tid, id, outcome string, at time.Time) error`; `DeleteDirectoryConnectio…
+- [T011 claude] `(m *Store) UsersByEmails(ctx, tid, []string) (map[string]store.User, error)`; `LinksByUIDs(ctx, tid, connID, []string) (map[string]store.DirectoryLink, error)`; `UpsertLink(ctx, store.DirectoryLink) error`; `UpdateImportedUser(ctx, tid, uid, store.ImportedProfile) error`; `DeleteImportedUser(ctx, tid, uid) error`.
+- [T011 claude] `(m *Store) FailNext(method string)` arms a one-shot error (unexported type `injectedErr`) for any of the directory methods above, by method name. It is not wired into older memstore methods.
 
 ## Gotchas
 
@@ -96,3 +103,5 @@
 - [T012 claude] `audit.Row` redacts any detail key whose name contains `password|secret|token|key|code|cookie|authorization|phone|first_name|last_name|display_name|email_address`. Avoid detail keys like `search_key`, `status_code` or `error_code`; use `reason` or plain names such as `connection_id`, `filter`, `count`, `truncated`, `created`, `updated`, `user_ids`.
 - [T012 claude] There is no database CHECK on `event_type`, so the Go `known` map is the only thing that enforces the vocabulary.
 - [T013 claude] In the unknown branch, `u` still holds the imported row after T014's fix. That is harmless only because the unknown branch never uses `u.ID`, so keep it that way.
+- [T011 claude] `UpdateImportedUser` moves the user to a new map key when the e-mail changes, because `Users` is keyed by tenant and lower-cased e-mail.
+- [T011 claude] Connections are returned as copies (the `BindPasswordEnc` slice is copied), so tests can't change stored ciphertext through a returned value.
