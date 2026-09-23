@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T006 claude] CIDRs must parse as prefixes (a bare IP like `10.0.0.1` is refused; `netip.ParsePrefix` behaves this way). Directory fields are validated even when `enabled: false`.
-- [T006 claude] `allow_plaintext` is refused only when `env: production`. `Warnings()` must mention `directory`, `allow_plaintext`, `allow_cidrs` and each allow CIDR string verbatim. `deny_cidrs` produces no directory warning. With defaults, the production shape must give zero warnings.
-- [T006 claude] Default `AllowCIDRs` is empty. The default `DenyCIDRs` is not asserted, so T007 may choose it.
-- [T007 claude] `deny_cidrs` defaults to empty. The always-denied set (loopback, link-local/metadata, unspecified, multicast) must be enforced in code by the `ldapdir` target policy (D5), not through config. Private ranges are not denied by default because customer directories are often on private networks.
-- [T007 claude] Validation order: `allow_plaintext` (production only), then deny CIDRs, allow CIDRs, ports, dial timeout, size limit, time limit, rate, connections. The first failure is returned.
 - [T008 claude] The test uses raw SQL for the new tables, not store helpers, so it does not depend on T010. It runs as `auth_app` through `st.Tx` (RLS applies) and checks results through the admin connection.
 - [T009 claude] No separate `(tenant_id, connection_id)` index on `user_directory_links`. The unique index `user_directory_links_source_uid (tenant_id, connection_id, directory_uid)` has those columns first, so it serves the same lookups.
 - [T009 claude] `user_directory_links.tenant_id` has no FK to tenants, like `group_members`. `directory_connections.tenant_id` does reference `tenants(id)`.
@@ -56,12 +51,14 @@
 - [T021 claude] Any StartTLS failure gives `ErrTLS`, and the connection is closed with no fallback. The one exception: if the ctx deadline expires, the result is `ErrTimeout`.
 - [T021 claude] `Session` methods must honour the ctx deadline (Open's StartTLS, Bind, BaseExists, Search), returning `ErrTimeout` promptly. go-ldap has no ctx, so close the connection on ctx done (`context.AfterFunc`).
 - [T021 claude] Search sends `SizeLimit+1`, `TimeLimit` in whole seconds, `NeverDerefAliases`, `TypesOnly=false`, and the attribute list exactly. It returns at most `SizeLimit` entries. Truncated=true if more arrive, or if the result code is 4 or 3 (the entries received so far are kept, with no error). Referrals are counted, never followed. An empty `Attributes` is refused with a closed error before anything is s…
+- [T022 claude] `Session.Bind` zeroes the caller's password slice (`defer clear(password)`) on every path, so callers must not reuse it. The ldapfake should do the same so the two behave alike.
+- [T022 claude] The ctx deadline is enforced by `context.AfterFunc(ctx, conn.Close)` around each go-ldap call; any failure after ctx is done returns `ErrTimeout`. A session can't be used after it times out. For dialing, the ctx deadline is also copied into `net.Dialer.Deadline` when it is earlier.
+- [T022 claude] Search uses the synchronous `conn.Search` with `EnforceSizeLimit=true`, so memory stays bounded to SizeLimit+1 entries even if the server ignores the limit. Results with code 3 or 4, or `ldap.ErrSizeLimitExceeded`, return as Truncated with no error. A panic inside go-ldap while decoding a hostile response is recovered and returned as `&DirectoryError{}`.
+- [T022 claude] Invalid queries (unknown Scope, empty Attributes, SizeLimit < 1, negative TimeLimit) return an error wrapping `ErrDirectory` ("invalid query"), and nothing is sent. TimeLimit is rounded up to whole seconds, so sub-second limits become 1.
+- [T022 claude] `mapError` also maps go-ldap 201/202 (filter compile/decompile) to `ErrInvalidFilter`. Closed sentinels are returned bare, dropping any wrapping text. Open returns the fixed-text `CheckURL`/`NewTLSConfig` errors unchanged.
 
 ## Interfaces
 
-- [T001 claude] Module version: `github.com/go-ldap/ldap/v3 v3.4.14`. go-ldap's own test dependencies (gokrb5, sspi) are in go.sum but not linked into the binary.
-- [T002 claude] Package paths: `github.com/go-freya/freya/services/auth/internal/{ldapdir,ldapdir/ldapfake,directory,directory/directorydb}`.
-- [T005 claude] `scripts/redaction-scan.sh` runs `go test -count=1 -v ./internal/ldapdir/... ./internal/directory/...` without build tags, with `FREYA_CAPTURE_DIR=$ARTIFACTS/capture` exported. It copies that log to `$FREYA_CAPTURE_DIR/ldap-suite.log`, and every file in the capture directory is scanned.
 - [T004 kimi] Directory layout: testdata/ldap/{filters,dns,urls,objectguid}/; .bin = non-UTF-8/binary, .txt = UTF-8. Regenerate: `cd services/auth/tests/fuzz/testdata/ldap && go run gen.go`.
 - [T004 kimi] Documented expected GUID decodes: valid-sequential.bin → 03020100-0504-0706-0809-0a0b0c0d0e0f, valid-ad-example.bin → 3f78f21c-a23e-4c71-9b4e-2d6f9c1a7b55.
 - [T004 kimi] Consumers: T037–T039 table tests and T040 fuzz targets (FuzzCompileUserFilter, FuzzCombine, FuzzScopeBase, FuzzCheckURL, FuzzDecodeEntry) — load whole subdirs as f.Add seeds.
@@ -107,6 +104,11 @@
 - [T021 claude] `type Scope int` with `ScopeSub` (zero value, sent as wholeSubtree) and `ScopeOne` (sent as singleLevel).
 - [T021 claude] `type Query struct{ BaseDN string; Scope Scope; Filter string; Attributes []string; SizeLimit int; TimeLimit time.Duration }`.
 - [T021 claude] `type RawEntry struct{ DN string; Attrs map[string][][]byte }`. Attribute keys are lower-cased.
+- [T022 claude] `ldapdir.Directory{Open(ctx, ConnParams) (Session, error)}`; `ldapdir.Session{Bind(ctx, dn string, pw []byte) error; BaseExists(ctx, baseDN string) error; Search(ctx, Query) (Page, error); TLSState() (tls.ConnectionState, bool); Close() error}`.
+- [T022 claude] `type Page struct{ Entries []RawEntry; Truncated bool; Referrals int }`; `ConnParams`, `Query`, `RawEntry`, `Scope` (`ScopeSub`/`ScopeOne`) are as T021 defined them.
+- [T022 claude] `const TLSModeLDAPS = "ldaps"`, `TLSModeStartTLS = "starttls"`, `TLSModePlain = "plain"`; `DefaultDialTimeout = 5s`; `MaxBERPacketBytes = 8 MiB` (set in `init()`).
+- [T022 claude] Errors: `ErrUnreachable`, `ErrTimeout`, `ErrTLS`, `ErrInvalidCredentials`, `ErrBaseNotFound`, `ErrDirectory`, `ErrInvalidFilter`, `ErrInvalidBase` (in `errors.go`); `type DirectoryError struct{ Code int }` (matches `ErrDirectory`); `func Reason(err error) string` returns target_refused, unreachable, timeout, tls_failed, invalid_credentials, base_not_found, invalid_filter, invalid_base, invalid_url…
+- [T022 claude] `mapError(err) error` is unexported; T023's fake should return the exported sentinels or `*DirectoryError` directly.
 
 ## Gotchas
 
@@ -156,3 +158,6 @@
 - [T021 claude] golangci-lint's gocritic flags `hugeParam` on `Search(ctx, q Query)` (80 bytes). The contract fixes it by value, so T022 needs a `//nolint:gocritic` on that function.
 - [T021 claude] errcheck flags `conn.Close()` calls in go-ldap. Use `_ =`.
 - [T021 claude] The test helpers reuse `newCA` from `tlsconf_test.go`, plus `mustPolicy`/`defaultTargets` from `policy_test.go`.
+- [T022 claude] The ldapdir test run takes about 18s, mostly the existing `TestHandshakeBehaviour` in `tlsconf_test.go` (three 5s subtests), not the client tests.
+- [T022 claude] `scripts/coverage-gate.sh` still needs a `coverage.out` generated first.
+- [T022 claude] `client_extra_test.go` builds a raw hostile packet that assumes message ID 1 for the first request on a plain session.
