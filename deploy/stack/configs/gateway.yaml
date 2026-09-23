@@ -21,6 +21,9 @@ discovery:
     auth: ["auth:9543"]
 edge:
   addr: 0.0.0.0:8443
+  # Persistent dev certificate from the edge-cert-init service (compose.yaml).
+  cert_file: /edge/tls.crt
+  key_file: /edge/tls.key
   allowed_origins: ["https://localhost:8443", "https://127.0.0.1:8443"]
   rate_limit: { per_second: 200, burst: 400 }
 public_origin: https://localhost:8443

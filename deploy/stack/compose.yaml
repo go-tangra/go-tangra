@@ -111,6 +111,29 @@ services:
     entrypoint: ["sh","-c","chown -R 10001:10001 /certs && chmod 0755 /certs"]
     volumes: ["certs:/certs"]
 
+  # Browser-facing certificate for the gateway edge (https://localhost:8443).
+  # Generated ONCE into the edge-cert volume and reused on every restart and
+  # rebuild, so the browser's certificate exception (or a trust-store import of
+  # tls.crt) keeps working. Delete the volume (down -v) to regenerate.
+  edge-cert-init:
+    image: alpine:3.20
+    user: "0:0"
+    entrypoint: ["sh","-c"]
+    command:
+      - |
+        set -e
+        if [ -s /edge/tls.crt ] && [ -s /edge/tls.key ]; then echo "edge certificate present, keeping it"; exit 0; fi
+        apk add --no-cache openssl >/dev/null
+        openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
+          -keyout /edge/tls.key -out /edge/tls.crt -days 825 \
+          -subj "/CN=localhost/O=Freya dev stack" \
+          -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+          -addext "extendedKeyUsage=serverAuth" \
+          -addext "keyUsage=digitalSignature"
+        chmod 0600 /edge/tls.key && chmod 0644 /edge/tls.crt
+        echo "edge certificate generated"
+    volumes: ["edge-cert:/edge"]
+
   # Ensure the ONE DB-sealed mesh root and mint a leaf SVID per file-provider
   # service into the shared volume (ca.pem = the trust bundle). lcm self-issues
   # its own identity from the same root at startup, so the whole mesh chains to
@@ -231,9 +254,10 @@ services:
     user: "0:0"
     ports: ["8443:8443"]
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","gateway-state:/state","./configs/gateway.yaml:/app/deploy/container.yaml:ro"]
+    volumes: ["tokens:/tokens:ro","gateway-state:/state","edge-cert:/edge:ro","./configs/gateway.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9290/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
+      edge-cert-init: { condition: service_completed_successfully }
       timescaledb: { condition: service_healthy }
       valkey: { condition: service_healthy }
       auth: { condition: service_healthy }
@@ -473,6 +497,7 @@ services:
 
 volumes:
   certs:
+  edge-cert:
   pebble-certs:
   tokens:
   vault-creds:

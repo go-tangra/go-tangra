@@ -61,6 +61,25 @@ The accept link is printed by `up.sh`, is in
 (<http://localhost:8025>). Open it to set a password + TOTP for the operator,
 then sign in at <https://localhost:8443> (accept the dev self-signed cert).
 
+### The browser certificate stays the same
+
+`edge-cert-init` generates the gateway's browser certificate (`CN=localhost`,
+SANs `localhost` + `127.0.0.1`, ~2 years) **once** into the `edge-cert` volume;
+restarts and image rebuilds reuse it, so a browser exception you accepted keeps
+working. It changes only after `down -v` (or deleting the `edge-cert` volume).
+
+To stop seeing the warning at all, trust it once on the host:
+
+```sh
+docker compose -p freya-stack cp edge-cert-init:/edge/tls.crt ./freya-dev-edge.crt
+# Linux (Chrome/Chromium use the NSS store):
+certutil -d sql:$HOME/.pki/nssdb -A -t "P,," -n "Freya dev stack" -i ./freya-dev-edge.crt
+# macOS: open the file in Keychain Access and set it to "Always Trust".
+```
+
+Only trust it on your own development machine; the private key lives in the
+Docker volume.
+
 ## Certificate lifetime / modes
 
 - **Default:** SVIDs ~12 h, refreshed well before expiry, under a stable root.
