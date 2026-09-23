@@ -6,10 +6,6 @@
 
 ## Decisions
 
-- [T005 claude] Sentinel bind-password values must start with `LDAP-MARKER-PW-` followed by at least one letter or digit (e.g. `LDAP-MARKER-PW-s3cret`). The scan pattern is `LDAP-MARKER-PW-[A-Za-z0-9]`, so the bare prefix in source code or test names never matches. This follows the `DNS-MARKER-KEY-*` / `LCM-MARKER-SECRET-*` convention.
-- [T005 claude] Only `internal/ldapdir` is in the 100% gate, as the task asks. `internal/directory` is held to the 80% overall target only.
-- [T004 kimi] Naming encodes grammar-level truth, not freya policy: valid-* (grammar-valid, in all caps), invalid-* (grammar-rejected), injection-* (fragments that must fail standalone and never escape Combine), policy-* (grammar-valid but refused by D6 caps), odd-* (grammar-valid edges like `(&)`, `(uid=)`, empty DN — acceptance is T044's call), everything else named by dimension. Table tests must not assert…
-- [T004 kimi] Corpus files have no trailing newline (it changes parser input); .editorconfig scoped `[services/auth/tests/fuzz/testdata/ldap/**]` insert_final_newline=false / trim_trailing_whitespace=false to protect them.
 - [T004 kimi] DN scoping expectations are relative to base dc=example,dc=test, case-insensitive RDN compare (matches people.ldif from T003).
 - [T003 kimi] TLS contract for T064/T067: harness mounts server.crt + server.key at /tls (env TLS_DIR); entrypoint stages them ldap-owned into /run/openldap/tls and slapd.ldif points there — mounts of any mode/ownership work. StartTLS on 389, ldaps on 636, both requiring the per-run test CA.
 - [T003 kimi] Fixture layout: no-mail (uid=eng4) and shared-mail twins (uid=eng6/eng7) live under ou=Engineering (the connection base) so quickstart Scenario 2's import math (created: 4) works; uid=eng-outlier has departmentNumber: 7 as the base-filter (departmentNumber=42) trap; the 1 MiB description is generated at build time and intentionally kept out of people.ldif.
@@ -56,6 +52,10 @@
 - [T019 claude] An empty CA gives `ParseCA("") == (nil, nil)` and `RootCAs == nil`, which means the system roots are used.
 - [T019 claude] By default: `MinVersion = TLS13`, `CipherSuites == nil`. With `allow_tls12`: `MinVersion = TLS12`, a non-empty list containing only the six ECDHE_{ECDSA,RSA} AES-GCM/CHACHA20 suites, and TLS 1.3 still allowed (`MaxVersion` 0 or TLS13).
 - [T019 claude] `VerifyPeerCertificate` and `VerifyConnection` must be nil, `Renegotiation` must be `RenegotiateNever`, and every call must return a fresh config (a cipher slice it shares with the package would fail the mutation test).
+- [T020 claude] `ParseCA` is strict: the number of `-----BEGIN` markers must equal the number of decoded certificates. This is because `pem.Decode` silently skips a malformed block and returns the next good one.
+- [T020 claude] Only an exactly empty CA string means system roots. A whitespace-only string gives `ErrInvalidCA`.
+- [T020 claude] An empty `Endpoint.Host` returns an error wrapping `ErrInvalidURL`. No new error variable was added.
+- [T020 claude] Error texts are fixed and never echo the PEM input.
 
 ## Interfaces
 
@@ -101,6 +101,7 @@
 - [T018 claude] `func (p *TargetPolicy) Dialer(timeout time.Duration) *net.Dialer`: returns a dialer with `Control: p.Control`. T022 should use it with go-ldap's `DialWithDialer`.
 - [T018 claude] `CheckURL` returns `Endpoint{Scheme, Host, Port}`; call `Endpoint.Addr()` to get the address to dial.
 - [T019 claude] `var ErrInvalidCA` (declare it in `tlsconf.go`; T022's `errors.go` must not declare it again), `const MaxCAPEMBytes = 64 << 10`, `func ParseCA(pem string) (*x509.CertPool, error)`, `func NewTLSConfig(ep Endpoint, caPEM string, allowTLS12 bool) (*tls.Config, error)`.
+- [T020 claude] Each call returns a new config with its own copy of the cipher list, so callers may keep or change it.
 
 ## Gotchas
 
@@ -143,3 +144,5 @@
 - [T018 claude] `scripts/coverage-gate.sh` expects an existing `coverage.out` in `services/auth`. Generate the profile first, or it exits with "open coverage.out: no such file".
 - [T019 claude] `x509.CertPool.AppendCertsFromPEM` silently skips blocks it can't parse. T020 must decode with `pem.Decode` and `x509.ParseCertificate` on each block to get the strict behaviour.
 - [T019 claude] `pool.Subjects()` is deprecated, so the test uses it under a `//nolint:staticcheck`.
+- [T020 claude] To keep 100% coverage, the malformed-block-before-a-valid-certificate case is tested in `tlsconf_extra_test.go`.
+- [T020 claude] To pass golangci-lint, I changed `tlsconf_test.go`: `handshake` now takes `*testPKI`, deferred `Close` calls are wrapped, and one boolean expression was rewritten.
