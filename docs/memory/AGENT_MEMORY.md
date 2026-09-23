@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T010 claude] A pending invitation means not accepted and not revoked, including expired ones, because Resend works on expired invitations. It is only looked up for `status='invited'`, and the most recent one wins.
-- [T010 claude] `UpdateImportedUser` / `DeleteImportedUser` return `ErrNotFound` when the user is missing or is not `imported`. The service loads the user first to tell 404 from 409 (invalid_state).
-- [T010 claude] `UpdateDirectoryConnection` keeps the stored password when `BindPasswordEnc` is empty. It does not change the test result, `created_by` or `created_at`. It sets `updated_by`.
-- [T010 claude] Store functions pass structs by value, like the rest of the package (gocritic hugeParam warnings accepted).
-- [T012 claude] No `user_activated` event type. Per research D14, activation is emitted as `audit.InviteCreated` with `Reason: "activation"` and `SubjectID` set to the user.
 - [T013 claude] "Dummy verify executed" is checked in two ways. An imported row that has a stray `PasswordHash` still refuses the correct password, and an imported sign-in must cost 0.5–2× an unknown one (best of 3 runs, pad disabled), the same bound `password_test.go` uses.
 - [T013 claude] The invite test inserts the invitation directly with `ms.InsertInvitation` rather than calling `CreateWith`. D10 will change `CreateWith` to turn an imported e-mail into an activation, and that would conflict with this test.
 - [T011 claude] The memstore methods have the same names as the `store` package functions, without the `tx` argument, e.g. `(m *Store) InsertDirectoryConnection(ctx, c)`. T032's `directorydb` and the `directory.Store` interface should use these names so memstore satisfies the interface directly.
@@ -56,14 +51,14 @@
 - [T023 claude] A referral object in scope is counted in `Page.Referrals` and never returned as an entry. A search or base check at or below a referral gives `DirectoryError{Code:10}`.
 - [T023 claude] Parents are not created automatically. A base DN exists only if an entry was added for it, so tests must `Add` the base and OU entries.
 - [T023 claude] Every Search call is recorded, including invalid queries and ones that get an injected error. To test "zero directory calls", assert `len(d.Searches())==0`.
+- [T024 claude] The service only returns closed errors. It defines `ErrValidation`("validation_failed"), `ErrInsecureTransport`("insecure_transport"), `ErrDuplicate`("duplicate"), `ErrLimitReached`("limit_reached") and `ErrNotFound`("not_found"), and the tests check the exact text. URL, CA and filter problems return `ldapdir.ErrInvalidURL`, `ldapdir.ErrTargetRefused`, `ldapdir.ErrInvalidCA` or `ldapdir.ErrInvalid…
+- [T024 claude] Invalid or empty bind/base DNs (including the root DSE `""`), a DN over 1024 bytes, a bad name (empty or over 80), a bad kind or tls_mode, limits out of range and a bad attribute name (`^[A-Za-z][A-Za-z0-9-]{0,63}$`) all return `ErrValidation`. A URL over 512 bytes, or a scheme that doesn't match tls_mode (`ldaps`↔`ldaps://`), returns `ldapdir.ErrInvalidURL`. A base filter over 4096 bytes return…
+- [T024 claude] Plain mode is refused whenever `Production` is set, even with `AllowPlaintext`, and also in dev without the opt-out. The refusal is audited as `directory_connection_created`, outcome refused, reason `insecure_transport`. A `target_refused` create is audited the same way.
+- [T024 claude] Defaults: size limit is min(500, `MaxSizeLimit`) and time limit is min(15, `MaxTimeLimit` in seconds). Values above the deployment maximum are refused. The base filter is stored in canonical form (`DecompileFilter(CompileFilter)`), and an empty filter stays `""`. Setting `CAPEM: ""` on update clears the CA.
+- [T024 claude] Presets are filled into any empty `Mapping` fields. AD uses objectGUID/mail/displayName/givenName/sn. OpenLDAP uses entryUUID/mail/(cn or displayName)/givenName/sn; the test accepts either display-name value so it doesn't conflict with T039. `other` has no uid preset, so the uid attribute is required; its email attribute defaults to `mail`.
 
 ## Interfaces
 
-- [T003 kimi] Env knobs: TLS_DIR (default /tls), SLAPD_LOGLEVEL (default stats); container exposes 389/636, slapd runs as user ldap.
-- [T003 kimi] Seed facts tests can rely on: base ou=Engineering,dc=example,dc=test; alias cn=eng-secret-alias → cn=hidden,ou=Secret; referral ou=Partners (ref ldap://directory.example.invalid); eng5 description = exactly 1048576 bytes.
-- [T006 claude] `Config.Directory Directory` (yaml `directory`). `Directory{Enabled bool; AllowPlaintext bool; Targets DirectoryTargets; DialTimeout time.Duration; MaxSizeLimit int; MaxTimeLimit time.Duration; RatePerMinute int; MaxConnectionsPerTenant int}`, with yaml keys `enabled, allow_plaintext, targets, dial_timeout, max_size_limit, max_time_limit, rate_per_minute, max_connections_per_tenant`.
-- [T006 claude] `DirectoryTargets{DenyCIDRs []string; AllowCIDRs []string; AllowedPorts []int}`, with yaml keys `deny_cidrs, allow_cidrs, allowed_ports`.
-- [T006 claude] Validate error messages must contain the full dotted key, e.g. `directory.targets.allow_cidrs`, `directory.targets.allowed_ports`, `directory.dial_timeout`, `directory.max_size_limit`, `directory.max_time_limit`, `directory.rate_per_minute`, `directory.max_connections_per_tenant`, `directory.allow_plaintext`.
 - [T007 claude] `config.Directory{Enabled, AllowPlaintext bool; Targets DirectoryTargets; DialTimeout time.Duration; MaxSizeLimit int; MaxTimeLimit time.Duration; RatePerMinute, MaxConnectionsPerTenant int}`
 - [T007 claude] `config.DirectoryTargets{DenyCIDRs, AllowCIDRs []string; AllowedPorts []int}`. CIDRs are stored as strings that are known to parse, so consumers call `netip.ParsePrefix` again (it cannot fail after `Validate`).
 - [T007 claude] Warning texts: `directory connections may use ldap:// without TLS (directory.allow_plaintext)` and `directory.targets.allow_cidrs overrides deny_cidrs for: <cidrs joined by ", ">`.
@@ -109,13 +104,14 @@
 - [T023 claude] Fixtures: `Add(Entry)` (panics on a bad DN), `AddAlias(dn, target)`, `AddReferral(dn, url)`, `SetCredentials(dn, pw)`, `SetDerefAliases(bool)`, `SetServerSizeLimit(n)` (0 = none), `SetTimeLimitAfter(n)` (negative = off, which is the default; otherwise returns n entries, Truncated), `SetDelay(d)`, `SetTLSVersion(v)` (default TLS 1.3; plain sessions report `ok=false`).
 - [T023 claude] `InjectError(op Op, errs ...error)` with `OpOpen|OpBind|OpBaseExists|OpSearch`; errors are used in order, one per call, and a nil entry lets that call run normally.
 - [T023 claude] Records: `Opens() []ldapdir.ConnParams`, `Binds() []BindCall{DN, Password}`, `BaseChecks() []string`, `Searches() []SearchCall{Query; Deref int (always ldap.NeverDerefAliases); WireSizeLimit (=SizeLimit+1); WireTimeLimit (whole seconds, rounded up)}`, `OpenSessions() int`.
+- [T024 claude] `type Deps struct{ Store Store; Directory ldapdir.Directory; Envelope *crypto.Envelope; Policy *ldapdir.TargetPolicy; Config config.Directory; Production bool; Cache *cache.Cache; Audit *audit.Writer; Now func() time.Time }`; `func New(Deps) *Service`. Passing `*memstore.Store` as `Store` must work.
+- [T024 claude] `(s *Service) Create(ctx, tenantctx.Actor, tenantID string, Input) (View, error)`; `Update(ctx, actor, tenantID, id string, Input) (View, error)`; `Get(ctx, actor, tenantID, id) (View, error)`; `List(ctx, actor, tenantID) ([]View, error)`; `Remove(ctx, actor, tenantID, id) error`.
+- [T024 claude] `type Input struct{ Name, Kind, URL, TLSMode *string; AllowTLS12 *bool; CAPEM *string; BindDN, BindPassword *string; BaseDN, BaseFilter *string; Attributes *Mapping; SizeLimit, TimeLimitSeconds *int }`. A nil field means keep (on update) or default (on create).
+- [T024 claude] `type Mapping struct{ UID, Email, DisplayName, FirstName, LastName string }` with json tags `uid,email,display_name,first_name,last_name`.
+- [T024 claude] `View` has json tags that exactly match the contract's `DirectoryConnection` (the List view key set is asserted), plus `ca_pem,omitempty`, which only `Get` fills. Go fields: `ID, Name, Kind, URL, TLSMode, AllowTLS12, CAPEMSet, CAPEM, BindDN, BindPasswordSet, BaseDN, BaseFilter, Attributes Mapping, SizeLimit, TimeLimitSeconds, LastTest *LastTest{At, Outcome}, CreatedAt, UpdatedAt`. No `[]byte` fiel…
 
 ## Gotchas
 
-- [T002 claude] The packages contain no statements yet, so the 100 % coverage gate for `ldapdir` (a later task adds it to SECURITY_PKGS) applies once real code lands.
-- [T005 claude] The scan uses grep's basic regular expressions (`grep -rc`, no `-E`). Keep it that way: switching to `-E` would change how existing patterns like `+38591` and `\$argon2id\$` are read.
-- [T005 claude] A test that fails in those packages makes `make redaction-scan` fail.
-- [T005 claude] The sentinel value must never appear in `-v` test output (`t.Log`, failure messages). Assert on whether it is present, and don't print the value.
 - [T004 kimi] Empty filter input is grammar-rejected by ldap.CompileFilter(""); D6 defaulting to (objectClass=*) happens in freya code before compilation — valid-empty.txt is 0 bytes by design.
 - [T004 kimi] go-ldap's grammar accepts things policy must refuse: raw NUL in values, `(bad_attr=x)`, `(&)`, deep nesting >16, >64 components — hence the policy-* prefix.
 - [T004 kimi] `ldap://::1` parses as hostname ":" port "1"; `ldap://host:389:636` as hostname "host:389" — parsing alone is never sufficient for CheckURL.
@@ -162,3 +158,7 @@
 - [T023 claude] A ctx timeout during the delay, or an injected `ErrTimeout`, leaves the session unusable. Any later call, and any call after Close, returns `ErrUnreachable`.
 - [T023 claude] `BindCall.Password` keeps a copy of the password so tests can assert which one was used. Don't print it in tests: the redaction scan runs this suite with `-v`.
 - [T023 claude] `Open` doesn't check the URL, the TLS mode or the target policy. Inject errors on `OpOpen` to test those paths.
+- [T024 claude] The redaction scan greps `-----BEGIN`, so no test may log or capture a CA PEM or a Get view that contains one. `capture()` writes to `$FREYA_CAPTURE_DIR/directory-<test>.txt` only when that variable is set.
+- [T024 claude] Test helper names start with `crud`/`newCRUD` (plus `sp`, `ip`, `bp`, `actorOf`, `validInput`, `capture`, `assertNoSecret`, `testCAPEM`, `bindAD`) so they don't collide with T025's `test_test.go` in the same package.
+- [T024 claude] The fixture uses `DenyCIDRs: 10.0.0.0/8`, so `ldaps://10.1.2.3` is expected to return `ErrTargetRefused`.
+- [T024 claude] Mapping `store.ErrConflict` to `ErrDuplicate` also has to happen on Update (renaming onto another connection's name).
