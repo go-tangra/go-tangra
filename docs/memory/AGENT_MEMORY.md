@@ -6,9 +6,6 @@
 
 ## Decisions
 
-- [T001 claude] Pinned via `services/auth/tools/ldap.go` (`//go:build tools`, blank import), because `go mod tidy` removes a requirement nothing imports. This file isn't part of any binary.
-- [T002 claude] The package comments follow the pattern of the existing `<domain>db` packages: `directorydb` is DB bindings only and is covered by the integration suite, and `directory` reaches storage through a Store interface (`directorydb` in production, `memstore` in tests).
-- [T002 claude] The doc comments record security commitments that later tasks must honour: the bind password uses associated data `ldap-bind:<tenant_id>:<connection_id>` and is zeroed after Bind; there is no skip-verify field; `ldapfake` is never linked into the binary.
 - [T005 claude] Sentinel bind-password values must start with `LDAP-MARKER-PW-` followed by at least one letter or digit (e.g. `LDAP-MARKER-PW-s3cret`). The scan pattern is `LDAP-MARKER-PW-[A-Za-z0-9]`, so the bare prefix in source code or test names never matches. This follows the `DNS-MARKER-KEY-*` / `LCM-MARKER-SECRET-*` convention.
 - [T005 claude] Only `internal/ldapdir` is in the 100% gate, as the task asks. `internal/directory` is held to the 80% overall target only.
 - [T004 kimi] Naming encodes grammar-level truth, not freya policy: valid-* (grammar-valid, in all caps), invalid-* (grammar-rejected), injection-* (fragments that must fail standalone and never escape Combine), policy-* (grammar-valid but refused by D6 caps), odd-* (grammar-valid edges like `(&)`, `(uid=)`, empty DN — acceptance is T044's call), everything else named by dimension. Table tests must not assert…
@@ -54,6 +51,11 @@
 - [T018 claude] Error wrapping uses fixed reason text only (`%w: reason`), never the input URL or address. The `url.Error` from `url.Parse` is never wrapped because it quotes the input, which may contain a password.
 - [T018 claude] `0.0.0.0/8` is part of the always-denied set. An IPv4 address is also matched against IPv4-mapped IPv6 prefixes, so `::/0` and `::ffff:10.0.0.0/104` cover it.
 - [T018 claude] Hostnames must use letters, digits, `-` and `_`, with labels of 1–63 bytes and at most 253 bytes in total. A trailing dot is allowed, but an all-digit last label is refused. Non-ASCII names are refused, so internationalised names must be entered in punycode.
+- [T019 claude] Signature is `NewTLSConfig(ep Endpoint, caPEM string, allowTLS12 bool)`. It takes the `Endpoint` returned by `CheckURL`, not a raw URL, so `ServerName = ep.Host` (IPv6 without brackets). An empty host must return an error.
+- [T019 claude] CA parsing is strict. Up to 65536 bytes is allowed and 65537 is refused. Every PEM block must be `CERTIFICATE` and must parse; a key or public-key block, bad certificate contents, or a stray `-----BEGIN` without a matching END all give `ErrInvalidCA`. Text between blocks, CRLF line endings and a self-signed leaf certificate are accepted.
+- [T019 claude] An empty CA gives `ParseCA("") == (nil, nil)` and `RootCAs == nil`, which means the system roots are used.
+- [T019 claude] By default: `MinVersion = TLS13`, `CipherSuites == nil`. With `allow_tls12`: `MinVersion = TLS12`, a non-empty list containing only the six ECDHE_{ECDSA,RSA} AES-GCM/CHACHA20 suites, and TLS 1.3 still allowed (`MaxVersion` 0 or TLS13).
+- [T019 claude] `VerifyPeerCertificate` and `VerifyConnection` must be nil, `Renegotiation` must be `RenegotiateNever`, and every call must return a fresh config (a cipher slice it shares with the package would fail the mutation test).
 
 ## Interfaces
 
@@ -98,6 +100,7 @@
 - [T017 claude] `NewTargetPolicy(config.DirectoryTargets) (*TargetPolicy, error)`; `(*TargetPolicy).CheckURL(string) (Endpoint, error)`; `(*TargetPolicy).Control(network, address string, _ syscall.RawConn) error`; `ErrTargetRefused`, `ErrInvalidURL`.
 - [T018 claude] `func (p *TargetPolicy) Dialer(timeout time.Duration) *net.Dialer`: returns a dialer with `Control: p.Control`. T022 should use it with go-ldap's `DialWithDialer`.
 - [T018 claude] `CheckURL` returns `Endpoint{Scheme, Host, Port}`; call `Endpoint.Addr()` to get the address to dial.
+- [T019 claude] `var ErrInvalidCA` (declare it in `tlsconf.go`; T022's `errors.go` must not declare it again), `const MaxCAPEMBytes = 64 << 10`, `func ParseCA(pem string) (*x509.CertPool, error)`, `func NewTLSConfig(ep Endpoint, caPEM string, allowTLS12 bool) (*tls.Config, error)`.
 
 ## Gotchas
 
@@ -138,3 +141,5 @@
 - [T017 claude] `netip.Prefix.Contains` does not match across address families. Unmap the address first, and for a v4 address also match against v6 prefixes, e.g. deny `::ffff:10.1.2.3` when `10.0.0.0/8` is denied.
 - [T018 claude] `url.Parse` already refuses an unterminated `[`, so the matching branch in `splitURLHost` is covered by calling that function directly in `policy_extra_test.go`.
 - [T018 claude] `scripts/coverage-gate.sh` expects an existing `coverage.out` in `services/auth`. Generate the profile first, or it exits with "open coverage.out: no such file".
+- [T019 claude] `x509.CertPool.AppendCertsFromPEM` silently skips blocks it can't parse. T020 must decode with `pem.Decode` and `x509.ParseCertificate` on each block to get the strict behaviour.
+- [T019 claude] `pool.Subjects()` is deprecated, so the test uses it under a `//nolint:staticcheck`.
