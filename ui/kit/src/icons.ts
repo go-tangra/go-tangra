@@ -31,6 +31,7 @@ export const ICONS = [
   'mdi-cancel', // icon-[mdi--cancel]
   'mdi-cash', // icon-[mdi--cash]
   'mdi-certificate-outline', // icon-[mdi--certificate-outline]
+  'mdi-chart-line', // icon-[mdi--chart-line]
   'mdi-check', // icon-[mdi--check]
   'mdi-check-circle-outline', // icon-[mdi--check-circle-outline]
   'mdi-check-decagram', // icon-[mdi--check-decagram]
@@ -59,6 +60,7 @@ export const ICONS = [
   'mdi-desktop-classic', // icon-[mdi--desktop-classic]
   'mdi-devices', // icon-[mdi--devices]
   'mdi-dice-multiple-outline', // icon-[mdi--dice-multiple-outline]
+  'mdi-dns-outline', // icon-[mdi--dns-outline]
   'mdi-domain', // icon-[mdi--domain]
   'mdi-domain-plus', // icon-[mdi--domain-plus]
   'mdi-door', // icon-[mdi--door]
@@ -210,6 +212,7 @@ export const ICON_CLASS_SAFELIST = [
   'icon-[mdi--cancel]',
   'icon-[mdi--cash]',
   'icon-[mdi--certificate-outline]',
+  'icon-[mdi--chart-line]',
   'icon-[mdi--check]',
   'icon-[mdi--check-circle-outline]',
   'icon-[mdi--check-decagram]',
@@ -238,6 +241,7 @@ export const ICON_CLASS_SAFELIST = [
   'icon-[mdi--desktop-classic]',
   'icon-[mdi--devices]',
   'icon-[mdi--dice-multiple-outline]',
+  'icon-[mdi--dns-outline]',
   'icon-[mdi--domain]',
   'icon-[mdi--domain-plus]',
   'icon-[mdi--door]',

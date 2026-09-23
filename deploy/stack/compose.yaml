@@ -16,7 +16,7 @@ services:
     healthcheck: { test: ["CMD","pg_isready","-U","postgres","-h","127.0.0.1","-p","5432"], interval: 3s, timeout: 3s, retries: 60, start_period: 5s }
   valkey:
     image: valkey/valkey:8
-    command: ["valkey-server", "--requirepass", "dev", "--user", "gateway", "on", ">dev", "~*", "&*", "+@all", "--user", "auth", "on", ">dev", "~*", "&*", "+@all", "--user", "lcm", "on", ">dev", "~*", "&*", "+@all", "--user", "notification", "on", ">dev", "~*", "&*", "+@all", "--user", "warden", "on", ">dev", "~*", "&*", "+@all", "--user", "deployer", "on", ">dev", "~*", "&*", "+@all", "--user", "paperless", "on", ">dev", "~*", "&*", "+@all", "--user", "inventory", "on", ">dev", "~*", "&*", "+@all", "--user", "ipam", "on", ">dev", "~*", "&*", "+@all", "--user", "asset", "on", ">dev", "~*", "&*", "+@all", "--user", "ticket", "on", ">dev", "~*", "&*", "+@all"]
+    command: ["valkey-server", "--requirepass", "dev", "--user", "gateway", "on", ">dev", "~*", "&*", "+@all", "--user", "auth", "on", ">dev", "~*", "&*", "+@all", "--user", "lcm", "on", ">dev", "~*", "&*", "+@all", "--user", "notification", "on", ">dev", "~*", "&*", "+@all", "--user", "warden", "on", ">dev", "~*", "&*", "+@all", "--user", "deployer", "on", ">dev", "~*", "&*", "+@all", "--user", "paperless", "on", ">dev", "~*", "&*", "+@all", "--user", "inventory", "on", ">dev", "~*", "&*", "+@all", "--user", "ipam", "on", ">dev", "~*", "&*", "+@all", "--user", "asset", "on", ">dev", "~*", "&*", "+@all", "--user", "ticket", "on", ">dev", "~*", "&*", "+@all", "--user", "dns", "on", ">dev", "~*", "&*", "+@all"]
     healthcheck: { test: ["CMD","valkey-cli","-a","dev","ping"], interval: 3s, timeout: 3s, retries: 40 }
   openfga-migrate:
     image: openfga/openfga:v1.20.0
@@ -177,7 +177,8 @@ services:
       "-allow","spiffe://example.org/svc/inventory=/api/inventory;inventory",
       "-allow","spiffe://example.org/svc/ipam=/api/ipam;ipam",
       "-allow","spiffe://example.org/svc/asset=/api/asset;asset",
-      "-allow","spiffe://example.org/svc/ticket=/api/ticket;ticket"]
+      "-allow","spiffe://example.org/svc/ticket=/api/ticket;ticket",
+      "-allow","spiffe://example.org/svc/dns=/api/dns;dns"]
     volumes: ["certs:/certs:ro","./configs/gateway.yaml:/app/deploy/container.yaml:ro"]
     restart: "no"
     depends_on:
@@ -551,6 +552,117 @@ services:
       rustfs: { condition: service_healthy }
       mailpit: { condition: service_started }
 
+  # --- DNS (feature 015): the shared PowerDNS Authoritative server + Recursor
+  # managed by the dns module. DEV ONLY: dns-secrets-init generates the two API
+  # keys ONCE into the dns-secrets volume (kept across restarts; delete the
+  # volume to rotate) and (re)writes the API include snippets from them into the
+  # PowerDNS include volumes. configs/dns.yaml references the keys as
+  # file:/secrets/pdns-*.key; production uses warden references.
+  # The PowerDNS/recursor HTTP APIs listen on the internal compose network only
+  # (never published). DNS is published on loopback ONLY, on alternative host
+  # ports (host :53 belongs to systemd-resolved, :5353 to mDNS):
+  #   authoritative 127.0.0.1:5300 (udp+tcp), resolver 127.0.0.1:5301 (udp+tcp).
+  dns-secrets-init:
+    image: alpine:3.20
+    user: "0:0"
+    entrypoint: ["sh","-c"]
+    command:
+      - |
+        set -e
+        umask 077
+        for k in pdns-auth pdns-recursor; do
+          if [ -s /secrets/$$k.key ]; then echo "$$k key present, keeping it"; else
+            head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > /secrets/$$k.key; echo "$$k key generated"; fi
+        done
+        AUTH=$$(cat /secrets/pdns-auth.key); REC=$$(cat /secrets/pdns-recursor.key)
+        printf '%s\n' '# Written by dns-secrets-init (dev stack). API on the internal network only.' \
+          'webserver=yes' 'api=yes' "api-key=$$AUTH" 'webserver-address=0.0.0.0' 'webserver-port=8081' \
+          'webserver-allow-from=127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16' > /auth-conf/00-api.conf
+        printf '%s\n' '# Written by dns-secrets-init (dev stack). API on the internal network only.' \
+          'webservice:' '  webserver: true' '  address: 0.0.0.0' '  port: 8082' "  api_key: \"$$REC\"" \
+          '  api_dir: /var/lib/pdns-recursor-api' \
+          '  allow_from: ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]' > /recursor-conf/00-api.yml
+        mkdir -p /recursor-api
+        chown 953:953 /auth-conf/00-api.conf /recursor-conf/00-api.yml /recursor-api /auth-conf /recursor-conf
+        chmod 0600 /auth-conf/00-api.conf /recursor-conf/00-api.yml
+        chmod 0755 /auth-conf /recursor-conf
+        echo "PowerDNS API snippets written"
+    volumes: ["dns-secrets:/secrets","pdns-auth-conf:/auth-conf","pdns-recursor-conf:/recursor-conf","pdns-recursor-api:/recursor-api"]
+    restart: "no"
+
+  pdns-auth:
+    image: powerdns/pdns-auth-49@sha256:b554df74bbde1afa7caedad4af9c91378be6d46d05807d089b3c7c443002e684
+    container_name: freya-pdns-auth
+    volumes: ["pdns-auth-data:/var/lib/powerdns","pdns-auth-conf:/etc/powerdns/pdns.d","../../services/dns/deploy/pdns/pdns.conf:/etc/powerdns/pdns.conf:ro"]
+    ports: ["127.0.0.1:5300:53/udp","127.0.0.1:5300:53/tcp"]
+    healthcheck: { test: ["CMD","pdns_control","rping"], interval: 5s, timeout: 3s, retries: 30, start_period: 5s }
+    restart: unless-stopped
+    depends_on:
+      dns-secrets-init: { condition: service_completed_successfully }
+
+  pdns-recursor:
+    image: powerdns/pdns-recursor-53@sha256:175d551ce52fa5c6bf0a0c19d6872791a4c928f6fb00a696534c1174693da3f7
+    container_name: freya-pdns-recursor
+    volumes: ["pdns-recursor-conf:/etc/powerdns/recursor.d","pdns-recursor-api:/var/lib/pdns-recursor-api","../../services/dns/deploy/pdns/recursor.yml:/etc/powerdns/recursor.conf:ro"]
+    ports: ["127.0.0.1:5301:53/udp","127.0.0.1:5301:53/tcp"]
+    healthcheck: { test: ["CMD","rec_control","ping"], interval: 5s, timeout: 3s, retries: 30, start_period: 5s }
+    restart: unless-stopped
+    depends_on:
+      dns-secrets-init: { condition: service_completed_successfully }
+      pdns-auth: { condition: service_healthy }
+
+  # Optional (docker compose --profile metrics ...): Prometheus scraping both
+  # PowerDNS webservers for the dns dashboard (metrics.prometheus_url).
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["metrics"]
+    volumes: ["./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    depends_on:
+      pdns-auth: { condition: service_healthy }
+      pdns-recursor: { condition: service_healthy }
+
+  # Mint dns's single-use join token (enrolls via the gateway edge for its mesh SVID).
+  dns-token:
+    image: freya/auth:dev
+    user: "0:0"
+    command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/dns","-ttl","30m","-out","/tokens/dns.token"]
+    volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      auth-bootstrap: { condition: service_completed_successfully }
+
+  # dns: PowerDNS management plane (zones, records, templates, supermasters,
+  # IPAM sync, the lcm-only ACME DNS-01 challenge surface, server configuration,
+  # dashboard). DEV: the Docker socket is mounted read-write so configuration
+  # saves can restart ONLY freya-pdns-auth / freya-pdns-recursor (restart-only
+  # client, container names from configs/dns.yaml). The socket is
+  # root-equivalent on the host: production uses an API-filtering socket proxy
+  # or docker.enabled: false (see services/dns/deploy/README.md). DOCKER_GID is
+  # the socket's group (deploy/stack/up.sh exports it).
+  dns:
+    image: freya/dns:dev
+    build: { context: ../.., dockerfile: services/dns/Dockerfile }
+    user: "0:0"
+    group_add: ["${DOCKER_GID:-999}"]
+    command: ["-config","deploy/container.yaml"]
+    volumes: ["tokens:/tokens:ro","dns-state:/state","dns-secrets:/secrets:ro","pdns-auth-conf:/pdns-auth-conf","pdns-recursor-conf:/pdns-recursor-conf",
+      "/var/run/docker.sock:/var/run/docker.sock","./configs/dns.yaml:/app/deploy/container.yaml:ro","../../services/dns/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9850/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      gateway: { condition: service_healthy }
+      lcm: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      dns-token: { condition: service_completed_successfully }
+      dns-secrets-init: { condition: service_completed_successfully }
+      pdns-auth: { condition: service_healthy }
+      pdns-recursor: { condition: service_healthy }
+      ipam: { condition: service_healthy }
+
 volumes:
   certs:
   edge-cert:
@@ -567,4 +679,10 @@ volumes:
   asset-state:
   ticket-state:
   ticket-secrets:
+  dns-state:
+  dns-secrets:
+  pdns-auth-data:
+  pdns-auth-conf:
+  pdns-recursor-conf:
+  pdns-recursor-api:
   rustfs-data:

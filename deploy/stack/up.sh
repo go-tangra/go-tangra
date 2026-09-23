@@ -4,6 +4,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export OPERATOR_EMAIL="${OPERATOR_EMAIL:-admin@example.org}"
+# The dns service restarts the PowerDNS containers through the Docker socket;
+# it joins the socket's group (compose group_add).
+export DOCKER_GID="${DOCKER_GID:-$(stat -c %g /var/run/docker.sock 2>/dev/null || echo 999)}"
 C=(docker compose -p freya-stack -f deploy/stack/compose.yaml)
 
 "${C[@]}" up -d --build

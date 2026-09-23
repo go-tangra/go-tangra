@@ -4,6 +4,25 @@
 
 ### Added
 
+- `services/dns`: PowerDNS management-plane module (spec `015-dns-service`,
+  go-tangra-dns replica): tenant-owned zones on one shared PowerDNS
+  Authoritative server with global name ownership and cross-tenant overlap
+  refusal (owner never revealed), per-type record validation (miekg/dns),
+  record sets with multi-value/disabled/comment editing, zone templates with
+  `[ZONE]` placeholders, supermasters (create/delete platform-admin only), BIND
+  export and NOTIFY, recursor forward-zone reconciliation, **IPAM sync**
+  (verified `ipam.ip_address.*` events → A/AAAA + subnet-sized PTR zones), the
+  lcm-only `dns.v1.Challenges` ACME DNS-01 surface plus the **Freya DNS**
+  provider in lcm, platform-admin server configuration (typed model, rendered
+  include files, restart-only Docker socket client limited to the two PowerDNS
+  containers), a curated Prometheus dashboard (no PromQL from the browser), SSE
+  live updates, tenant backup (zones re-linked, never re-created), `dns.v1.Zones`
+  + `pkg/dnsclient` for other modules and a federated UI remote. Wired into
+  `deploy/stack` (DB/role, Valkey user, allow-list `svc/dns=/api/dns;dns`,
+  `pdns-auth` 4.9 + `pdns-recursor` 5.3 pinned by digest with internal-only APIs,
+  DNS on loopback :5300/:5301, dev `file:` API keys from `dns-secrets-init`,
+  optional `metrics` Prometheus profile).
+
 - `services/ticket`: helpdesk module (spec `014-ticket-service`, go-tangra-ticket
   replica): tenant-scoped tickets with status/priority/assignee, conversation
   timeline (internal notes + emailed public replies with RFC 5322 threading

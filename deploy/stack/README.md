@@ -23,9 +23,14 @@ depreciation, lifecycle alerts and inventory-sync against `inventory` — see
 `services/asset/deploy/README.md`),
 `ticket` (helpdesk: tickets, conversations with emailed replies via Mailpit, CEL
 triage rules, tags, mailboxes, and an off-mesh inbound mail edge published on
-`https://localhost:9957/inbound/mail` — see `services/ticket/deploy/README.md`).
+`https://localhost:9957/inbound/mail` — see `services/ticket/deploy/README.md`),
+`dns` (PowerDNS management plane: zones/records/templates/supermasters on the
+shared `pdns-auth` server, forwarding through `pdns-recursor`, IPAM sync, the
+Freya DNS ACME provider for lcm, server configuration with container restarts
+via the Docker socket, dashboard — see `services/dns/deploy/README.md`).
 Infra: TimescaleDB, Valkey,
-OpenFGA, Mailpit, Vault, RustFS (object store), Tika + Gotenberg (extraction).
+OpenFGA, Mailpit, Vault, RustFS (object store), Tika + Gotenberg (extraction),
+PowerDNS Authoritative 4.9 + Recursor 5.3 (optional Prometheus: `--profile metrics`).
 
 > Docker note: if your shell isn't in the active `docker` group, prefix commands
 > with `sg docker -c '…'`.
@@ -180,3 +185,24 @@ curl -sk https://localhost:9957/inbound/mail \
 # -> 202 {"outcome":"created","ticket_id":"…"}
 ```
 
+
+## DNS (dev)
+
+`dns-secrets-init` generates the PowerDNS and recursor API keys once into the
+`dns-secrets` volume and writes the API include snippets for `pdns-auth` /
+`pdns-recursor`; their HTTP APIs stay on the internal network. DNS is published
+on **loopback only, on alternative ports** (host :53 is systemd-resolved,
+:5353 is mDNS):
+
+```sh
+dig @127.0.0.1 -p 5300 example.test SOA        # authoritative (pdns-auth)
+dig @127.0.0.1 -p 5301 www.example.test A      # resolver (pdns-recursor)
+```
+
+`dns` mounts `/var/run/docker.sock` **read-write** (`group_add: ${DOCKER_GID}`,
+exported by `up.sh`) so a platform admin's Configuration save can restart
+`freya-pdns-auth` / `freya-pdns-recursor` — and nothing else. The socket is
+root-equivalent on the host; see the risk note in
+`services/dns/deploy/README.md`. Prometheus for the DNS dashboard:
+`docker compose -p freya-stack --profile metrics up -d prometheus` (without it
+the dashboard shows "metrics unavailable").
