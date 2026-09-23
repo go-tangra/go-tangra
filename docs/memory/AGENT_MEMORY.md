@@ -45,6 +45,11 @@
 - [T016 claude] The `setUserRoles` refusal happens in the handler: it checks the status of the user returned by `Admin.Lookup` before `AssignRoles`. `authz.Assigner` is unchanged.
 - [T016 claude] The memstore `AddGroupMembers` also filters `Status == "imported"` (→ `ErrNotFound`), to match SQL for service-level tests.
 - [T016 claude] Adding an imported user to a group gives 404 `not_found`, not 409; the store-level fallback was kept, per T015's decision.
+- [T017 claude] `NewTargetPolicy` must return an error for a bad CIDR, a bare IP used as a CIDR, an empty `AllowedPorts`, or a port outside 1..65535. It repeats the config validation as a defence.
+- [T017 claude] `CheckURL` returns `ErrInvalidURL` for syntax problems: wrong or missing scheme, opaque form, no host, userinfo, any path including `/`, query, fragment, empty/0/65536/named port, `host:389:636`, `ldap://::1`, unterminated bracket, zoned IPv6, control characters, leading space.
+- [T017 claude] `CheckURL` returns `ErrTargetRefused` (can be wrapped) when the port is not allowed, including the scheme's default port, or when an IP-literal host is refused by the policy. Hostnames are not resolved.
+- [T017 claude] `Control` fails closed with `ErrTargetRefused` for any network other than tcp/tcp4/tcp6, an address that isn't `IP:numeric-port`, a zoned address, a disallowed port or a disallowed IP. IPv4-mapped addresses are unmapped before the always-deny and CIDR checks.
+- [T017 claude] Errors must never contain URL userinfo or a password.
 
 ## Interfaces
 
@@ -84,6 +89,9 @@
 - [T011 claude] `(m *Store) FailNext(method string)` arms a one-shot error (unexported type `injectedErr`) for any of the directory methods above, by method name. It is not wired into older memstore methods.
 - [T015 claude] `user.ErrInvalidState` (exported sentinel in `internal/user/admin.go`, next to `ErrLastOwner`) is expected by the test.
 - [T016 claude] `user.ErrInvalidState = errors.New("invalid_state")`; httpapi `errInvalidState = &Error{409, "invalid_state"}`, mapped in `adminError`. Reuse it for remove-imported/activate (T056+).
+- [T017 claude] `type Endpoint struct{ Scheme, Host string; Port int }`, compared with `==`. `Host` has no brackets for IPv6, and `Scheme` is lowercased (`LDAPS://` is accepted).
+- [T017 claude] `func (e Endpoint) Addr() string` = `net.JoinHostPort(Host, strconv.Itoa(Port))`.
+- [T017 claude] `NewTargetPolicy(config.DirectoryTargets) (*TargetPolicy, error)`; `(*TargetPolicy).CheckURL(string) (Endpoint, error)`; `(*TargetPolicy).Control(network, address string, _ syscall.RawConn) error`; `ErrTargetRefused`, `ErrInvalidURL`.
 
 ## Gotchas
 
@@ -118,3 +126,7 @@
 - [T015 claude] The store test needs docker: `sg docker -c 'go test -tags integration -run TestGroupRepos ./internal/store/'`.
 - [T015 claude] The intended fix is small: `if u.Status == "imported" { return ErrInvalidState }` after `lookup` in both `Deactivate` and `Reactivate`, plus `AND u.status <> 'imported'` in the `INSERT … SELECT` of `AddGroupMembers`. With it, everything passes.
 - [T016 claude] `invite.Accept` calls `AddGroupMembers` after setting the user to `active` in the same transaction, so the new filter doesn't affect it. Any future activation path must change the status before adding group memberships.
+- [T017 claude] Go's `url.Parse` accepts `ldaps://host:` with `Port()==""`. Detect the trailing `:` on `u.Host`.
+- [T017 claude] `url.Parse` also accepts `ldap://::1` and `host:389:636`. Refuse unbracketed hosts that contain `:`.
+- [T017 claude] A `%25` zone must be refused as `ErrInvalidURL` before any IP check (the test uses `2001:db8::1%25eth0`).
+- [T017 claude] `netip.Prefix.Contains` does not match across address families. Unmap the address first, and for a v4 address also match against v6 prefixes, e.g. deny `::ffff:10.1.2.3` when `10.0.0.0/8` is denied.
