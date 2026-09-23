@@ -16,7 +16,7 @@ services:
     healthcheck: { test: ["CMD","pg_isready","-U","postgres","-h","127.0.0.1","-p","5432"], interval: 3s, timeout: 3s, retries: 60, start_period: 5s }
   valkey:
     image: valkey/valkey:8
-    command: ["valkey-server", "--requirepass", "dev", "--user", "gateway", "on", ">dev", "~*", "&*", "+@all", "--user", "auth", "on", ">dev", "~*", "&*", "+@all", "--user", "lcm", "on", ">dev", "~*", "&*", "+@all", "--user", "notification", "on", ">dev", "~*", "&*", "+@all", "--user", "warden", "on", ">dev", "~*", "&*", "+@all", "--user", "deployer", "on", ">dev", "~*", "&*", "+@all", "--user", "paperless", "on", ">dev", "~*", "&*", "+@all", "--user", "inventory", "on", ">dev", "~*", "&*", "+@all", "--user", "ipam", "on", ">dev", "~*", "&*", "+@all", "--user", "asset", "on", ">dev", "~*", "&*", "+@all"]
+    command: ["valkey-server", "--requirepass", "dev", "--user", "gateway", "on", ">dev", "~*", "&*", "+@all", "--user", "auth", "on", ">dev", "~*", "&*", "+@all", "--user", "lcm", "on", ">dev", "~*", "&*", "+@all", "--user", "notification", "on", ">dev", "~*", "&*", "+@all", "--user", "warden", "on", ">dev", "~*", "&*", "+@all", "--user", "deployer", "on", ">dev", "~*", "&*", "+@all", "--user", "paperless", "on", ">dev", "~*", "&*", "+@all", "--user", "inventory", "on", ">dev", "~*", "&*", "+@all", "--user", "ipam", "on", ">dev", "~*", "&*", "+@all", "--user", "asset", "on", ">dev", "~*", "&*", "+@all", "--user", "ticket", "on", ">dev", "~*", "&*", "+@all"]
     healthcheck: { test: ["CMD","valkey-cli","-a","dev","ping"], interval: 3s, timeout: 3s, retries: 40 }
   openfga-migrate:
     image: openfga/openfga:v1.20.0
@@ -176,7 +176,8 @@ services:
       "-allow","spiffe://example.org/svc/paperless=/api/paperless;paperless",
       "-allow","spiffe://example.org/svc/inventory=/api/inventory;inventory",
       "-allow","spiffe://example.org/svc/ipam=/api/ipam;ipam",
-      "-allow","spiffe://example.org/svc/asset=/api/asset;asset"]
+      "-allow","spiffe://example.org/svc/asset=/api/asset;asset",
+      "-allow","spiffe://example.org/svc/ticket=/api/ticket;ticket"]
     volumes: ["certs:/certs:ro","./configs/gateway.yaml:/app/deploy/container.yaml:ro"]
     restart: "no"
     depends_on:
@@ -495,6 +496,61 @@ services:
       rustfs: { condition: service_healthy }
       inventory: { condition: service_healthy }
 
+  # Mint ticket's single-use join token (enrolls via the gateway edge for its mesh SVID).
+  ticket-token:
+    image: freya/auth:dev
+    user: "0:0"
+    command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/ticket","-ttl","30m","-out","/tokens/ticket.token"]
+    volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      auth-bootstrap: { condition: service_completed_successfully }
+
+  # DEV ONLY: generate the inbound relay token ONCE into the ticket-secrets volume
+  # (kept across restarts; delete the volume to rotate). configs/ticket.yaml
+  # references it as file:/secrets/relay.token. Production uses a warden reference.
+  ticket-secrets-init:
+    image: alpine:3.20
+    user: "0:0"
+    entrypoint: ["sh","-c"]
+    command:
+      - |
+        set -e
+        if [ -s /secrets/relay.token ]; then echo "relay token present, keeping it"; exit 0; fi
+        umask 077
+        head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > /secrets/relay.token
+        echo "relay token generated"
+    volumes: ["ticket-secrets:/secrets"]
+    restart: "no"
+
+  # ticket: helpdesk (tickets, conversations, CEL rules, tags, mailboxes). Serves the
+  # browser API via the gateway and the ticket.v1 module gRPC surface, AND a separate
+  # off-mesh INBOUND MAIL EDGE (:9957, TLS with the dev edge cert) that the mail relay
+  # posts raw RFC 822 messages to with the relay token. Attachments live in RustFS;
+  # public replies and auto-acknowledgements go out through Mailpit.
+  ticket:
+    image: freya/ticket:dev
+    build: { context: ../.., dockerfile: services/ticket/Dockerfile }
+    user: "0:0"
+    command: ["-config","deploy/container.yaml"]
+    volumes: ["tokens:/tokens:ro","ticket-state:/state","ticket-secrets:/secrets:ro","edge-cert:/edge:ro","./configs/ticket.yaml:/app/deploy/container.yaml:ro","../../services/ticket/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    ports: ["9957:9957"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9840/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      gateway: { condition: service_healthy }
+      lcm: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      edge-cert-init: { condition: service_completed_successfully }
+      ticket-token: { condition: service_completed_successfully }
+      ticket-secrets-init: { condition: service_completed_successfully }
+      rustfs: { condition: service_healthy }
+      mailpit: { condition: service_started }
+
 volumes:
   certs:
   edge-cert:
@@ -509,4 +565,6 @@ volumes:
   inventory-state:
   ipam-state:
   asset-state:
+  ticket-state:
+  ticket-secrets:
   rustfs-data:

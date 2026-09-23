@@ -77,6 +77,7 @@ export const ICONS = [
   'mdi-file-document-outline', // icon-[mdi--file-document-outline]
   'mdi-file-search-outline', // icon-[mdi--file-search-outline]
   'mdi-file-upload-outline', // icon-[mdi--file-upload-outline]
+  'mdi-filter-cog-outline', // icon-[mdi--filter-cog-outline]
   'mdi-filter-outline', // icon-[mdi--filter-outline]
   'mdi-flag', // icon-[mdi--flag]
   'mdi-folder', // icon-[mdi--folder]
@@ -159,6 +160,7 @@ export const ICONS = [
   'mdi-tag-multiple-outline', // icon-[mdi--tag-multiple-outline]
   'mdi-target', // icon-[mdi--target]
   'mdi-theme-light-dark', // icon-[mdi--theme-light-dark]
+  'mdi-ticket-outline', // icon-[mdi--ticket-outline]
   'mdi-tray', // icon-[mdi--tray]
   'mdi-tray-remove', // icon-[mdi--tray-remove]
   'mdi-trending-down', // icon-[mdi--trending-down]
@@ -254,6 +256,7 @@ export const ICON_CLASS_SAFELIST = [
   'icon-[mdi--file-document-outline]',
   'icon-[mdi--file-search-outline]',
   'icon-[mdi--file-upload-outline]',
+  'icon-[mdi--filter-cog-outline]',
   'icon-[mdi--filter-outline]',
   'icon-[mdi--flag]',
   'icon-[mdi--folder]',
@@ -335,6 +338,7 @@ export const ICON_CLASS_SAFELIST = [
   'icon-[mdi--tag-multiple-outline]',
   'icon-[mdi--target]',
   'icon-[mdi--theme-light-dark]',
+  'icon-[mdi--ticket-outline]',
   'icon-[mdi--trending-down]',
   'icon-[mdi--truck-outline]',
   'icon-[mdi--upload]',

@@ -15,6 +15,7 @@ import Vuetify/`@mdi/font`, bind `:rules`, or use `style=` attributes.
 | lcm | services/lcm/ui | migrated |
 | notification | services/notification/ui | migrated |
 | warden | services/warden/ui | migrated |
+| ticket | services/ticket/ui | migrated |
 
 ## Bundle baseline (gzipped JS+CSS of `dist/`, measured 2026-09-21 before migration)
 

@@ -65,6 +65,11 @@ func (m *Metrics) IdentityRenewal(outcome string) {
 	m.renewals.Add(context.Background(), 1, metric.WithAttributes(attribute.String("outcome", outcome)))
 }
 
+// Meter returns a meter on the same private provider, so a service's own
+// instruments are rendered by Handler on the admin listener next to the
+// framework's.
+func (m *Metrics) Meter(name string) metric.Meter { return m.provider.Meter(name) }
+
 // AuditDropped adds to the dropped-audit counter.
 func (m *Metrics) AuditDropped(n int64) { m.dropped.Add(context.Background(), n) }
 

@@ -4,6 +4,20 @@
 
 ### Added
 
+- `services/ticket`: helpdesk module (spec `014-ticket-service`, go-tangra-ticket
+  replica): tenant-scoped tickets with status/priority/assignee, conversation
+  timeline (internal notes + emailed public replies with RFC 5322 threading
+  headers and a reference token), an off-mesh **inbound mail edge** (`:9957`,
+  relay token + mailbox → tenant routing, iris/KumoMTA-compatible headers) with an
+  RFC 822/MIME parser, email threading back into tickets, loop-safe RFC 3834
+  auto-acknowledgements, sandboxed CEL triage rules (cost limit + deadline),
+  tags, mailboxes, history, statistics, SSE live updates, tenant backup,
+  server-side HTML sanitisation (bluemonday) shown in a sandboxed `srcdoc`
+  iframe, attachments in RustFS, `ticket.v1` gRPC + `pkg/ticketclient` for other
+  modules, and a federated UI remote. Wired into `deploy/stack` (DB/role, Valkey
+  user, allow-list `svc/ticket=/api/ticket;ticket`, Mailpit relay, dev relay token).
+  Coverage 93 % (authz/sealed/secrets/thread and the rules compile path 100 %).
+
 - `services/ipam` feature parity with go-tangra-ipam: IP/host group CRUD with
   member editing (new `PUT /host-groups/{id}/members/{mid}`), manual subnet
   create/edit/add-child, subnet split (`POST /subnets/{id}/split`, dry-run

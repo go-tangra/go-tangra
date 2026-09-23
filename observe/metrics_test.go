@@ -12,6 +12,8 @@ import (
 	"github.com/go-freya/freya/observe"
 	kerrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/transport"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type hdr map[string][]string
@@ -98,5 +100,23 @@ func TestMetricsInstrumentsAndExposition(t *testing.T) {
 	}
 	if rec.Header().Get("Content-Type") == "" {
 		t.Fatal("content type missing")
+	}
+}
+
+// A service's own instruments created on Meter are rendered by Handler.
+func TestMetricsServiceMeter(t *testing.T) {
+	m, err := observe.NewMetrics()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := m.Meter("example.org/svc").Int64Counter("svc.widgets", metric.WithDescription("Widgets made"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Add(context.Background(), 3, metric.WithAttributes(attribute.String("kind", "blue")))
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
+	if !strings.Contains(rec.Body.String(), `svc_widgets_total{kind="blue"} 3`) {
+		t.Fatalf("service counter missing:\n%s", rec.Body.String())
 	}
 }

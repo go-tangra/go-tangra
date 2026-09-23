@@ -20,7 +20,10 @@ network discovery scanning and out-of-band IPMI/KVM control — see
 `asset` (IT Asset Management: assets with an assign/unassign lifecycle, photos and
 documents in RustFS, categories/locations/suppliers, consumables/licenses/insurance,
 depreciation, lifecycle alerts and inventory-sync against `inventory` — see
-`services/asset/deploy/README.md`).
+`services/asset/deploy/README.md`),
+`ticket` (helpdesk: tickets, conversations with emailed replies via Mailpit, CEL
+triage rules, tags, mailboxes, and an off-mesh inbound mail edge published on
+`https://localhost:9957/inbound/mail` — see `services/ticket/deploy/README.md`).
 Infra: TimescaleDB, Valkey,
 OpenFGA, Mailpit, Vault, RustFS (object store), Tika + Gotenberg (extraction).
 
@@ -160,3 +163,20 @@ docker compose -p freya-stack -f deploy/stack/compose.yaml down -v   # wipes DB,
 - **A restarted workload can't enroll:** its single-use token was already burned.
   With SVID persistence (a `*-state` volume) a restart reuses the stored SVID; a
   hard reset (`down -v`) clears state + mints a fresh token.
+
+## Ticket inbound mail (dev)
+
+`ticket` publishes its inbound mail edge on the host (`:9957`, TLS with the same
+dev edge certificate as the gateway). `ticket-secrets-init` generates the relay
+token once into the `ticket-secrets` volume; replies and acknowledgements go to
+Mailpit. After creating a mailbox (Tickets → Mailboxes, e.g. `support@example.org`):
+
+```sh
+TOKEN=$(docker compose -p freya-stack exec -T ticket cat /secrets/relay.token)
+curl -sk https://localhost:9957/inbound/mail \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: message/rfc822" \
+  -H "X-Iris-Recipient: support@example.org" \
+  --data-binary @services/ticket/testdata/mail/plain.eml
+# -> 202 {"outcome":"created","ticket_id":"…"}
+```
+
