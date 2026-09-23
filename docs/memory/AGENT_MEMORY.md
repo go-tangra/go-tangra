@@ -42,6 +42,9 @@
 - [T014 claude] `u` is reset to `store.User{}` for imported rows, not just `known=false`. Otherwise the account rate-limit branch (runs before the `known` checks) would record the imported user's ID in its attempt row and reveal the account. This departs from T013's note that `u` would keep the imported row.
 - [T015 claude] The store test expects `ErrNotFound` from `AddGroupMembers` for an imported user, which is what the planned `u.status <> 'imported'` filter produces with the existing "not a user" fallback. Mapping it to `invalid_state` belongs in the service/HTTP layer, not the store.
 - [T015 claude] The admin guard must run right after `lookup`, before the last-owner check, the status update and `RevokeUser`, and it must emit no audit row with outcome ok.
+- [T016 claude] The `setUserRoles` refusal happens in the handler: it checks the status of the user returned by `Admin.Lookup` before `AssignRoles`. `authz.Assigner` is unchanged.
+- [T016 claude] The memstore `AddGroupMembers` also filters `Status == "imported"` (→ `ErrNotFound`), to match SQL for service-level tests.
+- [T016 claude] Adding an imported user to a group gives 404 `not_found`, not 409; the store-level fallback was kept, per T015's decision.
 
 ## Interfaces
 
@@ -80,6 +83,7 @@
 - [T011 claude] `(m *Store) UsersByEmails(ctx, tid, []string) (map[string]store.User, error)`; `LinksByUIDs(ctx, tid, connID, []string) (map[string]store.DirectoryLink, error)`; `UpsertLink(ctx, store.DirectoryLink) error`; `UpdateImportedUser(ctx, tid, uid, store.ImportedProfile) error`; `DeleteImportedUser(ctx, tid, uid) error`.
 - [T011 claude] `(m *Store) FailNext(method string)` arms a one-shot error (unexported type `injectedErr`) for any of the directory methods above, by method name. It is not wired into older memstore methods.
 - [T015 claude] `user.ErrInvalidState` (exported sentinel in `internal/user/admin.go`, next to `ErrLastOwner`) is expected by the test.
+- [T016 claude] `user.ErrInvalidState = errors.New("invalid_state")`; httpapi `errInvalidState = &Error{409, "invalid_state"}`, mapped in `adminError`. Reuse it for remove-imported/activate (T056+).
 
 ## Gotchas
 
@@ -113,3 +117,4 @@
 - [T015 claude] The `internal/user` package won't compile until T016 defines `ErrInvalidState`.
 - [T015 claude] The store test needs docker: `sg docker -c 'go test -tags integration -run TestGroupRepos ./internal/store/'`.
 - [T015 claude] The intended fix is small: `if u.Status == "imported" { return ErrInvalidState }` after `lookup` in both `Deactivate` and `Reactivate`, plus `AND u.status <> 'imported'` in the `INSERT … SELECT` of `AddGroupMembers`. With it, everything passes.
+- [T016 claude] `invite.Accept` calls `AddGroupMembers` after setting the user to `active` in the same transaction, so the new filter doesn't affect it. Any future activation path must change the status before adding group memberships.
