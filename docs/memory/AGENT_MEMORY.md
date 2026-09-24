@@ -6,10 +6,6 @@
 
 ## Decisions
 
-- [T039 claude] The uid is decoded as a GUID only when the uid attribute is `objectGUID` (any letter case). The value must be exactly 16 raw bytes. Output is lower-case `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` with the first three groups little-endian. Any other length, including the 36-byte text form, gives `ErrInvalidUID`.
-- [T039 claude] String uids (entryUUID, other) are used exactly as received (no trimming or case change) so the import re-fetch filter matches. They must be valid UTF-8, non-empty and ≤ 256 bytes.
-- [T039 claude] A uid with more than one value gives `ErrMultiValuedUID` and no value is picked. A missing or unmapped uid gives `ErrInvalidUID`.
-- [T039 claude] Mail, display name, first name and last name use the first value.
 - [T039 claude] Caps: DN ≤ 1024 bytes, uid ≤ 256, trimmed mail ≤ 254, each name ≤ 100 bytes after trimming (`user.NameMax`, counted in bytes, not runes). Anything over a cap gives `ErrValueTooLong`.
 - [T037 claude] Length: input ≤ `MaxFilterBytes` (4096) and canonical output ≤ 4096. The contract and data model say 4096; `gen.go`'s comment says 4000 and is out of date.
 - [T037 claude] Depth counts filter elements on the longest root-to-leaf path, including the leaf, and must be ≤ 16. Components count every node (and/or/not plus leaves) and must be ≤ 64.
@@ -56,13 +52,13 @@
 - [T049 claude] Added 409 `invalid_state` to `/admin/users/{id}/roles`, `/deactivate` and `/reactivate` (T016 follow-up).
 - [T050 claude] No change to `userdb/db.go`: `store.ListUsers` (pgx) and memstore already fill `Directory` and `InvitationID`, and filter by status.
 - [T050 claude] `DirectoryOrigin` has exactly `connection_id` (nil once the connection is deleted), `connection_name`, `directory_uid` and `last_imported_at` (RFC 3339 UTC). It never includes the DN, per T043.
+- [T051 kimi] Selection contract: the view renders its own checkbox column with `disabled` on non-`new`/`imported` rows + a `data-test="select-all"` button — the kit's `selectable` prop can't express per-row disabled, and its one-way `:checked` binding can't visually uncheck a box the parent filters out (vdom value never changes → Vue never rewrites the DOM).
+- [T051 kimi] `directorySearchSchema` in `schemas/directory.ts`: blank `filter`/`base`/`scope` → `undefined` (preprocess), filter trimmed ≤4096, base trimmed ≤1024, scope enum `one|sub`; the page POSTs the zod output verbatim (blank keys dropped by JSON.stringify).
+- [T051 kimi] After a successful import the page re-runs the last search (statuses refresh) and clears the selection; import-issue lines are `<display name from preview, else uid>: <reasonMessage(reason)>`; summary sentence is `Import finished: N created, N updated, N skipped, N failed.`
+- [T051 kimi] Preview status labels pinned: `New` / `Existing user` / `Imported` / `Invalid`; invalid rows also show `reasonMessage(reason)` (e.g. `no_email` → `The directory entry has no email address.`).
 
 ## Interfaces
 
-- [T030 claude] Errors: `ErrValidation`, `ErrInsecureTransport`, `ErrDuplicate`, `ErrLimitReached`, `ErrNotFound`, `ErrRateLimited`. URL, target, CA and filter problems return bare ldapdir sentinels.
-- [T030 claude] Internal helpers T031 can reuse:
-- [T030 claude] `s.lookup(ctx, &actor, tid, id)`: tenant lookup with the cross-tenant audit.
-- [T031 claude] `(*Service).Test(ctx, tenantctx.Actor, tid string, Input, connID string) (TestResult, error)` and `(*Service).TestSaved(ctx, tenantctx.Actor, tid, connID string) (TestResult, error)`.
 - [T031 claude] Constants `StepConnect`, `StepTLS`, `StepBind`, `StepSearchBase`.
 - [T031 claude] Unexported `s.allow(ctx, tenantID) error` is the shared per-tenant limiter. Search (US2) should call it so tests and searches share `rate_per_minute`.
 - [T034 claude] `App.Directories *directory.Service` (nil when disabled); `(*App).buildDirectory() error`.
@@ -109,13 +105,13 @@
 - [T048 claude] `directorydb.dbTx.InsertUser` writes `status='imported'` and `display_name_explicit` exactly as decoded. It deliberately avoids `store.InsertUser`, whose `DisplayNameExplicit` heuristic would mark a derived "First Last" name as explicit.
 - [T049 claude] operationIds `searchDirectory` and `importDirectory`. TS types: `components["schemas"]["SearchRequest"|"SearchResult"|"SearchError"|"ImportRequest"|"ImportResult"|"ImportItem"|"ImportIssue"]`. `User.directory` is `{connection_id: uuid|null, connection_name, directory_uid, last_imported_at}|null`, and `User.invitation_id` is `uuid|null`.
 - [T050 claude] `user.DirectoryOrigin{ConnectionID *string; ConnectionName, DirectoryUID, LastImportedAt string}`. `UserView.Directory` and `UserView.InvitationID` are always serialized, as `null` when empty.
+- [T051 kimi] Route `/admin/directories/import`, name `admin-directory-import`, roles owner/admin; page root `data-test="directory-import"`.
+- [T051 kimi] `data-test` contract: `connection` (picker, lists `GET /api/v1/admin/directories`), `filter`/`base`/`scope`/`search-directory` (form hidden until a connection is chosen), `search-error` (server `message` verbatim for invalid_filter, else `reasonMessage(reason)`), `effective-filter`, `truncation`, `preview-row`/`preview-name`/`preview-email`/`preview-status`/`preview-reason`, row checkbox `input[ty…
+- [T051 kimi] Skip/fail reason wording T052 must register in `api/client.ts` registerReasons: `no_email`=`The directory entry has no email address.`, `email_in_use`=`That email address already belongs to a user.` (plus `invalid_email`, `duplicate_email`, `already_active`, `not_found_in_directory`, `value_too_long`, `multi_valued_uid`, `invalid_uid`, `internal`); `timeout`/`directory_error` already registered.
+- [T051 kimi] `userStatuses` in `api/vocab.ts` becomes `['invited','active','deactivated','imported']` (status select options pinned: `['','invited','active','deactivated','imported']`).
 
 ## Gotchas
 
-- [T035 kimi] Fresh worktree has no node_modules and the kit `dist/` is missing: run `npm install` at repo root and `npm run kit` before `npx vitest run` in `services/auth/console`.
-- [T035 kimi] Zod v4 parsed objects keep optional fields as own-keys with value `undefined` — only `JSON.stringify` (and thus the POST body) drops them; assert `toBeUndefined()`, never `'key' in obj`.
-- [T035 kimi] The whole `vitest run`/`npm run lint` (vue-tsc) stays red until T036 lands, by design (same pattern as T024–T026).
-- [T028 claude] kin-openapi does not enforce `format: uuid` on path ids, so a malformed id reaches the handler, which must answer 404 `not_found` itself.
 - [T028 claude] The request validator rejects an empty `bind_password` (minLength 1) with 400 `validation_failed` before the service runs. The console must leave the field out, not send `""`.
 - [T028 claude] Running `npm install` at the repo root changes the root `package-lock.json`. Revert it unless a task means to change it.
 - [T029 claude] `services/auth/tests/contract` and `services/auth/internal/app` do not build yet: `internal/httpapi/directory.go` refers to `directory.Connection`, `directory.Input`, `directory.TestResult` and `directory.ErrNotFound`, which later tasks still have to add. The manifest itself is fine.
@@ -162,3 +158,7 @@
 - [T049 claude] The service still won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter`, `FilterError`) and T045 (`ScopeBase`, `WithinBase`) land. I checked this task with a stub that I've since deleted.
 - [T049 claude] The console `vue-tsc` fails in this worktree on the missing `qrcode` module in `useMfa.ts`, which this task didn't touch.
 - [T050 claude] The service still doesn't compile until T044/T045 land. I checked this task with a temporary `ldapdir` stub (`zz_t050_stub.go`) and deleted it afterwards. With the stub, `internal/httpapi`, `internal/user/...` and `tests/contract` all pass.
+- [T051 kimi] The kit client drops flat error-body fields: T049's `SearchError` is `{reason, message}` but kit `reasonOf` only keeps `reason` + a nested object `detail`. To show the parse message, extend kit `reasonOf` (ui/kit/src/api/client.ts) to collect remaining flat fields as `detail` while excluding a non-object `detail` key — validated against the kit's own suite (10/10, `client.spec.ts:102` still pins…
+- [T051 kimi] jsdom runs at 1280px (`setup.ts` `__vw`), so `UiDataTable` renders the table layout, not stacked cards; kit field wrappers (`UiInput`/`UiSelect`) put the native control inside `[data-test] ... input`/`select`.
+- [T051 kimi] A failing test that skips `w.unmount()` leaves stale DOM attached and `q()` (document-wide) matches it first — cascade failures after the first real one; the root failure was the kit `:checked` pitfall above.
+- [T051 kimi] Environment setup for a fresh worktree: `npm install` at repo root (writable cache: `--cache /tmp/...`), then `npm run kit`; npm may churn `package-lock.json` `dev` flags — restore it with `git checkout` if untouched deps.
