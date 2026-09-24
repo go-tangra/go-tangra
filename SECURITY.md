@@ -4,8 +4,9 @@
 
 Please **do not** open a public issue for security problems.
 
-Report privately to **security@go-freya.dev** (or via GitHub's private
-vulnerability reporting on this repository once it is public). Include a
+Report privately through GitHub's private vulnerability reporting on
+[go-tangra/go-tangra](https://github.com/go-tangra/go-tangra/security/advisories/new)
+(for a service, on that service's `go-tangra-<name>` repository). Include a
 description, affected versions, and a proof of concept if you have one. You
 will receive an acknowledgement within 2 business days.
 
@@ -22,7 +23,8 @@ Per the project constitution (Development Workflow & Quality Gates):
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | yes       |
+| 4.x     | yes       |
+| < 4.0   | no        |
 
 ## Known, mitigated upstream issues
 

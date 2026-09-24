@@ -1,21 +1,30 @@
 # Front-end architecture
 
-Freya's web UI is one application composed at runtime: the **gateway shell**
-(`services/gateway/shell`) is the host; every module ships a **federated remote**
-(`services/<module>/ui`, plus the auth console at `services/auth/console`) that the
+The go-tangra web UI is one application composed at runtime: the **gateway shell**
+(`shell/` in go-tangra-portal) is the host; every module ships a **federated remote**
+(`ui/` in its go-tangra-<module> repository, plus the auth console at `console/` in
+go-tangra-auth) that the
 shell loads from `/m/<module>/mf-manifest.json` after the gateway announces it
 (`GET /gateway/v1/me/modules`). Feature 013 replaced the Vuetify-era front-ends
 with a single kit, `@go-tangra/ui` (`ui/kit`), on FlyonUI + Tailwind 4 with Zod for
 every form.
 
 ```
+# this repository (go-tangra/go-tangra)
 ui/kit                      @go-tangra/ui — components, forms (Zod), api client, theme, catalogue
 ui/scripts                  static checks (duplicates, legacy, bundle size) + their self-tests
-ui/MIGRATION.md             per-front-end status table read by the checks; bundle baseline
-services/gateway/shell      host: layouts, navigation, ops views, module boundaries
-services/auth/console       standalone console (/console/) AND a remote (VITE_REMOTE=1)
-services/<module>/ui        remotes: src/remote/{routes,nav,header,boot}.ts exposes
+ui/MIGRATION.md             migration record from the monorepo (status table, bundle baseline)
+# service repositories
+go-tangra-portal  shell/    host: layouts, navigation, ops views, module boundaries
+go-tangra-auth    console/  standalone console (/console/) AND a remote (VITE_REMOTE=1)
+go-tangra-<name>  ui/       remotes: src/remote/{routes,nav,header,boot}.ts exposes
 ```
+
+`@go-tangra/ui` is published to GitHub Packages (`npm.pkg.github.com`) on every
+`v*` tag of this repository; its version follows the platform (`4.x`). Service
+repositories depend on `@go-tangra/ui@^4` through a committed `.npmrc`
+(`@go-tangra:registry=https://npm.pkg.github.com`) and install with a token that
+has `read:packages`.
 
 ## Runtime contract
 
@@ -56,19 +65,20 @@ binds `:rules`, keeps an inline validator outside `src/schemas/`, or sets `style
 
 | Check | Local | CI |
 |---|---|---|
-| `node ui/scripts/check-duplicates.mjs` | `npm run check` | `ui-kit` job |
-| `go-tangra-ui-check-no-legacy` (kit bin) | every front-end `npm run lint`; `npm run check` (`--root .`) | every front-end job |
-| `node ui/scripts/check-bundle-size.mjs` | after `npm run build` | `gateway-shell` job |
-| `node --test ui/scripts/tests/checks.spec.mjs` | `npm run check:self` | `ui-kit` job |
-| kit coverage thresholds | `npm run -w ui/kit test:coverage` | `ui-kit` job |
-| catalogue screenshots + axe | `npx playwright test -c catalogue/playwright.config.ts` | `ui-kit` job |
-| module e2e flows (`tests/e2e/*-flow.spec.ts`, `a11y.spec.ts`) | need a running stack + `E2E_OPERATOR_EMAIL/PASSWORD` (`PW_CHANNEL=chrome` on dev boxes) | manual / nightly |
+| kit build, lint (eslint + vue-tsc), vitest | `npm run build` / `npm run lint` / `npm test` | this repo, `ui-kit` job |
+| `node ui/scripts/check-duplicates.mjs` | `npm run check` | — |
+| `go-tangra-ui-check-no-legacy` (kit bin) | every front-end `npm run lint` | each service repo's UI job |
+| `node ui/scripts/check-bundle-size.mjs` | after building the shell and asset UIs | — |
+| `node --test ui/scripts/tests/checks.spec.mjs` | `npm run check:self` | — |
+| kit coverage thresholds | `npm run -w ui/kit test:coverage` | — |
+| catalogue screenshots + axe | `npx playwright test -c catalogue/playwright.config.ts` | — |
+| module e2e flows (`tests/e2e/*-flow.spec.ts`, `a11y.spec.ts`) | in each service repo; need a running stack + `E2E_OPERATOR_EMAIL/PASSWORD` (`PW_CHANNEL=chrome` on dev boxes) | manual / nightly |
 
 ## Building images
 
-Every service Dockerfile has a workspace UI stage: it copies the root
-`package.json` + `package-lock.json` and each workspace `package.json`, runs
-`npm ci`, builds `ui/kit`, then builds the module UI (`npm run -w services/<m>/ui build`).
-`deploy/stack/compose.yaml` builds from the repo root so the stage sees the
-workspace. Use `sg docker -c 'docker compose -p freya-stack build <service>'` on
-hosts where the user is not in the docker group.
+Every service repository builds its own image. The Dockerfile's UI stage runs
+`npm ci` in the service's front-end directory, installing the published
+`@go-tangra/ui` from GitHub Packages with a BuildKit secret (`npm_token`, never
+stored in a layer), then builds the module UI and embeds it in the Go binary.
+Images are published as `ghcr.io/go-tangra/<repo>:<version>`; `deploy/stack`
+runs them (see `deploy/stack/README.md` for building one from a local checkout).

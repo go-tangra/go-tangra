@@ -1,5 +1,9 @@
 # Front-end migration status (feature 013 — FlyonUI + Zod)
 
+> Historical record from the go-freya monorepo. The `services/...` paths below are
+> the monorepo layout; each front-end now lives in its own go-tangra-<name>
+> repository, where its `npm run lint` runs `go-tangra-ui-check-no-legacy` on itself.
+
 `go-tangra-ui-check-no-legacy --root .` (`ui/kit/bin/check-no-legacy.mjs`, run by the root `npm run check`) reads this table: a front-end marked `migrated` must not
 import Vuetify/`@mdi/font`, bind `:rules`, or use `style=` attributes.
 

@@ -1,5 +1,9 @@
 # Front-end static checks
 
+> The default front-end list (`lib.mjs`) is the go-freya monorepo layout. In this
+> repository only the kit is present, so pass `--root`/`--frontends` to check a
+> workspace that contains service front-ends.
+
 - `check-duplicates.mjs` — fails when a component basename exists both in the kit
   (`ui/kit/src/components`) and in any front-end, or in two or more front-ends. A
   component needed by a second front-end moves to the kit.

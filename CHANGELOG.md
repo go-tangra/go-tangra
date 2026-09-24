@@ -1,5 +1,32 @@
 # Changelog
 
+## 4.0.0 — go-tangra v4: platform extracted from go-freya
+
+The platform moves out of the go-freya monorepo into `go-tangra/go-tangra`, with
+its history. Services move to their own `go-tangra-<name>` repositories.
+
+### Changed
+
+- Go module path is `github.com/go-tangra/go-tangra/v4`; contrib modules are
+  `github.com/go-tangra/go-tangra/contrib/<name>/v4` and build standalone
+  (`replace` of the root module with `../..`, ignored by consumers).
+- The UI kit is `@go-tangra/ui` 4.0.0 (formerly `@freya/ui`), published to
+  GitHub Packages on `v*` tags. The root npm workspace holds only `ui/kit`.
+- `deploy/stack` runs every service from `ghcr.io/go-tangra/<repo>:${TANGRA_VERSION:-4.0.0}`
+  instead of building from the monorepo; policy files come from the images,
+  the PowerDNS configs and the test OpenLDAP image moved into `deploy/stack`.
+  `compose.override.yaml` builds a service from a local checkout.
+- CI tests the root and contrib modules with `GOWORK=off`, builds, lints and
+  tests the kit, and publishes it on tags. No platform container image.
+- `make testca` uses the framework's own `cmd/freya-devca`.
+- Vulnerability reports go through GitHub private vulnerability reporting; 4.x
+  is the supported line.
+
+### Removed
+
+- `services/*` and their specs, the monorepo `go.work`, and the migration
+  tooling (it stays in go-freya).
+
 ## 0.2.0 — unreleased
 
 ### Added
