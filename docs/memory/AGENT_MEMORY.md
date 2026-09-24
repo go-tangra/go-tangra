@@ -6,10 +6,6 @@
 
 ## Decisions
 
-- [T048 claude] Uids that `Decode` could never produce (a non-GUID for objectGUID, over 256 bytes, invalid UTF-8, control characters) are skipped as `not_found_in_directory` without a query. Entries outside the base count as not found. More than one match → failed `directory_error`.
-- [T048 claude] Decode errors are skipped with `ldapdir.Reason`. `duplicate_email` applies only against e-mails this request already created or updated.
-- [T048 claude] Only the connection's own link counts. Linked user not `imported` → skipped `already_active`, nothing written. Linked and still imported → names refreshed, and the e-mail changes only if no other user holds it.
-- [T049 claude] Search 400 for a `*ldapdir.FilterError` (checked with `errors.As` before `directoryError`) is `{"reason":"invalid_filter","message":fe.Detail}`. Every other error goes through `directoryError` and returns only the reason.
 - [T049 claude] The import handler checks 1..`directory.MaxImportUIDs` unique uids itself as well as through the OpenAPI validator, and gives 400 `validation_failed`. The uids are passed to the service unchanged.
 - [T049 claude] Import declares no 429, because import has no rate limit (T048). Both routes declare 403/404.
 - [T049 claude] Added 409 `invalid_state` to `/admin/users/{id}/roles`, `/deactivate` and `/reactivate` (T016 follow-up).
@@ -56,11 +52,13 @@
 - [T058 claude] Validation (roles/groups exist, ≤ GroupsMax) runs in its own read Tx before escalation. `store.ErrNotFound` from escalation maps to `ErrBadEmail`.
 - [T058 claude] In `CreateWith` conversion, the invitation names come from Params when given, otherwise from the user row. `Activate` always uses the row.
 - [T058 claude] Cross-tenant audit (`cross_tenant_refused`, reason `foreign_user`, details `target_tenant`) runs a separate `Atomic(Scope{System:true})` with `Tx.UserAnyTenant`, only for UUID-shaped ids.
+- [T059 claude] `RemoveImported` uses `a.lookup` so another tenant's id → `ErrNotFound` plus a `cross_tenant_refused` audit. A non-imported status → `ErrInvalidState` with nothing touched.
+- [T059 claude] If the lookup saw `imported` but the status-guarded delete then finds nothing (the user was invited or removed concurrently), it returns `ErrInvalidState`, not not found.
+- [T059 claude] Audit: `imported_user_deleted`, Outcome `ok`, SubjectKind `user`, SubjectID = uid, no details. Refusals are not audited.
+- [T059 claude] Sessions are not revoked explicitly: imported users can't sign in, and the DB cascade and memstore delete remove the user's other rows.
 
 ## Interfaces
 
-- [T043 claude] Needs `ldapdir.FilterError{Detail string}` as a pointer error (T037 pins this).
-- [T043 claude] console.yaml (T049): `POST /api/v1/admin/directories/{id}/search` and `/{id}/import`, each with csrf and a uuid path id. The request body is `$ref` SearchRequest / ImportRequest and the 200 response is `$ref` SearchResult / ImportResult. Search declares 400 (schema with `reason` and `message`), 429, 502 and 504; import declares 400, 502 and 504.
 - [T043 claude] Schemas:
 - [T040 kimi] Consumes exactly the contracts §C / T037-pinned surface: `type Filter struct{...}` with `String() string` (comparable, zero = ""), `const MaxFilterBytes = 4096`, `CompileUserFilter(string) (Filter, error)`, `Combine(base, user Filter) (Filter, error)`; `ScopeBase(connBase, requested string) (string, error)`, `WithinBase(connBase, entryDN string) bool`; `Mapping{UID,Email,DisplayName,FirstName,Las…
 - [T040 kimi] Corpus is read at `testdata/ldap/{filters,dns,urls,objectguid}` relative to the fuzz package (files have no trailing newline; `.bin` fixtures are non-UTF-8 bytes in strings).
@@ -109,10 +107,11 @@
 - [T058 claude] `func (g *authz.Groups) MayJoin(ctx, actor, tenantID string, groupIDs []string) error`
 - [T058 claude] `type authz.InviteEscalation struct{ Assigner *Assigner; Groups *Groups }` satisfies `invite.Escalation`.
 - [T058 claude] `invite.ActivateItem{UserID, Outcome, InvitationID, Reason string}`, `ActivateMax=100`, `Outcome*`/`Reason*` consts.
+- [T059 claude] `func (a *Admin) RemoveImported(ctx context.Context, actor tenantctx.Actor, uid string) error` returns nil, `ErrNotFound` (→ 404), `ErrInvalidState` (→ 409 `invalid_state`) or a store error.
+- [T059 claude] `AdminStore.DeleteImportedUser(ctx, tenantID, userID string) error` (memstore and `userdb.DBAdminStore` both implement it).
 
 ## Gotchas
 
-- [T041 claude] `mustSearch` fails if any directory session is left open, so always `Close` the session, including on errors.
 - [T041 claude] `TestSearchTimeout` relies on the caller's ctx deadline reaching the session, and T047 should also apply its own time limit + 2 s deadline.
 - [T042 claude] An injected `ldapdir.ErrTimeout` kills an ldapfake session, and later calls on it return `ErrUnreachable`. After a timeout the implementation must reopen the session or report the remaining entries as failed; the tests allow either. Always close every session: `OpenSessions()==0` is checked.
 - [T042 claude] memstore's `FailNext` only works on directory methods (`UpsertLink`, `UpdateImportedUser`, …), not `InsertUser`. memstore has no rollback, so the tests don't check rollback after an `UpsertLink` failure; directorydb's per-entry transaction must provide it.
@@ -162,3 +161,4 @@
 - [T057 claude] `golangci-lint` `hugeParam` on `actor` is expected; the signature was fixed by T053.
 - [T058 claude] In invitedb, `UserByID`/`UserAnyTenant` return `ErrNotFound` for non-UUID ids, to avoid a Postgres uuid cast error aborting the tx.
 - [T058 claude] `httpapi/admin_test.go` `withUS2` now wires `InviteEscalation`; handler tests for activate should reuse `withUS2`.
+- [T059 claude] `golangci-lint --new-from-rev HEAD` flags gocritic `hugeParam` on `actor`. It is kept because the test and contract fix the signature and the sibling methods match.
