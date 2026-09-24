@@ -6,10 +6,6 @@
 
 ## Decisions
 
-- [T054 claude] Activation audit: `invite_created`, Outcome `ok`, Reason `activation`, SubjectKind `user`, SubjectID = user id, Details `{"invitation_id": id}`, with no e-mail or names. A CreateWith conversion emits the same row. Other-tenant id: `cross_tenant_refused` with SubjectID = the id and no foreign e-mail in the details.
-- [T054 claude] CreateWith on an imported e-mail returns a non-empty invitation id and nil error, the same shape as any new invitation, and moves the user to `invited`. Escalation runs for every CreateWith call, before any write.
-- [T056 claude] Gate for both routes = `RequireAdmin` (owner/admin role). A custom role holding only `directory:manage` gets 403 `forbidden`.
-- [T056 claude] Activate body errors: schema refusals → 400 `validation_failed`; malformed JSON → 400 `malformed_body` (the existing DecodeJSON behaviour).
 - [T056 claude] Self-escalation is checked once for the whole request before any write: 403 `{"reason":"self_escalation"}` (exactly 1 key), no invitation, outbox row or status change. Owners may grant `owner`.
 - [T056 claude] `ActivateResult` is exactly `{items}`. There is one item per requested id (tests match by `user_id`, not order), and each item has exactly the keys `user_id, outcome, invitation_id, reason`, with null where there is no value. Failure reasons: `invalid_state` (active or already invited), `not_found` (unknown or other tenant).
 - [T056 claude] Plain `POST /admin/invitations` for an imported e-mail (case-insensitive) → the same 202 bytes as for a new or active address. It converts that row to `invited` with no second user row, and one invitation. An admin inviting with `r-owner` → 403 `self_escalation`.
@@ -56,12 +52,13 @@
 - [T064 kimi] Preview `uid` values are **entryUUIDs** (openldap mapping), generated per image build — tests must discover them from search results, never hardcode.
 - [T069 claude] The remaining `make lint` failures are revive (250 missing doc comments) and gocritic (hugeParam/rangeValCopy on by-value `tenantctx.Actor` and store structs). They existed before this feature and match how the whole service is written, so they were left alone. staticcheck and gosec are clean.
 - [T069 claude] `consoleHandler` now accepts a gateway-relayed nonce only if it is 128 characters or fewer, using only `[A-Za-z0-9+/=_-]`; anything else becomes an empty nonce.
+- [T070 claude] A stored bind password is reused only if `url`, `tls_mode` and `ca_pem` are all unchanged, on both Update and the unsaved Test with `connection_id`. Otherwise the result is `validation_failed`, audited as `refused`/`bind_password_required`. Clearing the CA also counts as a change.
+- [T070 claude] Import calls `s.allow` once per request and shares the per-tenant `directory.rate_per_minute` bucket with test and search.
+- [T070 claude] Search and import call `s.usable(&c)` right after lookup, refusing `plain` connections when in production or when `allow_plaintext` is off, before the password is unsealed.
+- [T070 claude] Base filters are validated at save with `ldapdir.CompileUserFilter` (the full policy); an empty filter is still stored as "".
 
 ## Interfaces
 
-- [T051 kimi] Skip/fail reason wording T052 must register in `api/client.ts` registerReasons: `no_email`=`The directory entry has no email address.`, `email_in_use`=`That email address already belongs to a user.` (plus `invalid_email`, `duplicate_email`, `already_active`, `not_found_in_directory`, `value_too_long`, `multi_valued_uid`, `invalid_uid`, `internal`); `timeout`/`directory_error` already registered.
-- [T051 kimi] `userStatuses` in `api/vocab.ts` becomes `['invited','active','deactivated','imported']` (status select options pinned: `['','invited','active','deactivated','imported']`).
-- [T044 claude] `type Filter struct{ canon string }` (comparable; the zero value is refused by `Combine`), `func (Filter) String() string`
 - [T044 claude] `const MaxFilterBytes = 4096`; `func CompileUserFilter(s string) (Filter, error)`; `func Combine(base, user Filter) (Filter, error)`
 - [T044 claude] `type FilterError struct{ Detail string }`, used as a pointer. `Error()` = `"ldapdir: invalid filter: " + Detail`, and it matches `ErrInvalidFilter` (so `Reason` returns `invalid_filter`).
 - [T045 claude] `func ScopeBase(connBase, requested string) (string, error)`
@@ -109,11 +106,12 @@
 - [T064 kimi] `startLDAP(t) (host string, caPEM []byte)` helper in the test file starts the container and returns the dial address + CA PEM; reusable by later integration tasks (e.g. T071 live smoke analogues).
 - [T064 kimi] Import/skip contract confirmed live: 4 created `{eng1,eng2,eng5,eng6}`, skipped `{eng4:no_email, eng7:duplicate_email}` when uids are passed in request order; re-import is all `updated`.
 - [T069 claude] `httpapi.relayedNonce(v string) string` (unexported).
+- [T070 claude] `directory.errCredentialRequired` (unexported, wraps `ErrValidation`); `targetChanged(old, c *store.DirectoryConnection) bool`; `(*Service).usable(c) error`.
+- [T070 claude] OpenAPI: `importDirectory` gains `429` and `400 insecure_transport`; `searchDirectory` `400` adds `insecure_transport`. `schema.d.ts` was regenerated.
+- [T070 claude] The console `bind-password` hint text is now `stored — leave blank to keep; required when the URL, TLS mode or CA changes`.
 
 ## Gotchas
 
-- [T051 kimi] jsdom runs at 1280px (`setup.ts` `__vw`), so `UiDataTable` renders the table layout, not stacked cards; kit field wrappers (`UiInput`/`UiSelect`) put the native control inside `[data-test] ... input`/`select`.
-- [T051 kimi] A failing test that skips `w.unmount()` leaves stale DOM attached and `q()` (document-wide) matches it first — cascade failures after the first real one; the root failure was the kit `:checked` pitfall above.
 - [T051 kimi] Environment setup for a fresh worktree: `npm install` at repo root (writable cache: `--cache /tmp/...`), then `npm run kit`; npm may churn `package-lock.json` `dev` flags — restore it with `git checkout` if untouched deps.
 - [T044 claude] `filter_test.go` already declares a `parserDetail` test helper, so the production function is named `filterParseDetail`.
 - [T044 claude] `ldapdir` tests, the `directory` package, `app` and `tests/fuzz` still won't compile until T045 (`ScopeBase`, `WithinBase`) lands. Until then, move `dn_test.go` aside or use a throwaway stub.
@@ -162,3 +160,5 @@
 - [T064 kimi] Avoid `defer resp.Body.Close()` (errcheck); the harness style is `defer func() { _ = resp.Body.Close() }()`.
 - [T069 claude] In a worktree with no `node_modules`, vitest and vue-tsc silently pick up an older install from a parent directory, which causes a "qrcode not found" error and stale `@freya/ui` failures. Run `npm ci` at the worktree root, then `npm run kit` (builds ui/kit), before `npm run lint` or vitest in the console.
 - [T069 claude] `golangci-lint` stops at 50 issues per linter by default. Use `--max-issues-per-linter=0 --max-same-issues=0` for real counts, or `--new-from-rev=f67251a5` to see only feature-016 findings.
+- [T070 claude] Any new test that edits `url`, `tls_mode` or `ca_pem` on a saved connection, or unsaved-tests them with `connection_id`, must include `bind_password`.
+- [T070 claude] Import now uses up a rate-limit token, so tests with a small `rate` should budget for imports too.
