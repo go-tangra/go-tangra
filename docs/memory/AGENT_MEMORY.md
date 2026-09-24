@@ -6,8 +6,6 @@
 
 ## Decisions
 
-- [T041 claude] `Query.SizeLimit` is the connection's `size_limit`, not limit+1: the real client already puts limit+1 on the wire (the fake records it as `WireSizeLimit`). `Query.TimeLimit` is `time_limit_seconds * time.Second`.
-- [T041 claude] Attributes: exactly the non-empty mapped attributes, never `*` or `objectClass`.
 - [T041 claude] Scope: `""` or `"sub"` gives `ScopeSub`, `"one"` gives `ScopeOne`; anything else is `ErrValidation`. A blank `Base` means the connection base.
 - [T041 claude] Errors: a bad filter must satisfy `errors.Is(err, ldapdir.ErrInvalidFilter)` (wrapping with a position message is allowed). A bad base gives `ldapdir.ErrInvalidBase`. Directory failures come back as errors whose `ldapdir.Reason` is `unreachable`, `tls_failed`, `target_refused`, `invalid_credentials`, `timeout` or `directory_error`. Unknown, malformed or foreign ids give `ErrNotFound`; a foreign id…
 - [T042 claude] One Search per uid. Filter is `(&<base filter>(<AttrUID>=<escaped uid>))`, compared after parsing (root AND, first child = canonical base filter, second child = equality with the literal uid bytes). Base = connection base, ScopeSub, mapped attributes only.
@@ -56,12 +54,11 @@
 - [T045 claude] `ScopeBase` returns the caller's string unchanged (the requested base, or `connBase` when the request is blank), not `DN.String()`. A re-serialised DN could change bytes or exceed the 1024-byte cap and then fail `WithinBase`.
 - [T045 claude] A DN is valid only if it is non-blank, at most `MaxDNBytes` (1024), parses with `ldap.ParseDN`, has at least one RDN, and has no attribute with an empty type or value. These are the same rules as `directory.validDN`.
 - [T045 claude] Every failure returns `("", ErrInvalidBase)`, and the error text never includes the input.
+- [T052 codex] Selection permits only new/imported entries, capped at 500.
+- [T052 codex] Preserved flat API error fields in kit `ApiError.detail` to display filter parse messages.
 
 ## Interfaces
 
-- [T036 codex] Exports `directoryConnectionSchema`, `directoryCreateSchema`, `DirectoryInput`, `DirectoryConnection`, and `DirectoryTestResult`.
-- [T036 codex] `DirectoryDrawer` accepts `connection` and emits `close` and `saved`.
-- [T038 claude] `func ScopeBase(connBase, requested string) (string, error)` (errors: `ErrInvalidBase`); `func WithinBase(connBase, entryDN string) bool`.
 - [T039 claude] `type Mapping struct{ UID, Email, DisplayName, FirstName, LastName string }` (comparable)
 - [T039 claude] `type Person struct{ UID, DN, Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool }` (comparable, compared with `==`)
 - [T039 claude] `func DefaultMapping(kind string) Mapping`; `func Decode(m Mapping, e RawEntry) (Person, error)`. RawEntry attribute keys are lower-case, so `Decode` must look up `strings.ToLower(attr)`.
@@ -109,10 +106,12 @@
 - [T045 claude] `func ScopeBase(connBase, requested string) (string, error)`
 - [T045 claude] `func WithinBase(connBase, entryDN string) bool`
 - [T045 claude] Unexported: `parseDN(string) (*ldap.DN, bool)` and `within(base, dn *ldap.DN) bool`.
+- [T052 codex] Added `directorySearchSchema`, `directoryImportSchema`, and generated API type aliases in `schemas/directory.ts`.
+- [T052 codex] Import route inherits remote mounting through existing route mapping.
+- [T052 codex] Directories now links to the import page.
 
 ## Gotchas
 
-- [T030 claude] The directory package test binary won't compile until T031 adds `Test` and `TestSaved`. To run only the CRUD tests, move `test_test.go` aside temporarily.
 - [T030 claude] `ldap.ParseDN("")` succeeds, and `cn=,dc=x` parses with an empty value. `validDN` refuses both explicitly.
 - [T030 claude] Size/time defaults are set before `apply`, so an explicit `0` is refused rather than replaced by the default.
 - [T031 claude] `scripts/redaction-scan.sh` fails with the default relative `ARTIFACTS`: the CRUD `capture()` helper can't open `.artifacts/capture/...` from the package directory. Run it with `ARTIFACTS=$PWD/.artifacts` until the script is fixed.
@@ -162,3 +161,4 @@
 - [T044 claude] `filter_test.go` already declares a `parserDetail` test helper, so the production function is named `filterParseDetail`.
 - [T044 claude] `ldapdir` tests, the `directory` package, `app` and `tests/fuzz` still won't compile until T045 (`ScopeBase`, `WithinBase`) lands. Until then, move `dn_test.go` aside or use a throwaway stub.
 - [T045 claude] `ldap.ParseDN` never returns an RDN with zero attributes, so there is no check for that case. Adding one would be dead code and break 100% coverage.
+- [T052 codex] Build the UI kit before running console tests.
