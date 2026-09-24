@@ -1,18 +1,15 @@
 {
-  "name": "freya-frontends",
+  "name": "go-tangra",
   "private": true,
-  "description": "npm workspace for the Freya platform front-ends: the shared UI kit (@go-tangra/ui), the gateway shell, the auth console and every module remote.",
+  "description": "npm workspace for the go-tangra v4 platform front-end: the shared UI kit (@go-tangra/ui) and its static checks.",
   "workspaces": [
-    "ui/kit",
-    "services/gateway/shell",
-    "services/auth/console",
-    "services/*/ui"
+    "ui/kit"
   ],
   "scripts": {
     "kit": "npm run build -w ui/kit",
-    "lint": "npm run lint --workspaces --if-present",
-    "test": "npm run test:unit --workspaces --if-present",
-    "build": "npm run kit && npm run build --workspaces --if-present",
+    "lint": "npm run lint -w ui/kit",
+    "test": "npm run test:unit -w ui/kit",
+    "build": "npm run build -w ui/kit",
     "check": "node ui/scripts/check-duplicates.mjs && node ui/kit/bin/check-no-legacy.mjs --root .",
     "check:self": "node --test ui/scripts/tests/checks.spec.mjs"
   },
