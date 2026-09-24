@@ -6,9 +6,6 @@
 
 ## Decisions
 
-- [T037 claude] Attribute description: `^[A-Za-z][A-Za-z0-9-]*(;[A-Za-z0-9-]+)*$` or a numeric OID. It applies to extensible-match types too. Matching rule must be a descriptor or an OID. Refuse `dnAttributes` and any case-insensitive "dn" matching rule (go-ldap parses `:DN:` as a rule name).
-- [T037 claude] Grammar refusals: `FilterError.Detail` == go-ldap inner message with the `ldap: ` prefix removed. The UTF-8 check runs before the parser. Detail must be valid UTF-8 with no control characters, so replace them in the parser's echoed trailing input.
-- [T041 claude] The effective filter is always `"(&" + canon(base_filter) + canon(user_filter) + ")"`. An empty filter on either side becomes `(objectClass=*)`, so an empty base filter still produces the `(&…)` form. Canonical means `DecompileFilter(CompileFilter(x))`.
 - [T041 claude] `Query.SizeLimit` is the connection's `size_limit`, not limit+1: the real client already puts limit+1 on the wire (the fake records it as `WireSizeLimit`). `Query.TimeLimit` is `time_limit_seconds * time.Second`.
 - [T041 claude] Attributes: exactly the non-empty mapped attributes, never `*` or `objectClass`.
 - [T041 claude] Scope: `""` or `"sub"` gives `ScopeSub`, `"one"` gives `ScopeOne`; anything else is `ErrValidation`. A blank `Base` means the connection base.
@@ -56,12 +53,12 @@
 - [T044 claude] Grammar refusals: `Detail` is go-ldap's inner message without the `ldap: ` prefix. Control characters and invalid UTF-8 are replaced by U+FFFD, and it is cut on a rune boundary at 256 bytes with "…" appended. Policy refusals use fixed texts that never quote the input.
 - [T044 claude] Caps: depth ≤16 elements on the longest path, ≤64 components (and/or/not nodes count too), input and canonical form each ≤4096 bytes. `Combine`'s output is not length-capped, so two filters at the cap still combine (up to 8195 bytes).
 - [T044 claude] Attribute descriptions must be a descriptor or a numeric OID (no leading zeros), optionally followed by `;option`s. Matching rules must be a descriptor or an OID. `:dn:` is refused in every spelling, including a rule that equals "dn" in any case. A NUL is refused raw or escaped in any assertion value.
+- [T045 claude] `ScopeBase` returns the caller's string unchanged (the requested base, or `connBase` when the request is blank), not `DN.String()`. A re-serialised DN could change bytes or exceed the 1024-byte cap and then fail `WithinBase`.
+- [T045 claude] A DN is valid only if it is non-blank, at most `MaxDNBytes` (1024), parses with `ldap.ParseDN`, has at least one RDN, and has no attribute with an empty type or value. These are the same rules as `directory.validDN`.
+- [T045 claude] Every failure returns `("", ErrInvalidBase)`, and the error text never includes the input.
 
 ## Interfaces
 
-- [T034 claude] `Production` for the service comes from `cfg.IsProduction()`, `Cache` from `a.Cache` and `Authz` from `a.Authz`.
-- [T032 claude] `directorydb.DBStore{St *store.Store}`; `(DBStore).Atomic(ctx context.Context, tenantID string, fn func(pgx.Tx) error) error`; plus the 8 `directory.Store` methods (compile-time assertion `var _ directory.Store = DBStore{}`).
-- [T032 claude] `app.buildDirectory` now passes `directorydb.DBStore{St: a.Store}` as `Deps.Store`.
 - [T036 codex] Exports `directoryConnectionSchema`, `directoryCreateSchema`, `DirectoryInput`, `DirectoryConnection`, and `DirectoryTestResult`.
 - [T036 codex] `DirectoryDrawer` accepts `connection` and emits `close` and `saved`.
 - [T038 claude] `func ScopeBase(connBase, requested string) (string, error)` (errors: `ErrInvalidBase`); `func WithinBase(connBase, entryDN string) bool`.
@@ -109,10 +106,12 @@
 - [T044 claude] `type Filter struct{ canon string }` (comparable; the zero value is refused by `Combine`), `func (Filter) String() string`
 - [T044 claude] `const MaxFilterBytes = 4096`; `func CompileUserFilter(s string) (Filter, error)`; `func Combine(base, user Filter) (Filter, error)`
 - [T044 claude] `type FilterError struct{ Detail string }`, used as a pointer. `Error()` = `"ldapdir: invalid filter: " + Detail`, and it matches `ErrInvalidFilter` (so `Reason` returns `invalid_filter`).
+- [T045 claude] `func ScopeBase(connBase, requested string) (string, error)`
+- [T045 claude] `func WithinBase(connBase, entryDN string) bool`
+- [T045 claude] Unexported: `parseDN(string) (*ldap.DN, bool)` and `within(base, dn *ldap.DN) bool`.
 
 ## Gotchas
 
-- [T029 claude] `services/auth/tests/contract` and `services/auth/internal/app` do not build yet: `internal/httpapi/directory.go` refers to `directory.Connection`, `directory.Input`, `directory.TestResult` and `directory.ErrNotFound`, which later tasks still have to add. The manifest itself is fine.
 - [T030 claude] The directory package test binary won't compile until T031 adds `Test` and `TestSaved`. To run only the CRUD tests, move `test_test.go` aside temporarily.
 - [T030 claude] `ldap.ParseDN("")` succeeds, and `cn=,dc=x` parses with an empty value. `validDN` refuses both explicitly.
 - [T030 claude] Size/time defaults are set before `apply`, so an explicit `0` is refused rather than replaced by the default.
@@ -162,3 +161,4 @@
 - [T051 kimi] Environment setup for a fresh worktree: `npm install` at repo root (writable cache: `--cache /tmp/...`), then `npm run kit`; npm may churn `package-lock.json` `dev` flags — restore it with `git checkout` if untouched deps.
 - [T044 claude] `filter_test.go` already declares a `parserDetail` test helper, so the production function is named `filterParseDetail`.
 - [T044 claude] `ldapdir` tests, the `directory` package, `app` and `tests/fuzz` still won't compile until T045 (`ScopeBase`, `WithinBase`) lands. Until then, move `dn_test.go` aside or use a throwaway stub.
+- [T045 claude] `ldap.ParseDN` never returns an RDN with zero attributes, so there is no check for that case. Adding one would be dead code and break 100% coverage.
