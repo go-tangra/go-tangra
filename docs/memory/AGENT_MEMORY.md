@@ -6,10 +6,6 @@
 
 ## Decisions
 
-- [T051 kimi] Selection contract: the view renders its own checkbox column with `disabled` on non-`new`/`imported` rows + a `data-test="select-all"` button — the kit's `selectable` prop can't express per-row disabled, and its one-way `:checked` binding can't visually uncheck a box the parent filters out (vdom value never changes → Vue never rewrites the DOM).
-- [T051 kimi] `directorySearchSchema` in `schemas/directory.ts`: blank `filter`/`base`/`scope` → `undefined` (preprocess), filter trimmed ≤4096, base trimmed ≤1024, scope enum `one|sub`; the page POSTs the zod output verbatim (blank keys dropped by JSON.stringify).
-- [T051 kimi] After a successful import the page re-runs the last search (statuses refresh) and clears the selection; import-issue lines are `<display name from preview, else uid>: <reasonMessage(reason)>`; summary sentence is `Import finished: N created, N updated, N skipped, N failed.`
-- [T051 kimi] Preview status labels pinned: `New` / `Existing user` / `Imported` / `Invalid`; invalid rows also show `reasonMessage(reason)` (e.g. `no_email` → `The directory entry has no email address.`).
 - [T044 claude] Empty or all-whitespace input → `(objectClass=*)`. Leading whitespace before a real filter is a grammar error (the parser's message), as the tests require.
 - [T044 claude] Grammar refusals: `Detail` is go-ldap's inner message without the `ldap: ` prefix. Control characters and invalid UTF-8 are replaced by U+FFFD, and it is cut on a rune boundary at 256 bytes with "…" appended. Policy refusals use fixed texts that never quote the input.
 - [T044 claude] Caps: depth ≤16 elements on the longest path, ≤64 components (and/or/not nodes count too), input and canonical form each ≤4096 bytes. `Combine`'s output is not length-capped, so two filters at the cap still combine (up to 8195 bytes).
@@ -56,11 +52,13 @@
 - [T060 claude] No new error variables: `errInvalidState` and `errSelfEscalation` were already mapped in `adminError`.
 - [T062 codex] Bulk selection includes only imported users, capped at 100.
 - [T062 codex] Selection clears on filtering and list refresh.
+- [T066 kimi] Skip gate is `process.env.E2E_OPERATOR_PASSWORD` (not E2E_PASSWORD), per the task wording; the flow itself signs in as the tenant owner (`signIn(page)` defaults).
+- [T066 kimi] Import filter is pinned to `(|(uid=eng1)(uid=eng2)(uid=eng5))` (the three unique-mail fixtures in `people.ldif`) so the summary is deterministic; the assertion is `created+updated == count of enabled preview checkboxes` with 0 skipped/0 failed, making the suite re-runnable against the same stack.
+- [T066 kimi] Activation target is the first `user-row` having an `activate` button (dynamic email), not a fixed fixture, so re-runs work after a previous run invited eng1.
+- [T066 kimi] Connection CA comes from `E2E_LDAP_CA_PEM` / `E2E_LDAP_CA_FILE`, defaulting to `deploy/stack/ldap/ca.pem` (T067 path) resolved relative to the spec file; LDAP settings overridable via `E2E_LDAP_URL/BIND_DN/BIND_PASSWORD/BASE_DN`, Mailpit via `E2E_MAILPIT_URL` (default `http://127.0.0.1:8025`).
 
 ## Interfaces
 
-- [T046 claude] `const MaxUIDBytes = 256, MaxEmailBytes = 254, MaxDNBytes = 1024`
-- [T046 claude] `ErrNoEmail`, `ErrInvalidEmail`, `ErrValueTooLong`, `ErrMultiValuedUID`, `ErrInvalidUID`; `Reason()` maps them to their snake_case codes.
 - [T047 claude] `directory.Store` gained `UsersByEmails(ctx, tid, emails)`, `LinksByUIDs(ctx, tid, connID, uids)` and `User(ctx, tid, id) (store.User, error)`. `directorydb.DBStore` implements all three (User via `store.GetUser`).
 - [T047 claude] `SearchRequest{Filter, Base, Scope}`, `SearchResult{Items, Truncated, OutOfScope, EffectiveFilter}` and `SearchItem{UID, DN, Email, DisplayName, FirstName, LastName, Status, UserID, Reason}`, with `MarshalJSON`/`UnmarshalJSON` (null ↔ "").
 - [T047 claude] Constants `StatusNew`, `StatusExistingUser`, `StatusImported`, `StatusInvalid`. Helpers T048 can reuse: `mappingOf(c)`, `mappedAttributes(c)`, `s.runSearch`-style session code, `closedDirErr`, and `s.testPassword(&Input{}, &c, tid, connID)` to unseal the stored password.
@@ -109,14 +107,11 @@
 - [T062 codex] `RoleGroupPickers.vue` shares `roleIds`/`groupIds` models between drawers.
 - [T062 codex] `ActivateDrawer.vue` emits `activated(ActivateResult)`.
 - [T062 codex] `schemas/directory.ts` exports `activateSchema` and `ActivateResult`.
+- [T066 kimi] New env knobs read by the spec: `E2E_LDAP_URL`, `E2E_LDAP_BIND_DN`, `E2E_LDAP_BIND_PASSWORD`, `E2E_LDAP_BASE_DN`, `E2E_LDAP_CA_PEM`, `E2E_LDAP_CA_FILE`, `E2E_MAILPIT_URL` (all optional, quickstart defaults).
+- [T066 kimi] Mailpit check mirrors the Go harness `LastMail`: `GET /api/v1/search?query=to:<email>` then `GET /api/v1/message/{ID}`; the invitation text must contain `/console/invite/accept?token=`.
 
 ## Gotchas
 
-- [T042 claude] memstore's `FailNext` only works on directory methods (`UpsertLink`, `UpdateImportedUser`, …), not `InsertUser`. memstore has no rollback, so the tests don't check rollback after an `UpsertLink` failure; directorydb's per-entry transaction must provide it.
-- [T042 claude] Test helpers use an `it` prefix (`itSetup`, `itSwitch`, `itNewDirectory`, …) so they don't clash with the parallel T041 search suite.
-- [T043 claude] `directory_test.go`'s shared `fakeDirectories` now has `found`/`imp` fields and `dirCall.Search`/`dirCall.UIDs`. `dirRoutes()` includes search and import, so the existing permission, CSRF and feature-disabled tests cover them.
-- [T043 claude] `app.go` won't build once `DirectoryService` gains Search/Import until `*directory.Service` implements both.
-- [T043 claude] The users-list test uses the real memstore: `ListUsers` already fills `store.User.Directory` and `InvitationID`, so T050 only needs to map them onto `UserView`.
 - [T040 kimi] AD objectGUID bytes are not valid UTF-8 — never UTF-8-check the uid value before the GUID-length/decode branch (hit this in the stub).
 - [T040 kimi] `ldap.ParseDN` trims insignificant spaces, so `sameDNFold` comparisons accept spaced DN spellings; `EqualFold` handles multi-valued RDN order.
 - [T040 kimi] The ScopeBase no-echo fuzz guard is gated on `len(requested) >= 24` — short inputs like "a" appear in fixed error words and would false-positive.
@@ -162,3 +157,8 @@
 - [T059 claude] `golangci-lint --new-from-rev HEAD` flags gocritic `hugeParam` on `actor`. It is kept because the test and contract fix the signature and the sibling methods match.
 - [T060 claude] `npm run gen:api` runs openapi-typescript 7.13.0 even though `console/node_modules` isn't installed. The regenerated file only gained lines; nothing was removed.
 - [T060 claude] `internal/directory` `TestSearchAudit/filter_capped_at_1_KiB` fails ("filter has more than 64 components"). This is outside T060's scope and the package doesn't import `httpapi`.
+- [T066 kimi] The drawer's Test button for a *new* connection does not persist `last_test` (no `connection_id`), so after Save the badge reads "Never tested" — the spec asserts the row URL instead, not the badge.
+- [T066 kimi] `UiTextarea` for `ca_pem` has no `data-test`; select it via `textarea[data-field="ca_pem"]` (the `data-field` id convention also used by groups.spec.ts).
+- [T066 kimi] After activation the users list reloads under the still-active `imported` filter, so the activated row vanishes until the filter is cleared (`selectOption('')`).
+- [T066 kimi] `npx tsc -p tsconfig.node.json` fails on a pre-existing `@freya/ui/vite` typing issue in `vite.config.ts` (unrelated to this task; the lint gate only type-checks `tsconfig.app.json`, which excludes e2e).
+- [T066 kimi] npm install churns `package-lock.json` `dev` flags — restore with `git checkout` (done).
