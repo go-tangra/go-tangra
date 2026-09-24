@@ -6,8 +6,6 @@
 
 ## Decisions
 
-- [T041 claude] Scope: `""` or `"sub"` gives `ScopeSub`, `"one"` gives `ScopeOne`; anything else is `ErrValidation`. A blank `Base` means the connection base.
-- [T041 claude] Errors: a bad filter must satisfy `errors.Is(err, ldapdir.ErrInvalidFilter)` (wrapping with a position message is allowed). A bad base gives `ldapdir.ErrInvalidBase`. Directory failures come back as errors whose `ldapdir.Reason` is `unreachable`, `tls_failed`, `target_refused`, `invalid_credentials`, `timeout` or `directory_error`. Unknown, malformed or foreign ids give `ErrNotFound`; a foreign id…
 - [T042 claude] One Search per uid. Filter is `(&<base filter>(<AttrUID>=<escaped uid>))`, compared after parsing (root AND, first child = canonical base filter, second child = equality with the literal uid bytes). Base = connection base, ScopeSub, mapped attributes only.
 - [T042 claude] Entries are processed in request order. The second entry with the same e-mail is `duplicate_email`, and the tests inject a directory error on the Nth search to hit the Nth uid.
 - [T042 claude] Request refused with `ErrValidation` before any directory call when there are 0 or more than 500 uids, a duplicate uid or a blank uid.
@@ -56,10 +54,11 @@
 - [T045 claude] Every failure returns `("", ErrInvalidBase)`, and the error text never includes the input.
 - [T052 codex] Selection permits only new/imported entries, capped at 500.
 - [T052 codex] Preserved flat API error fields in kit `ApiError.detail` to display filter parse messages.
+- [T055 claude] Rejecting non-imported users happens in `RemoveImported` after `lookup`, which returns `ErrInvalidState`. The store's `ErrNotFound` for a non-imported user is only a fallback.
+- [T055 claude] The `imported_user_deleted` row must have Outcome `ok`, SubjectKind `user`, SubjectID set to the uid, and ActorUserID set to the actor. Its details must not contain the user's e-mail (SR-007).
 
 ## Interfaces
 
-- [T039 claude] `type Mapping struct{ UID, Email, DisplayName, FirstName, LastName string }` (comparable)
 - [T039 claude] `type Person struct{ UID, DN, Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool }` (comparable, compared with `==`)
 - [T039 claude] `func DefaultMapping(kind string) Mapping`; `func Decode(m Mapping, e RawEntry) (Person, error)`. RawEntry attribute keys are lower-case, so `Decode` must look up `strings.ToLower(attr)`.
 - [T039 claude] Sentinels `ErrNoEmail`, `ErrInvalidEmail`, `ErrValueTooLong`, `ErrMultiValuedUID`, `ErrInvalidUID`. `Reason(err)` must return `no_email`, `invalid_email`, `value_too_long`, `multi_valued_uid`, `invalid_uid`, so add them to `closedErrors` and `reasons` in `errors.go`. Error text must not contain directory values.
@@ -109,11 +108,10 @@
 - [T052 codex] Added `directorySearchSchema`, `directoryImportSchema`, and generated API type aliases in `schemas/directory.ts`.
 - [T052 codex] Import route inherits remote mounting through existing route mapping.
 - [T052 codex] Directories now links to the import page.
+- [T055 claude] The test expects `func (a *Admin) RemoveImported(ctx context.Context, actor tenantctx.Actor, uid string) error`. `AdminStore` should gain `DeleteImportedUser(ctx, tenantID, userID string) error`, which memstore already implements.
 
 ## Gotchas
 
-- [T030 claude] `ldap.ParseDN("")` succeeds, and `cn=,dc=x` parses with an empty value. `validDN` refuses both explicitly.
-- [T030 claude] Size/time defaults are set before `apply`, so an explicit `0` is refused rather than replaced by the default.
 - [T031 claude] `scripts/redaction-scan.sh` fails with the default relative `ARTIFACTS`: the CRUD `capture()` helper can't open `.artifacts/capture/...` from the package directory. Run it with `ARTIFACTS=$PWD/.artifacts` until the script is fixed.
 - [T031 claude] If the stored password won't decrypt (for example a ciphertext moved from another connection), the test returns a generic error, not a result, and never binds.
 - [T034 claude] Until this task, `app.Build` failed its declared-vs-mounted route check because T028's yaml routes had no handler.
@@ -162,3 +160,5 @@
 - [T044 claude] `ldapdir` tests, the `directory` package, `app` and `tests/fuzz` still won't compile until T045 (`ScopeBase`, `WithinBase`) lands. Until then, move `dn_test.go` aside or use a throwaway stub.
 - [T045 claude] `ldap.ParseDN` never returns an RDN with zero attributes, so there is no check for that case. Adding one would be dead code and break 100% coverage.
 - [T052 codex] Build the UI kit before running console tests.
+- [T055 claude] memstore's `DeleteImportedUser` already removes the link, sessions, bindings and group memberships. T059 only needs the `userdb` side, which wraps `store.DeleteImportedUser(ctx, tx, tid, uid)` in a tenant transaction.
+- [T055 claude] The test uses `lookup`'s existing cross-tenant audit. Use `a.lookup` instead of the store directly, or the `cross_tenant_refused` assertion fails.
