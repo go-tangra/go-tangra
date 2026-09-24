@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T034 claude] Temporary store adapter `directoryStore` in `app.go` (each method is one `store.Tx` under `Scope{TenantID}`; `GetDirectoryConnectionAnyTenant` runs under `Scope{System: true}`). This deviates from T032's planned `directorydb`, which wasn't implemented.
-- [T032 claude] `Atomic(ctx, tenantID, fn func(pgx.Tx) error)` forces tenant scope and returns an error for an empty tenant id (an empty `app.tenant_id` would silently match nothing). Only `GetDirectoryConnectionAnyTenant` uses `Scope{System: true}`.
-- [T032 claude] Each connection method is its own transaction via `Atomic`; the value-struct parameters carry `//nolint:gocritic` because `directory.Store` fixes those signatures.
-- [T032 claude] Deviation from invitedb's `Atomic(ctx, scope, func(any) error)`: this one takes a tenant id rather than a scope, so callers can't pick the system scope.
-- [T036 codex] Reused inherited remote routes and manifest navigation; added standalone sidebar navigation separately.
 - [T036 codex] Retained T035’s owner/admin standalone route gate.
 - [T036 codex] Drawer tests use unsaved-input testing; they do not persist `last_test`.
 - [T038 claude] `ScopeBase(connBase, requested)`: a blank `requested` means no narrowing and returns the connection base. It succeeds only if `requested` equals `connBase` or is below it, compared per RDN and ignoring case. The result is compared as a parsed DN, so returning `DN.String()` is fine.
@@ -56,12 +51,14 @@
 - [T047 claude] Preview: the link of this connection decides first (user status `imported` → `imported`, anything else → `existing_user`). Then an e-mail match (case-insensitive) → `existing_user`, else `new`. Items that fail `Decode` get `invalid` plus `ldapdir.Reason`.
 - [T047 claude] Deadline = dial timeout + time limit + 2 s over the whole session. A `context.DeadlineExceeded` is mapped to `ldapdir.ErrTimeout`. Directory errors are returned as the ldapdir closed errors.
 - [T047 claude] Entries are capped client-side at `SizeLimit` again (marks truncated), even though the client already does this.
+- [T048 claude] Deviation from T032: `DBStore.Atomic` is now `Atomic(ctx, scope store.Scope, fn func(any) error)` (the contract/invitedb form, which memstore already has). It refuses system/operator scopes. The old tenant-id helper is now the unexported `tenantTx`.
+- [T048 claude] The re-fetch filter is built by hand as `"(&"+CompileUserFilter(base).String()+"("+attr+"="+ldap.EscapeFilter(v)+"))"`, not through `CompileUserFilter`/`Combine`, so arbitrary uid bytes never go through user-filter rules. `SizeLimit` is 2.
+- [T048 claude] Uids that `Decode` could never produce (a non-GUID for objectGUID, over 256 bytes, invalid UTF-8, control characters) are skipped as `not_found_in_directory` without a query. Entries outside the base count as not found. More than one match → failed `directory_error`.
+- [T048 claude] Decode errors are skipped with `ldapdir.Reason`. `duplicate_email` applies only against e-mails this request already created or updated.
+- [T048 claude] Only the connection's own link counts. Linked user not `imported` → skipped `already_active`, nothing written. Linked and still imported → names refreshed, and the e-mail changes only if no other user holds it.
 
 ## Interfaces
 
-- [T028 claude] operationIds: `listDirectories`, `createDirectory`, `testDirectoryInput` (POST /directories/test), `getDirectory`, `updateDirectory`, `deleteDirectory` (POST /{id}/remove), `testDirectory` (POST /{id}/test).
-- [T028 claude] TS: `components["schemas"]["DirectoryConnection" | "DirectoryConnectionInput" | "DirectoryTestInput" | "TestResult" | "DirectoryAttributes"]`. `TestResult.step` is `"connect"|"tls"|"bind"|"search_base"|null`.
-- [T029 claude] `authmanifest.Version == "1.2.0"`; permission ref `directory:manage`; CASL ability `manage DirectoryConnection`; nav path `/console/admin/directories`.
 - [T030 claude] `type Store interface` (the 8 connection methods memstore already has, including `GetDirectoryConnectionAnyTenant` and `SetDirectoryConnectionTest`). T032's directorydb must satisfy it; later tasks add the import methods.
 - [T030 claude] Deps and `New` are exactly as T024/T025 specified; `Now` defaults to `time.Now`.
 - [T030 claude] Errors: `ErrValidation`, `ErrInsecureTransport`, `ErrDuplicate`, `ErrLimitReached`, `ErrNotFound`, `ErrRateLimited`. URL, target, CA and filter problems return bare ldapdir sentinels.
@@ -109,12 +106,12 @@
 - [T047 claude] `directory.Store` gained `UsersByEmails(ctx, tid, emails)`, `LinksByUIDs(ctx, tid, connID, uids)` and `User(ctx, tid, id) (store.User, error)`. `directorydb.DBStore` implements all three (User via `store.GetUser`).
 - [T047 claude] `SearchRequest{Filter, Base, Scope}`, `SearchResult{Items, Truncated, OutOfScope, EffectiveFilter}` and `SearchItem{UID, DN, Email, DisplayName, FirstName, LastName, Status, UserID, Reason}`, with `MarshalJSON`/`UnmarshalJSON` (null ↔ "").
 - [T047 claude] Constants `StatusNew`, `StatusExistingUser`, `StatusImported`, `StatusInvalid`. Helpers T048 can reuse: `mappingOf(c)`, `mappedAttributes(c)`, `s.runSearch`-style session code, `closedDirErr`, and `s.testPassword(&Input{}, &c, tid, connID)` to unseal the stored password.
+- [T048 claude] `directory.ImportTx{UserByEmail, User, LinksByUIDs, InsertUser, UpdateImportedUser, UpsertLink}`; `directory.Store` gained `Atomic(ctx, store.Scope, func(tx any) error) error`.
+- [T048 claude] `ImportResult{Created, Updated []ImportItem; Skipped, Failed []ImportIssue}` with `MarshalJSON` (nil → `[]`); constants `MaxImportUIDs=500`, `ReasonEmailInUse`, `ReasonDuplicateEmail`, `ReasonAlreadyActive`, `ReasonNotFound`, `ReasonDirectoryError`, `ReasonTimeout`, `ReasonInternal`.
+- [T048 claude] `directorydb.dbTx.InsertUser` writes `status='imported'` and `display_name_explicit` exactly as decoded. It deliberately avoids `store.InsertUser`, whose `DisplayNameExplicit` heuristic would mark a derived "First Last" name as explicit.
 
 ## Gotchas
 
-- [T026 claude] Never print a recorded `dirCall.Input` with `%+v`: it holds the password. Use `dirOps(calls)`, because the redaction scan runs with `-v`.
-- [T027 claude] `NavEntry.Order` is `int32`.
-- [T027 claude] `TestOpenAPIDocument` still passes once the routes are only declared, so T028 can add the yaml before the handlers exist.
 - [T027 claude] No other test pins version `1.1.0`.
 - [T033 claude] T030's `directory.Input` must not define a custom `UnmarshalJSON`. It is embedded in the test-body struct, so a custom method would take over decoding and silently drop `connection_id`.
 - [T033 claude] T030 must export `directory.ErrNotFound` along with `ErrValidation`, `ErrInsecureTransport`, `ErrDuplicate`, `ErrLimitReached` and `ErrRateLimited`, or `directory.go` won't compile.
@@ -162,3 +159,6 @@
 - [T047 claude] The `directory` package (and so `app`) won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter.String`) and T045 (`ScopeBase`, `WithinBase`) land. Its tests also need T048's `Import`, because of `import_test.go`.
 - [T047 claude] Verification used throwaway stand-ins for T044/T045 in `ldapdir`, since deleted. The T041 tests need `CompileUserFilter` to reject NUL, `:dn:` and anything over 4096 bytes, and `WithinBase` to reject "not a dn" and "".
 - [T047 claude] memstore `UsersByEmails` keys the map by the stored (original-case) e-mail, so lower-case the keys before matching.
+- [T048 claude] The `directory` package still won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter`) and T045 (`WithinBase`, `ScopeBase`) land.
+- [T048 claude] memstore's `Atomic` has no rollback. After an injected `UpsertLink` failure the user row stays in memstore; only directorydb rolls it back.
+- [T048 claude] golangci-lint flags `hugeParam` in T042's `import_test.go:184` (`itAccounted`); I left it alone.
