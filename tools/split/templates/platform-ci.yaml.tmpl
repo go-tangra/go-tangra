@@ -1,0 +1,121 @@
+# go-tangra platform CI (v4). Generated from go-freya tools/split/templates/platform-ci.yaml.tmpl.
+#
+# - Go: vet + race tests for the root module ([[ .Module ]]) and every contrib
+#   module, each on its own with GOWORK=off.
+# - UI kit ([[ .NPMPackage ]], workspace [[ .NPMWorkspace ]]): build, lint, vitest.
+# - Tags 'v*' publish [[ .NPMPackage ]] to GitHub Packages (npm.pkg.github.com). The tag must
+#   equal "v" + [[ .NPMWorkspace ]]/package.json version. No container image is built here.
+name: CI
+
+on:
+  push:
+    branches:
+      - [[ .DefaultBranch ]]
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - [[ .DefaultBranch ]]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GOWORK: 'off'
+
+jobs:
+  go:
+    name: Go (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - .
+[[- range .Contrib ]]
+          - [[ . ]]
+[[- end ]]
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test -race
+        run: go test -race ./...
+
+  ui-kit:
+    name: UI kit build + lint + vitest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: npm ci
+        run: npm ci --no-audit --no-fund
+
+      - name: Build
+        run: npm run build -w [[ .NPMWorkspace ]]
+
+      - name: Lint
+        run: npm run lint -w [[ .NPMWorkspace ]]
+
+      - name: Unit tests (vitest)
+        run: npm run test:unit -w [[ .NPMWorkspace ]]
+
+  publish-ui-kit:
+    name: Publish [[ .NPMPackage ]]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - go
+      - ui-kit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@go-tangra'
+          cache: npm
+
+      - name: Tag matches package version
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          have="$(node -p "require('./[[ .NPMWorkspace ]]/package.json').version")"
+          if [ "$want" != "$have" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match [[ .NPMWorkspace ]]/package.json version ${have}" >&2
+            exit 1
+          fi
+
+      - name: npm ci
+        run: npm ci --no-audit --no-fund
+
+      - name: Build
+        run: npm run build -w [[ .NPMWorkspace ]]
+
+      - name: Publish
+        run: npm publish -w [[ .NPMWorkspace ]]
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
