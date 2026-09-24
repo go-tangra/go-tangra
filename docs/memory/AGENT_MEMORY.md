@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T020 claude] Only an exactly empty CA string means system roots. A whitespace-only string gives `ErrInvalidCA`.
-- [T020 claude] An empty `Endpoint.Host` returns an error wrapping `ErrInvalidURL`. No new error variable was added.
-- [T020 claude] Error texts are fixed and never echo the PEM input.
-- [T021 claude] Test seam: `Client` has an unexported field `dialer func(time.Duration) *net.Dialer`. It defaults to `policy.Dialer`. Tests replace it with a plain dialer because loopback is always denied.
-- [T021 claude] `Open` validates before dialling: `CheckURL`, then scheme vs `TLSMode` (`ldaps`↔`ldaps://`; `starttls`/`plain`↔`ldap://`; mismatch, empty or unknown → `ErrInvalidURL`), then `NewTLSConfig` (`ErrInvalidCA`). Only after that does it dial.
 - [T021 claude] Any StartTLS failure gives `ErrTLS`, and the connection is closed with no fallback. The one exception: if the ctx deadline expires, the result is `ErrTimeout`.
 - [T021 claude] `Session` methods must honour the ctx deadline (Open's StartTLS, Bind, BaseExists, Search), returning `ErrTimeout` promptly. go-ldap has no ctx, so close the connection on ctx done (`context.AfterFunc`).
 - [T021 claude] Search sends `SizeLimit+1`, `TimeLimit` in whole seconds, `NeverDerefAliases`, `TypesOnly=false`, and the attribute list exactly. It returns at most `SizeLimit` entries. Truncated=true if more arrive, or if the result code is 4 or 3 (the entries received so far are kept, with no error). Referrals are counted, never followed. An empty `Attributes` is refused with a closed error before anything is s…
@@ -56,14 +51,14 @@
 - [T028 claude] Attribute names use `DirectoryAttributeName` (maxLength 64, pattern `^([A-Za-z][A-Za-z0-9-]{0,63})?$`), which allows an empty string. `name` rejects control characters, as `GroupInput` does.
 - [T028 claude] `size_limit` must be 1–1000 and `time_limit_seconds` 1–60 in both input and output. `last_test`, `TestResult.step`, `reason` and `tls` are `nullable: true`.
 - [T029 claude] `directory:manage` goes before `tenants:operate` in the operator grant list, and the nav entry comes right after Users (order 800) so entries stay sorted by order.
+- [T030 claude] `Input` uses pointer fields (T024 form); nil means default on create and keep on update. I converted T025's `test_test.go` to this form (`ttPtr(...)` only). A zero `Input{}` is still detectable with `reflect.ValueOf(in).IsZero()`, as T033 needs.
+- [T030 claude] `Connection` is a type alias for `View`. `TestResult` and `TLSInfo` are defined in `directory.go` (httpapi needs them). An empty `Step`/`Reason` marshals as JSON `null`.
+- [T030 claude] Only policy refusals are audited as refused (`insecure_transport`, `target_refused`, `limit_reached`) on created/updated. Plain input errors are not audited.
+- [T030 claude] Update audit details are `{"fields": [...]}` with field names only; a password change shows as `bind_credential`.
+- [T030 claude] DN and filter validation is local to `directory` (`validDN`, `canonicalFilter`) because ldapdir's filter/DN helpers don't exist yet (T044/T045).
 
 ## Interfaces
 
-- [T011 claude] `(m *Store) UsersByEmails(ctx, tid, []string) (map[string]store.User, error)`; `LinksByUIDs(ctx, tid, connID, []string) (map[string]store.DirectoryLink, error)`; `UpsertLink(ctx, store.DirectoryLink) error`; `UpdateImportedUser(ctx, tid, uid, store.ImportedProfile) error`; `DeleteImportedUser(ctx, tid, uid) error`.
-- [T011 claude] `(m *Store) FailNext(method string)` arms a one-shot error (unexported type `injectedErr`) for any of the directory methods above, by method name. It is not wired into older memstore methods.
-- [T015 claude] `user.ErrInvalidState` (exported sentinel in `internal/user/admin.go`, next to `ErrLastOwner`) is expected by the test.
-- [T016 claude] `user.ErrInvalidState = errors.New("invalid_state")`; httpapi `errInvalidState = &Error{409, "invalid_state"}`, mapped in `adminError`. Reuse it for remove-imported/activate (T056+).
-- [T017 claude] `type Endpoint struct{ Scheme, Host string; Port int }`, compared with `==`. `Host` has no brackets for IPv6, and `Scheme` is lowercased (`LDAPS://` is accepted).
 - [T017 claude] `func (e Endpoint) Addr() string` = `net.JoinHostPort(Host, strconv.Itoa(Port))`.
 - [T017 claude] `NewTargetPolicy(config.DirectoryTargets) (*TargetPolicy, error)`; `(*TargetPolicy).CheckURL(string) (Endpoint, error)`; `(*TargetPolicy).Control(network, address string, _ syscall.RawConn) error`; `ErrTargetRefused`, `ErrInvalidURL`.
 - [T018 claude] `func (p *TargetPolicy) Dialer(timeout time.Duration) *net.Dialer`: returns a dialer with `Control: p.Control`. T022 should use it with go-ldap's `DialWithDialer`.
@@ -109,12 +104,14 @@
 - [T028 claude] operationIds: `listDirectories`, `createDirectory`, `testDirectoryInput` (POST /directories/test), `getDirectory`, `updateDirectory`, `deleteDirectory` (POST /{id}/remove), `testDirectory` (POST /{id}/test).
 - [T028 claude] TS: `components["schemas"]["DirectoryConnection" | "DirectoryConnectionInput" | "DirectoryTestInput" | "TestResult" | "DirectoryAttributes"]`. `TestResult.step` is `"connect"|"tls"|"bind"|"search_base"|null`.
 - [T029 claude] `authmanifest.Version == "1.2.0"`; permission ref `directory:manage`; CASL ability `manage DirectoryConnection`; nav path `/console/admin/directories`.
+- [T030 claude] `type Store interface` (the 8 connection methods memstore already has, including `GetDirectoryConnectionAnyTenant` and `SetDirectoryConnectionTest`). T032's directorydb must satisfy it; later tasks add the import methods.
+- [T030 claude] Deps and `New` are exactly as T024/T025 specified; `Now` defaults to `time.Now`.
+- [T030 claude] Errors: `ErrValidation`, `ErrInsecureTransport`, `ErrDuplicate`, `ErrLimitReached`, `ErrNotFound`, `ErrRateLimited`. URL, target, CA and filter problems return bare ldapdir sentinels.
+- [T030 claude] Internal helpers T031 can reuse:
+- [T030 claude] `s.lookup(ctx, &actor, tid, id)`: tenant lookup with the cross-tenant audit.
 
 ## Gotchas
 
-- [T015 claude] The `internal/user` package won't compile until T016 defines `ErrInvalidState`.
-- [T015 claude] The store test needs docker: `sg docker -c 'go test -tags integration -run TestGroupRepos ./internal/store/'`.
-- [T015 claude] The intended fix is small: `if u.Status == "imported" { return ErrInvalidState }` after `lookup` in both `Deactivate` and `Reactivate`, plus `AND u.status <> 'imported'` in the `INSERT … SELECT` of `AddGroupMembers`. With it, everything passes.
 - [T016 claude] `invite.Accept` calls `AddGroupMembers` after setting the user to `active` in the same transaction, so the new filter doesn't affect it. Any future activation path must change the status before adding group memberships.
 - [T017 claude] Go's `url.Parse` accepts `ldaps://host:` with `Port()==""`. Detect the trailing `:` on `u.Host`.
 - [T017 claude] `url.Parse` also accepts `ldap://::1` and `host:389:636`. Refuse unbracketed hosts that contain `:`.
@@ -162,3 +159,6 @@
 - [T028 claude] The request validator rejects an empty `bind_password` (minLength 1) with 400 `validation_failed` before the service runs. The console must leave the field out, not send `""`.
 - [T028 claude] Running `npm install` at the repo root changes the root `package-lock.json`. Revert it unless a task means to change it.
 - [T029 claude] `services/auth/tests/contract` and `services/auth/internal/app` do not build yet: `internal/httpapi/directory.go` refers to `directory.Connection`, `directory.Input`, `directory.TestResult` and `directory.ErrNotFound`, which later tasks still have to add. The manifest itself is fine.
+- [T030 claude] The directory package test binary won't compile until T031 adds `Test` and `TestSaved`. To run only the CRUD tests, move `test_test.go` aside temporarily.
+- [T030 claude] `ldap.ParseDN("")` succeeds, and `cn=,dc=x` parses with an empty value. `validDN` refuses both explicitly.
+- [T030 claude] Size/time defaults are set before `apply`, so an explicit `0` is refused rather than replaced by the default.
