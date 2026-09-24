@@ -6,10 +6,6 @@
 
 ## Decisions
 
-- [T053 claude] `MayAssign` is a pure check: no tuple writes, no bindings, no target user, so every role in the list counts as new. Only `AssignRoles` exempts roles the target already has.
-- [T053 claude] A role id from another tenant must return `store.ErrNotFound`, not `ErrSelfEscalation`.
-- [T053 claude] Roles granted through groups are not part of `MayAssign`. Callers pass the permissions a group grants to `Escalation.MayGrant`; the test builds them with the unexported `Groups.groupGrants`.
-- [T054 claude] `New` keeps its signature (4 callers). Escalation is attached with `svc.WithEscalation(e) *Service`. A nil escalation means no check, so existing callers and tests keep working, and `app.go` must wire `authz.Assigner` in T058.
 - [T054 claude] Whole-request refusals return `(nil, err)`. `ErrBadEmail` (validation_failed) covers 0 / duplicate / more than `ActivateMax` ids, more than `GroupsMax` groups, and unknown roles or groups. `authz.ErrSelfEscalation` is returned after exactly one `MayAssign` call, made before any invitation or outbox write.
 - [T054 claude] Per-user results come back in request order, as `ActivateItem{UserID, Outcome, InvitationID, Reason string}` with empty strings where there is no value. Failed items have an empty `InvitationID`. Reasons are `invalid_state` (not imported), `not_found` (missing or other-tenant) and `internal` (store error).
 - [T054 claude] Activation audit: `invite_created`, Outcome `ok`, Reason `activation`, SubjectKind `user`, SubjectID = user id, Details `{"invitation_id": id}`, with no e-mail or names. A CreateWith conversion emits the same row. Other-tenant id: `cross_tenant_refused` with SubjectID = the id and no foreign e-mail in the details.
@@ -56,11 +52,13 @@
 - [T063 kimi] Echo-in-diagnostics is modeled with real text-bearing errors only on the connection-test flow (`rsEchoDir`), which provably reduces failures to closed reasons; search/import use the closed error shapes the ldapdir client produces (code-only `DirectoryError`), because the client boundary — not the directory service — drops server diagnostics (research D4/D9, covered by ldapdir client tests). Do…
 - [T063 kimi] Fixed `TestSearchAudit/filter_capped_at_1_KiB` test data to respect the D6 policy (≤64 filter components): fewer, longer components; the policy cap itself is correct per research, don't lower it.
 - [T063 kimi] Fixed `services/auth/scripts/redaction-scan.sh` to export an absolute `FREYA_CAPTURE_DIR` (T031's unowned follow-up); `ARTIFACTS=$PWD/.artifacts` workaround no longer needed.
+- [T064 kimi] The container starts with **no wait strategy** (slapd only starts after certs are staged at `/tls`), then the harness generates a CA + IP-SAN server cert for the container address and `CopyToContainer`s it in; readiness is a host-side dial poll on 636. A port-based `WaitingFor` would deadlock.
+- [T064 kimi] The service dials the container's **docker-network IP** (loopback is always refused by the target policy); the `Start` hook denies the private ranges and allows exactly that host /32 (mirrors T065's hook and the stack config).
+- [T064 kimi] Fixture gotcha: eng6/eng7 have **no individual e-mail** — both share `eng-twins@example.test`; the match-all preview also returns the base OU and the alias as `invalid/no_email` items and the referral as a reference (not an entry). Look entries up by DN where e-mail is absent/shared.
+- [T064 kimi] Preview `uid` values are **entryUUIDs** (openldap mapping), generated per image build — tests must discover them from search results, never hardcode.
 
 ## Interfaces
 
-- [T050 claude] `user.DirectoryOrigin{ConnectionID *string; ConnectionName, DirectoryUID, LastImportedAt string}`. `UserView.Directory` and `UserView.InvitationID` are always serialized, as `null` when empty.
-- [T051 kimi] Route `/admin/directories/import`, name `admin-directory-import`, roles owner/admin; page root `data-test="directory-import"`.
 - [T051 kimi] `data-test` contract: `connection` (picker, lists `GET /api/v1/admin/directories`), `filter`/`base`/`scope`/`search-directory` (form hidden until a connection is chosen), `search-error` (server `message` verbatim for invalid_filter, else `reasonMessage(reason)`), `effective-filter`, `truncation`, `preview-row`/`preview-name`/`preview-email`/`preview-status`/`preview-reason`, row checkbox `input[ty…
 - [T051 kimi] Skip/fail reason wording T052 must register in `api/client.ts` registerReasons: `no_email`=`The directory entry has no email address.`, `email_in_use`=`That email address already belongs to a user.` (plus `invalid_email`, `duplicate_email`, `already_active`, `not_found_in_directory`, `value_too_long`, `multi_valued_uid`, `invalid_uid`, `internal`); `timeout`/`directory_error` already registered.
 - [T051 kimi] `userStatuses` in `api/vocab.ts` becomes `['invited','active','deactivated','imported']` (status select options pinned: `['','invited','active','deactivated','imported']`).
@@ -109,13 +107,11 @@
 - [T067 claude] Compose: services `ldap-certs`, `openldap` (image `freya/openldap-test:dev`), network `ldap` (172.31.250.0/29), volume `ldap-tls` (ca.crt, server.crt, server.key). `auth` now has `networks: [default, ldap]`.
 - [T063 kimi] `rsEchoDir`/`rsEchoSession` in redaction_test.go wrap an `ldapdir.Directory` so Bind/BaseExists/Open failures echo the presented bind password in diagnostic text; reusable for future redaction tests.
 - [T063 kimi] Capture files: `$FREYA_CAPTURE_DIR/directory-TestRedaction*.txt` (views/results as `%+v` + JSON bodies, errors, full audit rows).
+- [T064 kimi] `startLDAP(t) (host string, caPEM []byte)` helper in the test file starts the container and returns the dial address + CA PEM; reusable by later integration tasks (e.g. T071 live smoke analogues).
+- [T064 kimi] Import/skip contract confirmed live: 4 created `{eng1,eng2,eng5,eng6}`, skipped `{eng4:no_email, eng7:duplicate_email}` when uids are passed in request order; re-import is all `updated`.
 
 ## Gotchas
 
-- [T048 claude] golangci-lint flags `hugeParam` in T042's `import_test.go:184` (`itAccounted`); I left it alone.
-- [T049 claude] In `console.yaml`, flow-style descriptions containing `(` or `,` must be quoted, or kin-openapi fails with "extra sibling fields".
-- [T049 claude] The service still won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter`, `FilterError`) and T045 (`ScopeBase`, `WithinBase`) land. I checked this task with a stub that I've since deleted.
-- [T049 claude] The console `vue-tsc` fails in this worktree on the missing `qrcode` module in `useMfa.ts`, which this task didn't touch.
 - [T050 claude] The service still doesn't compile until T044/T045 land. I checked this task with a temporary `ldapdir` stub (`zz_t050_stub.go`) and deleted it afterwards. With the stub, `internal/httpapi`, `internal/user/...` and `tests/contract` all pass.
 - [T051 kimi] The kit client drops flat error-body fields: T049's `SearchError` is `{reason, message}` but kit `reasonOf` only keeps `reason` + a nested object `detail`. To show the parse message, extend kit `reasonOf` (ui/kit/src/api/client.ts) to collect remaining flat fields as `detail` while excluding a non-object `detail` key — validated against the kit's own suite (10/10, `client.spec.ts:102` still pins…
 - [T051 kimi] jsdom runs at 1280px (`setup.ts` `__vw`), so `UiDataTable` renders the table layout, not stacked cards; kit field wrappers (`UiInput`/`UiSelect`) put the native control inside `[data-test] ... input`/`select`.
@@ -162,3 +158,7 @@
 - [T063 kimi] Never print a swept value on failure (suite log is itself scanned); all `rsNoSecret*` helpers report only the sink name.
 - [T063 kimi] `f.dir.Binds()` records plaintext passwords — fine in memory, but never include it in failure messages or captures.
 - [T063 kimi] Root-level `make redaction-scan` (repo root Makefile) fails for a pre-existing reason unrelated to feature 016: its script greps without `|| true` and dies under `set -e` when a pattern has 0 matches, even though its integration suite passes.
+- [T064 kimi] Run with `sg docker -c '...'`; the T003 image layers are docker-cached after first build (fast), cold runs build once.
+- [T064 kimi] `byEmail`-style maps key on `email` only — entries without mail or with shared mail are invisible there; use `itemByDN`.
+- [T064 kimi] `code, out := e.JSON(...)` inside `if` scopes shadows the outer pair — reassigning `out` later can silently mix responses; the lint `ineffassign` catches unread `code`.
+- [T064 kimi] Avoid `defer resp.Body.Close()` (errcheck); the harness style is `defer func() { _ = resp.Body.Close() }()`.
