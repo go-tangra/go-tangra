@@ -6,8 +6,6 @@
 
 ## Decisions
 
-- [T050 claude] No change to `userdb/db.go`: `store.ListUsers` (pgx) and memstore already fill `Directory` and `InvitationID`, and filter by status.
-- [T050 claude] `DirectoryOrigin` has exactly `connection_id` (nil once the connection is deleted), `connection_name`, `directory_uid` and `last_imported_at` (RFC 3339 UTC). It never includes the DN, per T043.
 - [T051 kimi] Selection contract: the view renders its own checkbox column with `disabled` on non-`new`/`imported` rows + a `data-test="select-all"` button — the kit's `selectable` prop can't express per-row disabled, and its one-way `:checked` binding can't visually uncheck a box the parent filters out (vdom value never changes → Vue never rewrites the DOM).
 - [T051 kimi] `directorySearchSchema` in `schemas/directory.ts`: blank `filter`/`base`/`scope` → `undefined` (preprocess), filter trimmed ≤4096, base trimmed ≤1024, scope enum `one|sub`; the page POSTs the zod output verbatim (blank keys dropped by JSON.stringify).
 - [T051 kimi] After a successful import the page re-runs the last search (statuses refresh) and clears the selection; import-issue lines are `<display name from preview, else uid>: <reasonMessage(reason)>`; summary sentence is `Import finished: N created, N updated, N skipped, N failed.`
@@ -56,12 +54,11 @@
 - [T060 claude] `activateUsers` passes the body unchanged to `invite.Service.Activate`. Whole-request errors go through the existing `adminError` (`ErrBadEmail` → 400 `validation_failed`, `ErrSelfEscalation` → 403). Empty `InvitationID`/`Reason` strings are sent as JSON `null`.
 - [T060 claude] `removeImported` → `Admin.RemoveImported`: success gives 204 with an empty body, not found gives 404, and `ErrInvalidState` gives 409.
 - [T060 claude] No new error variables: `errInvalidState` and `errSelfEscalation` were already mapped in `adminError`.
+- [T062 codex] Bulk selection includes only imported users, capped at 100.
+- [T062 codex] Selection clears on filtering and list refresh.
 
 ## Interfaces
 
-- [T040 kimi] Corpus is read at `testdata/ldap/{filters,dns,urls,objectguid}` relative to the fuzz package (files have no trailing newline; `.bin` fixtures are non-UTF-8 bytes in strings).
-- [T046 claude] `type Mapping struct{ UID, Email, DisplayName, FirstName, LastName string }`, `type Person struct{ UID, DN, Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool }`
-- [T046 claude] `func DefaultMapping(kind string) Mapping`, `func Decode(m Mapping, e RawEntry) (Person, error)`
 - [T046 claude] `const MaxUIDBytes = 256, MaxEmailBytes = 254, MaxDNBytes = 1024`
 - [T046 claude] `ErrNoEmail`, `ErrInvalidEmail`, `ErrValueTooLong`, `ErrMultiValuedUID`, `ErrInvalidUID`; `Reason()` maps them to their snake_case codes.
 - [T047 claude] `directory.Store` gained `UsersByEmails(ctx, tid, emails)`, `LinksByUIDs(ctx, tid, connID, uids)` and `User(ctx, tid, id) (store.User, error)`. `directorydb.DBStore` implements all three (User via `store.GetUser`).
@@ -109,6 +106,9 @@
 - [T059 claude] `AdminStore.DeleteImportedUser(ctx, tenantID, userID string) error` (memstore and `userdb.DBAdminStore` both implement it).
 - [T060 claude] operationIds `activateUsers` and `removeImportedUser`.
 - [T060 claude] TS types: `components["schemas"]["ActivateRequest"]` and `components["schemas"]["ActivateResult"]`. Result items are `{user_id, outcome: 'invited'|'failed', invitation_id: string|null, reason: string|null}`.
+- [T062 codex] `RoleGroupPickers.vue` shares `roleIds`/`groupIds` models between drawers.
+- [T062 codex] `ActivateDrawer.vue` emits `activated(ActivateResult)`.
+- [T062 codex] `schemas/directory.ts` exports `activateSchema` and `ActivateResult`.
 
 ## Gotchas
 
