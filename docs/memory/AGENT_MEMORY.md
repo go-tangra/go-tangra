@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T021 claude] Any StartTLS failure gives `ErrTLS`, and the connection is closed with no fallback. The one exception: if the ctx deadline expires, the result is `ErrTimeout`.
-- [T021 claude] `Session` methods must honour the ctx deadline (Open's StartTLS, Bind, BaseExists, Search), returning `ErrTimeout` promptly. go-ldap has no ctx, so close the connection on ctx done (`context.AfterFunc`).
-- [T021 claude] Search sends `SizeLimit+1`, `TimeLimit` in whole seconds, `NeverDerefAliases`, `TypesOnly=false`, and the attribute list exactly. It returns at most `SizeLimit` entries. Truncated=true if more arrive, or if the result code is 4 or 3 (the entries received so far are kept, with no error). Referrals are counted, never followed. An empty `Attributes` is refused with a closed error before anything is s…
-- [T022 claude] `Session.Bind` zeroes the caller's password slice (`defer clear(password)`) on every path, so callers must not reuse it. The ldapfake should do the same so the two behave alike.
-- [T022 claude] The ctx deadline is enforced by `context.AfterFunc(ctx, conn.Close)` around each go-ldap call; any failure after ctx is done returns `ErrTimeout`. A session can't be used after it times out. For dialing, the ctx deadline is also copied into `net.Dialer.Deadline` when it is earlier.
 - [T022 claude] Search uses the synchronous `conn.Search` with `EnforceSizeLimit=true`, so memory stays bounded to SizeLimit+1 entries even if the server ignores the limit. Results with code 3 or 4, or `ldap.ErrSizeLimitExceeded`, return as Truncated with no error. A panic inside go-ldap while decoding a hostile response is recovered and returned as `&DirectoryError{}`.
 - [T022 claude] Invalid queries (unknown Scope, empty Attributes, SizeLimit < 1, negative TimeLimit) return an error wrapping `ErrDirectory` ("invalid query"), and nothing is sent. TimeLimit is rounded up to whole seconds, so sub-second limits become 1.
 - [T022 claude] `mapError` also maps go-ldap 201/202 (filter compile/decompile) to `ErrInvalidFilter`. Closed sentinels are returned bare, dropping any wrapping text. Open returns the fixed-text `CheckURL`/`NewTLSConfig` errors unchanged.
@@ -56,12 +51,14 @@
 - [T030 claude] Only policy refusals are audited as refused (`insecure_transport`, `target_refused`, `limit_reached`) on created/updated. Plain input errors are not audited.
 - [T030 claude] Update audit details are `{"fields": [...]}` with field names only; a password change shows as `bind_credential`.
 - [T030 claude] DN and filter validation is local to `directory` (`validDN`, `canonicalFilter`) because ldapdir's filter/DN helpers don't exist yet (T044/T045).
+- [T031 claude] `Test(ctx, actor, tid, Input{}, connID)` with a zero Input hands off to `TestSaved`, which saves `last_test`. A non-zero Input with a `connID` uses the stored connection's settings for any field left out, and its stored password when `bind_password` is left out. Nothing is saved in that case.
+- [T031 claude] The rate limit counts before any lookup or validation. The key is `cache.RateKey("directory", tenantID)` over a 1-minute window, limit `Config.RatePerMinute`. If the cache errors, the test is refused (fail closed). If `Cache` is nil or the limit is ≤0, there is no limit.
+- [T031 claude] If the target policy refuses a URL (for example a literal IP or a bad port), the test returns a failed `connect` step with reason `target_refused`, not an error. A bad URL, CA, DN or TLS mode, or `insecure_transport`, is returned as an error before any dial.
+- [T031 claude] Tests don't check name, kind, filter or attributes; only the connection parameters are validated.
+- [T031 claude] `last_test_outcome` is `ok` or the reason. Any reason outside the data-model list is stored as `directory_error`. It is saved with a context that ignores the caller's cancellation (5 s timeout), so a timed-out test is still recorded.
 
 ## Interfaces
 
-- [T017 claude] `func (e Endpoint) Addr() string` = `net.JoinHostPort(Host, strconv.Itoa(Port))`.
-- [T017 claude] `NewTargetPolicy(config.DirectoryTargets) (*TargetPolicy, error)`; `(*TargetPolicy).CheckURL(string) (Endpoint, error)`; `(*TargetPolicy).Control(network, address string, _ syscall.RawConn) error`; `ErrTargetRefused`, `ErrInvalidURL`.
-- [T018 claude] `func (p *TargetPolicy) Dialer(timeout time.Duration) *net.Dialer`: returns a dialer with `Control: p.Control`. T022 should use it with go-ldap's `DialWithDialer`.
 - [T018 claude] `CheckURL` returns `Endpoint{Scheme, Host, Port}`; call `Endpoint.Addr()` to get the address to dial.
 - [T019 claude] `var ErrInvalidCA` (declare it in `tlsconf.go`; T022's `errors.go` must not declare it again), `const MaxCAPEMBytes = 64 << 10`, `func ParseCA(pem string) (*x509.CertPool, error)`, `func NewTLSConfig(ep Endpoint, caPEM string, allowTLS12 bool) (*tls.Config, error)`.
 - [T020 claude] Each call returns a new config with its own copy of the cipher list, so callers may keep or change it.
@@ -109,11 +106,12 @@
 - [T030 claude] Errors: `ErrValidation`, `ErrInsecureTransport`, `ErrDuplicate`, `ErrLimitReached`, `ErrNotFound`, `ErrRateLimited`. URL, target, CA and filter problems return bare ldapdir sentinels.
 - [T030 claude] Internal helpers T031 can reuse:
 - [T030 claude] `s.lookup(ctx, &actor, tid, id)`: tenant lookup with the cross-tenant audit.
+- [T031 claude] `(*Service).Test(ctx, tenantctx.Actor, tid string, Input, connID string) (TestResult, error)` and `(*Service).TestSaved(ctx, tenantctx.Actor, tid, connID string) (TestResult, error)`.
+- [T031 claude] Constants `StepConnect`, `StepTLS`, `StepBind`, `StepSearchBase`.
+- [T031 claude] Unexported `s.allow(ctx, tenantID) error` is the shared per-tenant limiter. Search (US2) should call it so tests and searches share `rate_per_minute`.
 
 ## Gotchas
 
-- [T016 claude] `invite.Accept` calls `AddGroupMembers` after setting the user to `active` in the same transaction, so the new filter doesn't affect it. Any future activation path must change the status before adding group memberships.
-- [T017 claude] Go's `url.Parse` accepts `ldaps://host:` with `Port()==""`. Detect the trailing `:` on `u.Host`.
 - [T017 claude] `url.Parse` also accepts `ldap://::1` and `host:389:636`. Refuse unbracketed hosts that contain `:`.
 - [T017 claude] A `%25` zone must be refused as `ErrInvalidURL` before any IP check (the test uses `2001:db8::1%25eth0`).
 - [T017 claude] `netip.Prefix.Contains` does not match across address families. Unmap the address first, and for a v4 address also match against v6 prefixes, e.g. deny `::ffff:10.1.2.3` when `10.0.0.0/8` is denied.
@@ -162,3 +160,5 @@
 - [T030 claude] The directory package test binary won't compile until T031 adds `Test` and `TestSaved`. To run only the CRUD tests, move `test_test.go` aside temporarily.
 - [T030 claude] `ldap.ParseDN("")` succeeds, and `cn=,dc=x` parses with an empty value. `validDN` refuses both explicitly.
 - [T030 claude] Size/time defaults are set before `apply`, so an explicit `0` is refused rather than replaced by the default.
+- [T031 claude] `scripts/redaction-scan.sh` fails with the default relative `ARTIFACTS`: the CRUD `capture()` helper can't open `.artifacts/capture/...` from the package directory. Run it with `ARTIFACTS=$PWD/.artifacts` until the script is fixed.
+- [T031 claude] If the stored password won't decrypt (for example a ciphertext moved from another connection), the test returns a generic error, not a result, and never binds.
