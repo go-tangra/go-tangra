@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T017 claude] `CheckURL` returns `ErrTargetRefused` (can be wrapped) when the port is not allowed, including the scheme's default port, or when an IP-literal host is refused by the policy. Hostnames are not resolved.
-- [T017 claude] `Control` fails closed with `ErrTargetRefused` for any network other than tcp/tcp4/tcp6, an address that isn't `IP:numeric-port`, a zoned address, a disallowed port or a disallowed IP. IPv4-mapped addresses are unmapped before the always-deny and CIDR checks.
-- [T017 claude] Errors must never contain URL userinfo or a password.
-- [T018 claude] `ErrTargetRefused` and `ErrInvalidURL` are declared in `policy.go`. T022's `errors.go` must not declare them again.
-- [T018 claude] Error wrapping uses fixed reason text only (`%w: reason`), never the input URL or address. The `url.Error` from `url.Parse` is never wrapped because it quotes the input, which may contain a password.
 - [T018 claude] `0.0.0.0/8` is part of the always-denied set. An IPv4 address is also matched against IPv4-mapped IPv6 prefixes, so `::/0` and `::ffff:10.0.0.0/104` cover it.
 - [T018 claude] Hostnames must use letters, digits, `-` and `_`, with labels of 1–63 bytes and at most 253 bytes in total. A trailing dot is allowed, but an all-digit last label is refused. Non-ASCII names are refused, so internationalised names must be entered in punycode.
 - [T019 claude] Signature is `NewTLSConfig(ep Endpoint, caPEM string, allowTLS12 bool)`. It takes the `Endpoint` returned by `CheckURL`, not a raw URL, so `ServerName = ep.Host` (IPv6 without brackets). An empty host must return an error.
@@ -56,12 +51,14 @@
 - [T027 claude] `DirectoryConnection` may hold only the contract fields plus an optional `ca_pem`. `ca_pem` goes into the same schema, not a separate one.
 - [T027 claude] `POST /api/v1/admin/directories/test` needs its own flat, closed body schema with `connection_id` and a writeOnly `bind_password` (not `allOf`), because a closed schema can't be combined with `allOf`.
 - [T027 claude] Every object inside a request body, including `attributes`, needs `additionalProperties: false`.
+- [T033 claude] When the feature is disabled (or `Directories` is nil), every route answers 404 `not_found` before authentication or authz. The routes are always mounted.
+- [T033 claude] `RequirePermission` lets owner/admin through without an FGA call. Anyone else needs `Allowed(...)==true`. An authz error, a bad permission string, a nil checker or an empty tenant/user id all give 403 `forbidden`, and the error detail is not logged.
+- [T033 claude] Error mapping (`directoryError`):
+- [T033 claude] 404 `not_found`: `store.ErrNotFound`, `directory.ErrNotFound`, `tenantctx.ErrCrossTenant`.
+- [T033 claude] 400: `validation_failed`, `insecure_transport`, `invalid_url`, `invalid_ca`, `invalid_filter`, `invalid_base`.
 
 ## Interfaces
 
-- [T009 claude] DB CHECKs, all giving 23514:
-- [T010 claude] `InsertDirectoryConnection(ctx, tx, DirectoryConnection) error` (duplicate name → ErrConflict); `GetDirectoryConnection(ctx, tx, tenantID, id)`; `GetDirectoryConnectionAnyTenant(ctx, tx, id)` (system scope); `ListDirectoryConnections(ctx, tx, tenantID)` (ordered by lower(name)); `CountDirectoryConnections(ctx, tx, tenantID) (int, error)`; `UpdateDirectoryConnection(ctx, tx, DirectoryConnection) …
-- [T010 claude] `UsersByEmails(ctx, tx, tenantID, []string) (map[string]User, error)`: matching is case-insensitive (citext) and the map is keyed by the stored e-mail. `LinksByUIDs(ctx, tx, tenantID, connID, []string) (map[string]DirectoryLink, error)` is keyed by directory uid.
 - [T010 claude] `UpsertLink(ctx, tx, DirectoryLink) error`: upserts on user_id and keeps `first_imported_at`. The same uid already linked to another user gives ErrConflict.
 - [T010 claude] `UpdateImportedUser(ctx, tx, tenantID, userID, ImportedProfile{Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool}) error`: an e-mail already in use gives ErrConflict. `DeleteImportedUser(ctx, tx, tenantID, userID) error`.
 - [T010 claude] `DirectoryConnection.CAPEM` is "" for NULL. `LastTestOutcome`, `LastTestAt`, `CreatedBy`, `UpdatedBy` and `DirectoryLink.ConnectionID` / `ImportedBy` are pointers.
@@ -109,12 +106,12 @@
 - [T026 claude] Sentinels the tests use: `directory.ErrValidation` (400 validation_failed), `ErrInsecureTransport` (400), `ErrDuplicate` (409 duplicate), `ErrLimitReached` (409 limit_reached), `ErrRateLimited` (429).
 - [T027 claude] `console.yaml`: `info.version: 1.2.0`; `DirectoryConnectionInput.bind_password` is `{type: string, minLength: 1, maxLength: 1024, writeOnly: true}`; maxLength is name 80, url 512, ca_pem 65536, bind_dn/base_dn 1024, base_filter 4096; `{id}` path params are `format: uuid`; `TestResult.step` enum is exactly `[connect, tls, bind, search_base]` (a `null` entry is ignored).
 - [T027 claude] Manifest: the Permission, Ability and Nav entry must match contract B exactly, word for word (the description too).
+- [T033 claude] `httpapi.PermDirectoryManage = "directory:manage"`.
+- [T033 claude] `RequirePermission(r *http.Request, az PermissionChecker, perm string) (tenantctx.Actor, error)`.
+- [T033 claude] The handlers write `directory.Connection` / `directory.TestResult` directly with `WriteJSON`, so their JSON tags define the wire format. List returns `{"items": [...]}` and never `null`.
 
 ## Gotchas
 
-- [T009 claude] The URL CHECK refuses anything with userinfo, a path, a query or a fragment, including a trailing `/`. The service should normalise the URL (e.g. strip a trailing slash) before inserting.
-- [T009 claude] Run the integration tests with `sg docker -c 'go test -tags integration ./internal/store/'`.
-- [T010 claude] citext comparisons with a Go `[]string` need `$n::text[]::citext[]`. A plain `text[]` compares case-sensitively.
 - [T010 claude] `DirectoryConnection` includes `BindPasswordEnc`. API views must drop it.
 - [T012 claude] `audit.Row` redacts any detail key whose name contains `password|secret|token|key|code|cookie|authorization|phone|first_name|last_name|display_name|email_address`. Avoid detail keys like `search_key`, `status_code` or `error_code`; use `reason` or plain names such as `connection_id`, `filter`, `count`, `truncated`, `created`, `updated`, `user_ids`.
 - [T012 claude] There is no database CHECK on `event_type`, so the Go `known` map is the only thing that enforces the vocabulary.
@@ -162,3 +159,6 @@
 - [T027 claude] `NavEntry.Order` is `int32`.
 - [T027 claude] `TestOpenAPIDocument` still passes once the routes are only declared, so T028 can add the yaml before the handlers exist.
 - [T027 claude] No other test pins version `1.1.0`.
+- [T033 claude] T030's `directory.Input` must not define a custom `UnmarshalJSON`. It is embedded in the test-body struct, so a custom method would take over decoding and silently drop `connection_id`.
+- [T033 claude] T030 must export `directory.ErrNotFound` along with `ErrValidation`, `ErrInsecureTransport`, `ErrDuplicate`, `ErrLimitReached` and `ErrRateLimited`, or `directory.go` won't compile.
+- [T033 claude] The internal handlers take `*tenantctx.Actor` to satisfy gocritic's `hugeParam` check. The service interface still takes the actor by value, as the tests require.
