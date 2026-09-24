@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T027 claude] The contract test expects create (POST) and update (PUT) request bodies to be `$ref: '#/components/schemas/DirectoryConnectionInput'`; POST 201, GET `/{id}` 200 and PUT 200 to be `$ref …/DirectoryConnection`; list 200 to be `{items: array of $ref DirectoryConnection}`; both test routes 200 to be `$ref …/TestResult`, all under `application/json`.
-- [T027 claude] `DirectoryConnection` may hold only the contract fields plus an optional `ca_pem`. `ca_pem` goes into the same schema, not a separate one.
-- [T027 claude] `POST /api/v1/admin/directories/test` needs its own flat, closed body schema with `connection_id` and a writeOnly `bind_password` (not `allOf`), because a closed schema can't be combined with `allOf`.
-- [T027 claude] Every object inside a request body, including `attributes`, needs `additionalProperties: false`.
-- [T033 claude] When the feature is disabled (or `Directories` is nil), every route answers 404 `not_found` before authentication or authz. The routes are always mounted.
 - [T033 claude] `RequirePermission` lets owner/admin through without an FGA call. Anyone else needs `Allowed(...)==true`. An authz error, a bad permission string, a nil checker or an empty tenant/user id all give 403 `forbidden`, and the error detail is not logged.
 - [T033 claude] Error mapping (`directoryError`):
 - [T033 claude] 404 `not_found`: `store.ErrNotFound`, `directory.ErrNotFound`, `tenantctx.ErrCrossTenant`.
@@ -56,14 +51,14 @@
 - [T037 claude] Empty or whitespace-only input → `(objectClass=*)`. Refuse invalid UTF-8, a raw NUL, and `\00` in any assertion value (equality/substrings/ge/le/approx/extensible).
 - [T037 claude] Attribute description: `^[A-Za-z][A-Za-z0-9-]*(;[A-Za-z0-9-]+)*$` or a numeric OID. It applies to extensible-match types too. Matching rule must be a descriptor or an OID. Refuse `dnAttributes` and any case-insensitive "dn" matching rule (go-ldap parses `:DN:` as a rule name).
 - [T037 claude] Grammar refusals: `FilterError.Detail` == go-ldap inner message with the `ldap: ` prefix removed. The UTF-8 check runs before the parser. Detail must be valid UTF-8 with no control characters, so replace them in the parser's echoed trailing input.
+- [T041 claude] The effective filter is always `"(&" + canon(base_filter) + canon(user_filter) + ")"`. An empty filter on either side becomes `(objectClass=*)`, so an empty base filter still produces the `(&…)` form. Canonical means `DecompileFilter(CompileFilter(x))`.
+- [T041 claude] `Query.SizeLimit` is the connection's `size_limit`, not limit+1: the real client already puts limit+1 on the wire (the fake records it as `WireSizeLimit`). `Query.TimeLimit` is `time_limit_seconds * time.Second`.
+- [T041 claude] Attributes: exactly the non-empty mapped attributes, never `*` or `objectClass`.
+- [T041 claude] Scope: `""` or `"sub"` gives `ScopeSub`, `"one"` gives `ScopeOne`; anything else is `ErrValidation`. A blank `Base` means the connection base.
+- [T041 claude] Errors: a bad filter must satisfy `errors.Is(err, ldapdir.ErrInvalidFilter)` (wrapping with a position message is allowed). A bad base gives `ldapdir.ErrInvalidBase`. Directory failures come back as errors whose `ldapdir.Reason` is `unreachable`, `tls_failed`, `target_refused`, `invalid_credentials`, `timeout` or `directory_error`. Unknown, malformed or foreign ids give `ErrNotFound`; a foreign id…
 
 ## Interfaces
 
-- [T023 claude] Records: `Opens() []ldapdir.ConnParams`, `Binds() []BindCall{DN, Password}`, `BaseChecks() []string`, `Searches() []SearchCall{Query; Deref int (always ldap.NeverDerefAliases); WireSizeLimit (=SizeLimit+1); WireTimeLimit (whole seconds, rounded up)}`, `OpenSessions() int`.
-- [T024 claude] `type Deps struct{ Store Store; Directory ldapdir.Directory; Envelope *crypto.Envelope; Policy *ldapdir.TargetPolicy; Config config.Directory; Production bool; Cache *cache.Cache; Audit *audit.Writer; Now func() time.Time }`; `func New(Deps) *Service`. Passing `*memstore.Store` as `Store` must work.
-- [T024 claude] `(s *Service) Create(ctx, tenantctx.Actor, tenantID string, Input) (View, error)`; `Update(ctx, actor, tenantID, id string, Input) (View, error)`; `Get(ctx, actor, tenantID, id) (View, error)`; `List(ctx, actor, tenantID) ([]View, error)`; `Remove(ctx, actor, tenantID, id) error`.
-- [T024 claude] `type Input struct{ Name, Kind, URL, TLSMode *string; AllowTLS12 *bool; CAPEM *string; BindDN, BindPassword *string; BaseDN, BaseFilter *string; Attributes *Mapping; SizeLimit, TimeLimitSeconds *int }`. A nil field means keep (on update) or default (on create).
-- [T024 claude] `type Mapping struct{ UID, Email, DisplayName, FirstName, LastName string }` with json tags `uid,email,display_name,first_name,last_name`.
 - [T024 claude] `View` has json tags that exactly match the contract's `DirectoryConnection` (the List view key set is asserted), plus `ca_pem,omitempty`, which only `Get` fills. Go fields: `ID, Name, Kind, URL, TLSMode, AllowTLS12, CAPEMSet, CAPEM, BindDN, BindPasswordSet, BaseDN, BaseFilter, Attributes Mapping, SizeLimit, TimeLimitSeconds, LastTest *LastTest{At, Outcome}, CreatedAt, UpdatedAt`. No `[]byte` fiel…
 - [T025 claude] `New(Deps) *Service` with `Deps{Store, Directory ldapdir.Directory, Envelope *crypto.Envelope, Policy *ldapdir.TargetPolicy, Cache *cache.Cache, Audit *audit.Writer, Config config.Directory, Production bool}`. `Deps.Store` must accept `*memstore.Store`.
 - [T025 claude] `Input{Name, Kind, URL, TLSMode string; AllowTLS12 bool; CAPEM, BindDN string; BindPassword *string; BaseDN string}` (more fields allowed).
@@ -109,12 +104,14 @@
 - [T037 claude] `func CompileUserFilter(s string) (Filter, error)`: returns a zero `Filter` on error
 - [T037 claude] `func Combine(base, user Filter) (Filter, error)`: a zero Filter on either side → `ErrInvalidFilter`
 - [T037 claude] `type FilterError struct{ Detail string }`: `Error()` = `ErrInvalidFilter.Error()` + detail; `Is(ErrInvalidFilter)` only; `mapError` → bare `ErrInvalidFilter`; `Reason` → `invalid_filter`
+- [T041 claude] `func (s *Service) Search(ctx context.Context, actor tenantctx.Actor, tenantID, connID string, q SearchRequest) (SearchResult, error)`
+- [T041 claude] `type SearchRequest struct{ Filter, Base, Scope string }` (JSON `filter`, `base`, `scope`)
+- [T041 claude] `type SearchResult struct{ Items []SearchItem; Truncated bool; OutOfScope int; EffectiveFilter string }` (JSON `items`, `truncated`, `out_of_scope`, `effective_filter`). `Items` is never nil.
+- [T041 claude] `type SearchItem struct{ UID, DN, Email, DisplayName, FirstName, LastName, Status, UserID, Reason string }`. It marshals to exactly 9 keys: `uid`, `dn`, `email`, `display_name`, `first_name`, `last_name`, `status`, `user_id`, `reason`. An empty `email`, `user_id` or `reason` marshals as `null`, which needs a custom `MarshalJSON`.
+- [T041 claude] `directory.Store` must gain `UsersByEmails` and `LinksByUIDs` (memstore already has both).
 
 ## Gotchas
 
-- [T021 claude] errcheck flags `conn.Close()` calls in go-ldap. Use `_ =`.
-- [T021 claude] The test helpers reuse `newCA` from `tlsconf_test.go`, plus `mustPolicy`/`defaultTargets` from `policy_test.go`.
-- [T022 claude] The ldapdir test run takes about 18s, mostly the existing `TestHandshakeBehaviour` in `tlsconf_test.go` (three 5s subtests), not the client tests.
 - [T022 claude] `scripts/coverage-gate.sh` still needs a `coverage.out` generated first.
 - [T022 claude] `client_extra_test.go` builds a raw hostile packet that assumes message ID 1 for the first request on a plain session.
 - [T023 claude] A ctx timeout during the delay, or an injected `ErrTimeout`, leaves the session unusable. Any later call, and any call after Close, returns `ErrUnreachable`.
@@ -162,3 +159,6 @@
 - [T037 claude] The tests read the corpus from `../../tests/fuzz/testdata/ldap/filters`, relative to the package directory.
 - [T037 claude] A connection with no base filter should call `CompileUserFilter("")` for the base, not pass a zero `Filter` to `Combine`.
 - [T037 claude] go-ldap's canonical form turns UTF-8 into hex escapes (`ü` → `\c3\bc`) and decodes unnecessary escapes (`\2c` → `,`, `\41` → `A`). This is why canonical output can go over 4096 when the input doesn't.
+- [T041 claude] The suite reuses `ttSetup`, `ttAdmin`, `ttDetails` and `ttNoSecret` from `test_test.go`. New helpers use an `st` prefix, plus fixture methods `configure`, `search`, `mustSearch`, `lastSearch`, `noDirectoryCalls` and `searched`.
+- [T041 claude] `mustSearch` fails if any directory session is left open, so always `Close` the session, including on errors.
+- [T041 claude] `TestSearchTimeout` relies on the caller's ctx deadline reaching the session, and T047 should also apply its own time limit + 2 s deadline.
