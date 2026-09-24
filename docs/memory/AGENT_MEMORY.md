@@ -6,9 +6,6 @@
 
 ## Decisions
 
-- [T018 claude] `0.0.0.0/8` is part of the always-denied set. An IPv4 address is also matched against IPv4-mapped IPv6 prefixes, so `::/0` and `::ffff:10.0.0.0/104` cover it.
-- [T018 claude] Hostnames must use letters, digits, `-` and `_`, with labels of 1–63 bytes and at most 253 bytes in total. A trailing dot is allowed, but an all-digit last label is refused. Non-ASCII names are refused, so internationalised names must be entered in punycode.
-- [T019 claude] Signature is `NewTLSConfig(ep Endpoint, caPEM string, allowTLS12 bool)`. It takes the `Endpoint` returned by `CheckURL`, not a raw URL, so `ServerName = ep.Host` (IPv6 without brackets). An empty host must return an error.
 - [T019 claude] CA parsing is strict. Up to 65536 bytes is allowed and 65537 is refused. Every PEM block must be `CERTIFICATE` and must parse; a key or public-key block, bad certificate contents, or a stray `-----BEGIN` without a matching END all give `ErrInvalidCA`. Text between blocks, CRLF line endings and a self-signed leaf certificate are accepted.
 - [T019 claude] An empty CA gives `ParseCA("") == (nil, nil)` and `RootCAs == nil`, which means the system roots are used.
 - [T019 claude] By default: `MinVersion = TLS13`, `CipherSuites == nil`. With `allow_tls12`: `MinVersion = TLS12`, a non-empty list containing only the six ECDHE_{ECDSA,RSA} AES-GCM/CHACHA20 suites, and TLS 1.3 still allowed (`MaxVersion` 0 or TLS13).
@@ -56,12 +53,12 @@
 - [T033 claude] Error mapping (`directoryError`):
 - [T033 claude] 404 `not_found`: `store.ErrNotFound`, `directory.ErrNotFound`, `tenantctx.ErrCrossTenant`.
 - [T033 claude] 400: `validation_failed`, `insecure_transport`, `invalid_url`, `invalid_ca`, `invalid_filter`, `invalid_base`.
+- [T035 kimi] Drawer "Test connection" always posts to `POST /api/v1/admin/directories/test`; edit mode adds `connection_id` and omits `bind_password` when blank (reuse stored), create mode sends neither `connection_id` nor a blank password. The saved-test route `/{id}/test` is left for a possible row action later.
+- [T035 kimi] Kind presets fill only empty mapping fields (mirrors T024's server rule); `other` has no preset and changes nothing. OpenLDAP display-name preset pinned to `cn`.
+- [T035 kimi] Drawer Save/Test post the `useZodForm` schema output verbatim (zod normalisation is the wire contract); create body is asserted with exact `toEqual`.
 
 ## Interfaces
 
-- [T010 claude] `UpsertLink(ctx, tx, DirectoryLink) error`: upserts on user_id and keeps `first_imported_at`. The same uid already linked to another user gives ErrConflict.
-- [T010 claude] `UpdateImportedUser(ctx, tx, tenantID, userID, ImportedProfile{Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool}) error`: an e-mail already in use gives ErrConflict. `DeleteImportedUser(ctx, tx, tenantID, userID) error`.
-- [T010 claude] `DirectoryConnection.CAPEM` is "" for NULL. `LastTestOutcome`, `LastTestAt`, `CreatedBy`, `UpdatedBy` and `DirectoryLink.ConnectionID` / `ImportedBy` are pointers.
 - [T012 claude] `audit.DirectoryConnectionCreated`, `audit.DirectoryConnectionUpdated`, `audit.DirectoryConnectionDeleted`, `audit.DirectoryConnectionTested`, `audit.DirectorySearched`, `audit.DirectoryImported`, `audit.ImportedUserDeleted` (all `audit.EventType`).
 - [T013 claude] The sign-in test expects imported attempts to be recorded as `memstore.Attempt{UserID: "", Outcome: "refused", Reason: "unknown_account"}`. `signin_failed` audit rows must have `ActorUserID == nil` and `Reason == "unknown_account"`. There must be no `lockout` event and no `cache.RateKey("fail", uid)` key.
 - [T011 claude] `(m *Store) InsertDirectoryConnection(ctx, store.DirectoryConnection) error`; `GetDirectoryConnection(ctx, tid, id)`; `GetDirectoryConnectionAnyTenant(ctx, id)`; `ListDirectoryConnections(ctx, tid)`; `CountDirectoryConnections(ctx, tid) (int, error)`; `UpdateDirectoryConnection(ctx, c) error`; `SetDirectoryConnectionTest(ctx, tid, id, outcome string, at time.Time) error`; `DeleteDirectoryConnectio…
@@ -109,12 +106,12 @@
 - [T033 claude] `httpapi.PermDirectoryManage = "directory:manage"`.
 - [T033 claude] `RequirePermission(r *http.Request, az PermissionChecker, perm string) (tenantctx.Actor, error)`.
 - [T033 claude] The handlers write `directory.Connection` / `directory.TestResult` directly with `WriteJSON`, so their JSON tags define the wire format. List returns `{"items": [...]}` and never `null`.
+- [T035 kimi] `@/schemas/directory` exports `directoryConnectionSchema` (optional `bind_password`, blank→undefined = keep; `allow_tls12` defaults false; optional `size_limit` 1–1000 / `time_limit_seconds` 1–60 via `''`-preprocess) and `directoryCreateSchema` (refine: `bind_password` required, message `Enter the bind password.`). Pinned messages: `Enter an ldap:// or ldaps:// URL.`, `At most 80 characters.…
+- [T035 kimi] `data-test` contract: page `directories`; `directory-row`, `directory-name`, `directory-url`, `directory-tls`, `last-test` (chip `title` = raw ISO `at`); buttons `new-directory`, `edit`, `delete-directory`, `save-directory`, `test-connection`; drawer `directory-drawer`; fields `directory-name`, `directory-kind` (native `<select>` inside), `directory-url`, `directory-tls-mode`, `bind-dn`, `base-dn`…
+- [T035 kimi] Route pinned: `/admin/directories`, name `admin-directories`, roles owner/admin. Register reason wording T036 must add in `api/client.ts`: at least `tls_failed: 'The TLS handshake failed.'`.
 
 ## Gotchas
 
-- [T010 claude] `DirectoryConnection` includes `BindPasswordEnc`. API views must drop it.
-- [T012 claude] `audit.Row` redacts any detail key whose name contains `password|secret|token|key|code|cookie|authorization|phone|first_name|last_name|display_name|email_address`. Avoid detail keys like `search_key`, `status_code` or `error_code`; use `reason` or plain names such as `connection_id`, `filter`, `count`, `truncated`, `created`, `updated`, `user_ids`.
-- [T012 claude] There is no database CHECK on `event_type`, so the Go `known` map is the only thing that enforces the vocabulary.
 - [T013 claude] In the unknown branch, `u` still holds the imported row after T014's fix. That is harmless only because the unknown branch never uses `u.ID`, so keep it that way.
 - [T011 claude] `UpdateImportedUser` moves the user to a new map key when the e-mail changes, because `Users` is keyed by tenant and lower-cased e-mail.
 - [T011 claude] Connections are returned as copies (the `BindPasswordEnc` slice is copied), so tests can't change stored ciphertext through a returned value.
@@ -162,3 +159,6 @@
 - [T033 claude] T030's `directory.Input` must not define a custom `UnmarshalJSON`. It is embedded in the test-body struct, so a custom method would take over decoding and silently drop `connection_id`.
 - [T033 claude] T030 must export `directory.ErrNotFound` along with `ErrValidation`, `ErrInsecureTransport`, `ErrDuplicate`, `ErrLimitReached` and `ErrRateLimited`, or `directory.go` won't compile.
 - [T033 claude] The internal handlers take `*tenantctx.Actor` to satisfy gocritic's `hugeParam` check. The service interface still takes the actor by value, as the tests require.
+- [T035 kimi] Fresh worktree has no node_modules and the kit `dist/` is missing: run `npm install` at repo root and `npm run kit` before `npx vitest run` in `services/auth/console`.
+- [T035 kimi] Zod v4 parsed objects keep optional fields as own-keys with value `undefined` — only `JSON.stringify` (and thus the POST body) drops them; assert `toBeUndefined()`, never `'key' in obj`.
+- [T035 kimi] The whole `vitest run`/`npm run lint` (vue-tsc) stays red until T036 lands, by design (same pattern as T024–T026).
