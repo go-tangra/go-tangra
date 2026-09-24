@@ -6,9 +6,6 @@
 
 ## Decisions
 
-- [T044 claude] Empty or all-whitespace input → `(objectClass=*)`. Leading whitespace before a real filter is a grammar error (the parser's message), as the tests require.
-- [T044 claude] Grammar refusals: `Detail` is go-ldap's inner message without the `ldap: ` prefix. Control characters and invalid UTF-8 are replaced by U+FFFD, and it is cut on a rune boundary at 256 bytes with "…" appended. Policy refusals use fixed texts that never quote the input.
-- [T044 claude] Caps: depth ≤16 elements on the longest path, ≤64 components (and/or/not nodes count too), input and canonical form each ≤4096 bytes. `Combine`'s output is not length-capped, so two filters at the cap still combine (up to 8195 bytes).
 - [T044 claude] Attribute descriptions must be a descriptor or a numeric OID (no leading zeros), optionally followed by `;option`s. Matching rules must be a descriptor or an OID. `:dn:` is refused in every spelling, including a rule that equals "dn" in any case. A NUL is refused raw or escaped in any assertion value.
 - [T045 claude] `ScopeBase` returns the caller's string unchanged (the requested base, or `connBase` when the request is blank), not `DN.String()`. A re-serialised DN could change bytes or exceed the 1024-byte cap and then fail `WithinBase`.
 - [T045 claude] A DN is valid only if it is non-blank, at most `MaxDNBytes` (1024), parses with `ldap.ParseDN`, has at least one RDN, and has no attribute with an empty type or value. These are the same rules as `directory.validDN`.
@@ -56,12 +53,12 @@
 - [T066 kimi] Import filter is pinned to `(|(uid=eng1)(uid=eng2)(uid=eng5))` (the three unique-mail fixtures in `people.ldif`) so the summary is deterministic; the assertion is `created+updated == count of enabled preview checkboxes` with 0 skipped/0 failed, making the suite re-runnable against the same stack.
 - [T066 kimi] Activation target is the first `user-row` having an `activate` button (dynamic email), not a fixed fixture, so re-runs work after a previous run invited eng1.
 - [T066 kimi] Connection CA comes from `E2E_LDAP_CA_PEM` / `E2E_LDAP_CA_FILE`, defaulting to `deploy/stack/ldap/ca.pem` (T067 path) resolved relative to the spec file; LDAP settings overridable via `E2E_LDAP_URL/BIND_DN/BIND_PASSWORD/BASE_DN`, Mailpit via `E2E_MAILPIT_URL` (default `http://127.0.0.1:8025`).
+- [T065 kimi] Refused targets are asserted via the `TestResult` body (`ok:false, step:connect, reason:target_refused|unreachable`), never via transport errors: the endpoint turns `ErrTargetRefused` into a failed connect step, so 200 + coarse reason is the contract.
+- [T065 kimi] `ldap://` URLs use `tls_mode:"plain"` with `directory.allow_plaintext: true` set in the test config hook (harness env is "test"); only `[::1]` uses `ldaps://` per the quickstart. Without this, checkTarget's insecure_transport check fires before the dial for allowed ldap:// targets.
+- [T065 kimi] deny_cidrs test set = `10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fd00::/8` (all docker default pools); allow_cidrs = the pg container IP /32 (or /128), so the deny case uses `pgIP.Next()` — refused pre-dial, deterministic regardless of what holds that address.
 
 ## Interfaces
 
-- [T047 claude] `directory.Store` gained `UsersByEmails(ctx, tid, emails)`, `LinksByUIDs(ctx, tid, connID, uids)` and `User(ctx, tid, id) (store.User, error)`. `directorydb.DBStore` implements all three (User via `store.GetUser`).
-- [T047 claude] `SearchRequest{Filter, Base, Scope}`, `SearchResult{Items, Truncated, OutOfScope, EffectiveFilter}` and `SearchItem{UID, DN, Email, DisplayName, FirstName, LastName, Status, UserID, Reason}`, with `MarshalJSON`/`UnmarshalJSON` (null ↔ "").
-- [T047 claude] Constants `StatusNew`, `StatusExistingUser`, `StatusImported`, `StatusInvalid`. Helpers T048 can reuse: `mappingOf(c)`, `mappedAttributes(c)`, `s.runSearch`-style session code, `closedDirErr`, and `s.testPassword(&Input{}, &c, tid, connID)` to unseal the stored password.
 - [T048 claude] `directory.ImportTx{UserByEmail, User, LinksByUIDs, InsertUser, UpdateImportedUser, UpsertLink}`; `directory.Store` gained `Atomic(ctx, store.Scope, func(tx any) error) error`.
 - [T048 claude] `ImportResult{Created, Updated []ImportItem; Skipped, Failed []ImportIssue}` with `MarshalJSON` (nil → `[]`); constants `MaxImportUIDs=500`, `ReasonEmailInUse`, `ReasonDuplicateEmail`, `ReasonAlreadyActive`, `ReasonNotFound`, `ReasonDirectoryError`, `ReasonTimeout`, `ReasonInternal`.
 - [T048 claude] `directorydb.dbTx.InsertUser` writes `status='imported'` and `display_name_explicit` exactly as decoded. It deliberately avoids `store.InsertUser`, whose `DisplayNameExplicit` heuristic would mark a derived "First Last" name as explicit.
@@ -109,12 +106,12 @@
 - [T062 codex] `schemas/directory.ts` exports `activateSchema` and `ActivateResult`.
 - [T066 kimi] New env knobs read by the spec: `E2E_LDAP_URL`, `E2E_LDAP_BIND_DN`, `E2E_LDAP_BIND_PASSWORD`, `E2E_LDAP_BASE_DN`, `E2E_LDAP_CA_PEM`, `E2E_LDAP_CA_FILE`, `E2E_MAILPIT_URL` (all optional, quickstart defaults).
 - [T066 kimi] Mailpit check mirrors the Go harness `LastMail`: `GET /api/v1/search?query=to:<email>` then `GET /api/v1/message/{ID}`; the invitation text must contain `/console/invite/accept?token=`.
+- [T065 kimi] `Start(t *testing.T, mutate ...func(*config.Config, string)) *Env` — variadic config hooks; second arg is the TimescaleDB container IP. T064 can reuse this to allow the OpenLDAP container CIDR.
+- [T065 kimi] `Env.PGIP string` — TimescaleDB container address on the docker network.
+- [T065 kimi] `container(t, req)` now returns `(testcontainers.Container, host, ports)`.
 
 ## Gotchas
 
-- [T040 kimi] AD objectGUID bytes are not valid UTF-8 — never UTF-8-check the uid value before the GUID-length/decode branch (hit this in the stub).
-- [T040 kimi] `ldap.ParseDN` trims insignificant spaces, so `sameDNFold` comparisons accept spaced DN spellings; `EqualFold` handles multi-valued RDN order.
-- [T040 kimi] The ScopeBase no-echo fuzz guard is gated on `len(requested) >= 24` — short inputs like "a" appear in fixed error words and would false-positive.
 - [T040 kimi] Go fuzzing writes only failing inputs into `testdata`; passing runs never mutate the corpus.
 - [T046 claude] `ldapdir` now imports `internal/user`, so `user` must never import `ldapdir`.
 - [T046 claude] The `ldapdir` test binary won't compile until T044 (filter.go) and T045 (dn.go) land. To run the other tests, move `filter_test.go` and `dn_test.go` aside temporarily.
@@ -162,3 +159,6 @@
 - [T066 kimi] After activation the users list reloads under the still-active `imported` filter, so the activated row vanishes until the filter is cleared (`selectOption('')`).
 - [T066 kimi] `npx tsc -p tsconfig.node.json` fails on a pre-existing `@freya/ui/vite` typing issue in `vite.config.ts` (unrelated to this task; the lint gate only type-checks `tsconfig.app.json`, which excludes e2e).
 - [T066 kimi] npm install churns `package-lock.json` `dev` flags — restore with `git checkout` (done).
+- [T065 kimi] Run integration tests with `sg docker -c '...'` (stale docker group membership); images were already cached here, a cold run pulls 4 images first.
+- [T065 kimi] The allow-override dial relies on the host routing to the container bridge network (RST in ms). On rootless/remote-docker setups it would fall back to a 5 s dial timeout → `timeout` instead of `unreachable`.
+- [T065 kimi] `AuditCount` sleeps 1.2 s (500 ms writer batch); call it once at the end, not per assertion.
