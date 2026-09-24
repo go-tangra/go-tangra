@@ -6,9 +6,6 @@
 
 ## Decisions
 
-- [T049 claude] The import handler checks 1..`directory.MaxImportUIDs` unique uids itself as well as through the OpenAPI validator, and gives 400 `validation_failed`. The uids are passed to the service unchanged.
-- [T049 claude] Import declares no 429, because import has no rate limit (T048). Both routes declare 403/404.
-- [T049 claude] Added 409 `invalid_state` to `/admin/users/{id}/roles`, `/deactivate` and `/reactivate` (T016 follow-up).
 - [T050 claude] No change to `userdb/db.go`: `store.ListUsers` (pgx) and memstore already fill `Directory` and `InvitationID`, and filter by status.
 - [T050 claude] `DirectoryOrigin` has exactly `connection_id` (nil once the connection is deleted), `connection_name`, `directory_uid` and `last_imported_at` (RFC 3339 UTC). It never includes the DN, per T043.
 - [T051 kimi] Selection contract: the view renders its own checkbox column with `disabled` on non-`new`/`imported` rows + a `data-test="select-all"` button — the kit's `selectable` prop can't express per-row disabled, and its one-way `:checked` binding can't visually uncheck a box the parent filters out (vdom value never changes → Vue never rewrites the DOM).
@@ -56,11 +53,12 @@
 - [T059 claude] If the lookup saw `imported` but the status-guarded delete then finds nothing (the user was invited or removed concurrently), it returns `ErrInvalidState`, not not found.
 - [T059 claude] Audit: `imported_user_deleted`, Outcome `ok`, SubjectKind `user`, SubjectID = uid, no details. Refusals are not audited.
 - [T059 claude] Sessions are not revoked explicitly: imported users can't sign in, and the DB cascade and memstore delete remove the user's other rows.
+- [T060 claude] `activateUsers` passes the body unchanged to `invite.Service.Activate`. Whole-request errors go through the existing `adminError` (`ErrBadEmail` → 400 `validation_failed`, `ErrSelfEscalation` → 403). Empty `InvitationID`/`Reason` strings are sent as JSON `null`.
+- [T060 claude] `removeImported` → `Admin.RemoveImported`: success gives 204 with an empty body, not found gives 404, and `ErrInvalidState` gives 409.
+- [T060 claude] No new error variables: `errInvalidState` and `errSelfEscalation` were already mapped in `adminError`.
 
 ## Interfaces
 
-- [T043 claude] Schemas:
-- [T040 kimi] Consumes exactly the contracts §C / T037-pinned surface: `type Filter struct{...}` with `String() string` (comparable, zero = ""), `const MaxFilterBytes = 4096`, `CompileUserFilter(string) (Filter, error)`, `Combine(base, user Filter) (Filter, error)`; `ScopeBase(connBase, requested string) (string, error)`, `WithinBase(connBase, entryDN string) bool`; `Mapping{UID,Email,DisplayName,FirstName,Las…
 - [T040 kimi] Corpus is read at `testdata/ldap/{filters,dns,urls,objectguid}` relative to the fuzz package (files have no trailing newline; `.bin` fixtures are non-UTF-8 bytes in strings).
 - [T046 claude] `type Mapping struct{ UID, Email, DisplayName, FirstName, LastName string }`, `type Person struct{ UID, DN, Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool }`
 - [T046 claude] `func DefaultMapping(kind string) Mapping`, `func Decode(m Mapping, e RawEntry) (Person, error)`
@@ -109,11 +107,11 @@
 - [T058 claude] `invite.ActivateItem{UserID, Outcome, InvitationID, Reason string}`, `ActivateMax=100`, `Outcome*`/`Reason*` consts.
 - [T059 claude] `func (a *Admin) RemoveImported(ctx context.Context, actor tenantctx.Actor, uid string) error` returns nil, `ErrNotFound` (→ 404), `ErrInvalidState` (→ 409 `invalid_state`) or a store error.
 - [T059 claude] `AdminStore.DeleteImportedUser(ctx, tenantID, userID string) error` (memstore and `userdb.DBAdminStore` both implement it).
+- [T060 claude] operationIds `activateUsers` and `removeImportedUser`.
+- [T060 claude] TS types: `components["schemas"]["ActivateRequest"]` and `components["schemas"]["ActivateResult"]`. Result items are `{user_id, outcome: 'invited'|'failed', invitation_id: string|null, reason: string|null}`.
 
 ## Gotchas
 
-- [T041 claude] `TestSearchTimeout` relies on the caller's ctx deadline reaching the session, and T047 should also apply its own time limit + 2 s deadline.
-- [T042 claude] An injected `ldapdir.ErrTimeout` kills an ldapfake session, and later calls on it return `ErrUnreachable`. After a timeout the implementation must reopen the session or report the remaining entries as failed; the tests allow either. Always close every session: `OpenSessions()==0` is checked.
 - [T042 claude] memstore's `FailNext` only works on directory methods (`UpsertLink`, `UpdateImportedUser`, …), not `InsertUser`. memstore has no rollback, so the tests don't check rollback after an `UpsertLink` failure; directorydb's per-entry transaction must provide it.
 - [T042 claude] Test helpers use an `it` prefix (`itSetup`, `itSwitch`, `itNewDirectory`, …) so they don't clash with the parallel T041 search suite.
 - [T043 claude] `directory_test.go`'s shared `fakeDirectories` now has `found`/`imp` fields and `dirCall.Search`/`dirCall.UIDs`. `dirRoutes()` includes search and import, so the existing permission, CSRF and feature-disabled tests cover them.
@@ -162,3 +160,5 @@
 - [T058 claude] In invitedb, `UserByID`/`UserAnyTenant` return `ErrNotFound` for non-UUID ids, to avoid a Postgres uuid cast error aborting the tx.
 - [T058 claude] `httpapi/admin_test.go` `withUS2` now wires `InviteEscalation`; handler tests for activate should reuse `withUS2`.
 - [T059 claude] `golangci-lint --new-from-rev HEAD` flags gocritic `hugeParam` on `actor`. It is kept because the test and contract fix the signature and the sibling methods match.
+- [T060 claude] `npm run gen:api` runs openapi-typescript 7.13.0 even though `console/node_modules` isn't installed. The regenerated file only gained lines; nothing was removed.
+- [T060 claude] `internal/directory` `TestSearchAudit/filter_capped_at_1_KiB` fails ("filter has more than 64 components"). This is outside T060's scope and the package doesn't import `httpapi`.
