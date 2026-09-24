@@ -6,9 +6,6 @@
 
 ## Decisions
 
-- [T023 claude] Filters are compiled with `ldap.CompileFilter` and evaluated in the fake, so escaping is real (`(uid=\2a)` matches only a literal `*`). Matching ignores case for valid UTF-8 and compares non-UTF-8 values byte for byte (objectGUID). AD bit rules 803/804 and rule-less `:=` are supported; any other extensible rule gives `DirectoryError{Code:53}`. Invalid filter → `ErrInvalidFilter`.
-- [T023 claude] `Query` has no deref field, so the client always asks for NeverDerefAliases. The fake honours this by default: an alias comes back as the alias object itself. `SetDerefAliases(true)` models a misbehaving server that swaps in the alias target, even one outside the base. T041 uses this for its "alias target dropped" check.
-- [T023 claude] A referral object in scope is counted in `Page.Referrals` and never returned as an entry. A search or base check at or below a referral gives `DirectoryError{Code:10}`.
 - [T023 claude] Parents are not created automatically. A base DN exists only if an entry was added for it, so tests must `Add` the base and OU entries.
 - [T023 claude] Every Search call is recorded, including invalid queries and ones that get an injected error. To test "zero directory calls", assert `len(d.Searches())==0`.
 - [T024 claude] The service only returns closed errors. It defines `ErrValidation`("validation_failed"), `ErrInsecureTransport`("insecure_transport"), `ErrDuplicate`("duplicate"), `ErrLimitReached`("limit_reached") and `ErrNotFound`("not_found"), and the tests check the exact text. URL, CA and filter problems return `ldapdir.ErrInvalidURL`, `ldapdir.ErrTargetRefused`, `ldapdir.ErrInvalidCA` or `ldapdir.ErrInvalid…
@@ -56,11 +53,12 @@
 - [T034 claude] `RegisterDirectory` is always called, so declared routes = mounted routes. `Directories` is set only when the service exists, which avoids passing a typed-nil interface to httpapi.
 - [T034 claude] The BER cap stays in `ldapdir`'s `init()`. `app.buildDirectory` only checks that `ber.MaxPacketLengthBytes == ldapdir.MaxBERPacketBytes` and fails `Build` if not.
 - [T034 claude] Temporary store adapter `directoryStore` in `app.go` (each method is one `store.Tx` under `Scope{TenantID}`; `GetDirectoryConnectionAnyTenant` runs under `Scope{System: true}`). This deviates from T032's planned `directorydb`, which wasn't implemented.
+- [T032 claude] `Atomic(ctx, tenantID, fn func(pgx.Tx) error)` forces tenant scope and returns an error for an empty tenant id (an empty `app.tenant_id` would silently match nothing). Only `GetDirectoryConnectionAnyTenant` uses `Scope{System: true}`.
+- [T032 claude] Each connection method is its own transaction via `Atomic`; the value-struct parameters carry `//nolint:gocritic` because `directory.Store` fixes those signatures.
+- [T032 claude] Deviation from invitedb's `Atomic(ctx, scope, func(any) error)`: this one takes a tenant id rather than a scope, so callers can't pick the system scope.
 
 ## Interfaces
 
-- [T020 claude] Each call returns a new config with its own copy of the cipher list, so callers may keep or change it.
-- [T021 claude] `type Client`; `func NewClient(p *TargetPolicy) *Client` (implements `Directory`); `const DefaultDialTimeout = 5 * time.Second` (used when `DialTimeout == 0`); `const MaxBERPacketBytes = 8 << 20`. `ber.MaxPacketLengthBytes` must equal it once `NewClient` has been called (setting it in `init()` works).
 - [T021 claude] `type ConnParams struct{ URL, TLSMode, CAPEM string; AllowTLS12 bool; DialTimeout time.Duration }`. TLSMode is one of the literal strings "ldaps", "starttls" or "plain".
 - [T021 claude] `type Scope int` with `ScopeSub` (zero value, sent as wholeSubtree) and `ScopeOne` (sent as singleLevel).
 - [T021 claude] `type Query struct{ BaseDN string; Scope Scope; Filter string; Attributes []string; SizeLimit int; TimeLimit time.Duration }`.
@@ -109,11 +107,11 @@
 - [T031 claude] Unexported `s.allow(ctx, tenantID) error` is the shared per-tenant limiter. Search (US2) should call it so tests and searches share `rate_per_minute`.
 - [T034 claude] `App.Directories *directory.Service` (nil when disabled); `(*App).buildDirectory() error`.
 - [T034 claude] `Production` for the service comes from `cfg.IsProduction()`, `Cache` from `a.Cache` and `Authz` from `a.Authz`.
+- [T032 claude] `directorydb.DBStore{St *store.Store}`; `(DBStore).Atomic(ctx context.Context, tenantID string, fn func(pgx.Tx) error) error`; plus the 8 `directory.Store` methods (compile-time assertion `var _ directory.Store = DBStore{}`).
+- [T032 claude] `app.buildDirectory` now passes `directorydb.DBStore{St: a.Store}` as `Deps.Store`.
 
 ## Gotchas
 
-- [T017 claude] A `%25` zone must be refused as `ErrInvalidURL` before any IP check (the test uses `2001:db8::1%25eth0`).
-- [T017 claude] `netip.Prefix.Contains` does not match across address families. Unmap the address first, and for a v4 address also match against v6 prefixes, e.g. deny `::ffff:10.1.2.3` when `10.0.0.0/8` is denied.
 - [T018 claude] `url.Parse` already refuses an unterminated `[`, so the matching branch in `splitURLHost` is covered by calling that function directly in `policy_extra_test.go`.
 - [T018 claude] `scripts/coverage-gate.sh` expects an existing `coverage.out` in `services/auth`. Generate the profile first, or it exits with "open coverage.out: no such file".
 - [T019 claude] `x509.CertPool.AppendCertsFromPEM` silently skips blocks it can't parse. T020 must decode with `pem.Decode` and `x509.ParseCertificate` on each block to get the strict behaviour.
@@ -162,3 +160,5 @@
 - [T031 claude] `scripts/redaction-scan.sh` fails with the default relative `ARTIFACTS`: the CRUD `capture()` helper can't open `.artifacts/capture/...` from the package directory. Run it with `ARTIFACTS=$PWD/.artifacts` until the script is fixed.
 - [T031 claude] If the stored password won't decrypt (for example a ciphertext moved from another connection), the test returns a generic error, not a result, and never binds.
 - [T034 claude] Until this task, `app.Build` failed its declared-vs-mounted route check because T028's yaml routes had no handler.
+- [T032 claude] `directorydb` imports `directory` (for the interface assertion), so `directory` must never import `directorydb`.
+- [T032 claude] Running `golangci-lint` on `internal/app` reports existing gocritic warnings (`hugeParam` on `Build`'s cfg, `sloppyReassign`, and others) that this task didn't introduce.
