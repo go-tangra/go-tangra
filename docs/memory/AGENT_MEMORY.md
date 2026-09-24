@@ -6,9 +6,6 @@
 
 ## Decisions
 
-- [T022 claude] Search uses the synchronous `conn.Search` with `EnforceSizeLimit=true`, so memory stays bounded to SizeLimit+1 entries even if the server ignores the limit. Results with code 3 or 4, or `ldap.ErrSizeLimitExceeded`, return as Truncated with no error. A panic inside go-ldap while decoding a hostile response is recovered and returned as `&DirectoryError{}`.
-- [T022 claude] Invalid queries (unknown Scope, empty Attributes, SizeLimit < 1, negative TimeLimit) return an error wrapping `ErrDirectory` ("invalid query"), and nothing is sent. TimeLimit is rounded up to whole seconds, so sub-second limits become 1.
-- [T022 claude] `mapError` also maps go-ldap 201/202 (filter compile/decompile) to `ErrInvalidFilter`. Closed sentinels are returned bare, dropping any wrapping text. Open returns the fixed-text `CheckURL`/`NewTLSConfig` errors unchanged.
 - [T023 claude] Filters are compiled with `ldap.CompileFilter` and evaluated in the fake, so escaping is real (`(uid=\2a)` matches only a literal `*`). Matching ignores case for valid UTF-8 and compares non-UTF-8 values byte for byte (objectGUID). AD bit rules 803/804 and rule-less `:=` are supported; any other extensible rule gives `DirectoryError{Code:53}`. Invalid filter → `ErrInvalidFilter`.
 - [T023 claude] `Query` has no deref field, so the client always asks for NeverDerefAliases. The fake honours this by default: an alias comes back as the alias object itself. `SetDerefAliases(true)` models a misbehaving server that swaps in the alias target, even one outside the base. T041 uses this for its "alias target dropped" check.
 - [T023 claude] A referral object in scope is counted in `Page.Referrals` and never returned as an entry. A search or base check at or below a referral gives `DirectoryError{Code:10}`.
@@ -56,11 +53,12 @@
 - [T031 claude] If the target policy refuses a URL (for example a literal IP or a bad port), the test returns a failed `connect` step with reason `target_refused`, not an error. A bad URL, CA, DN or TLS mode, or `insecure_transport`, is returned as an error before any dial.
 - [T031 claude] Tests don't check name, kind, filter or attributes; only the connection parameters are validated.
 - [T031 claude] `last_test_outcome` is `ok` or the reason. Any reason outside the data-model list is stored as `directory_error`. It is saved with a context that ignores the caller's cancellation (5 s timeout), so a timed-out test is still recorded.
+- [T034 claude] `RegisterDirectory` is always called, so declared routes = mounted routes. `Directories` is set only when the service exists, which avoids passing a typed-nil interface to httpapi.
+- [T034 claude] The BER cap stays in `ldapdir`'s `init()`. `app.buildDirectory` only checks that `ber.MaxPacketLengthBytes == ldapdir.MaxBERPacketBytes` and fails `Build` if not.
+- [T034 claude] Temporary store adapter `directoryStore` in `app.go` (each method is one `store.Tx` under `Scope{TenantID}`; `GetDirectoryConnectionAnyTenant` runs under `Scope{System: true}`). This deviates from T032's planned `directorydb`, which wasn't implemented.
 
 ## Interfaces
 
-- [T018 claude] `CheckURL` returns `Endpoint{Scheme, Host, Port}`; call `Endpoint.Addr()` to get the address to dial.
-- [T019 claude] `var ErrInvalidCA` (declare it in `tlsconf.go`; T022's `errors.go` must not declare it again), `const MaxCAPEMBytes = 64 << 10`, `func ParseCA(pem string) (*x509.CertPool, error)`, `func NewTLSConfig(ep Endpoint, caPEM string, allowTLS12 bool) (*tls.Config, error)`.
 - [T020 claude] Each call returns a new config with its own copy of the cipher list, so callers may keep or change it.
 - [T021 claude] `type Client`; `func NewClient(p *TargetPolicy) *Client` (implements `Directory`); `const DefaultDialTimeout = 5 * time.Second` (used when `DialTimeout == 0`); `const MaxBERPacketBytes = 8 << 20`. `ber.MaxPacketLengthBytes` must equal it once `NewClient` has been called (setting it in `init()` works).
 - [T021 claude] `type ConnParams struct{ URL, TLSMode, CAPEM string; AllowTLS12 bool; DialTimeout time.Duration }`. TLSMode is one of the literal strings "ldaps", "starttls" or "plain".
@@ -109,10 +107,11 @@
 - [T031 claude] `(*Service).Test(ctx, tenantctx.Actor, tid string, Input, connID string) (TestResult, error)` and `(*Service).TestSaved(ctx, tenantctx.Actor, tid, connID string) (TestResult, error)`.
 - [T031 claude] Constants `StepConnect`, `StepTLS`, `StepBind`, `StepSearchBase`.
 - [T031 claude] Unexported `s.allow(ctx, tenantID) error` is the shared per-tenant limiter. Search (US2) should call it so tests and searches share `rate_per_minute`.
+- [T034 claude] `App.Directories *directory.Service` (nil when disabled); `(*App).buildDirectory() error`.
+- [T034 claude] `Production` for the service comes from `cfg.IsProduction()`, `Cache` from `a.Cache` and `Authz` from `a.Authz`.
 
 ## Gotchas
 
-- [T017 claude] `url.Parse` also accepts `ldap://::1` and `host:389:636`. Refuse unbracketed hosts that contain `:`.
 - [T017 claude] A `%25` zone must be refused as `ErrInvalidURL` before any IP check (the test uses `2001:db8::1%25eth0`).
 - [T017 claude] `netip.Prefix.Contains` does not match across address families. Unmap the address first, and for a v4 address also match against v6 prefixes, e.g. deny `::ffff:10.1.2.3` when `10.0.0.0/8` is denied.
 - [T018 claude] `url.Parse` already refuses an unterminated `[`, so the matching branch in `splitURLHost` is covered by calling that function directly in `policy_extra_test.go`.
@@ -162,3 +161,4 @@
 - [T030 claude] Size/time defaults are set before `apply`, so an explicit `0` is refused rather than replaced by the default.
 - [T031 claude] `scripts/redaction-scan.sh` fails with the default relative `ARTIFACTS`: the CRUD `capture()` helper can't open `.artifacts/capture/...` from the package directory. Run it with `ARTIFACTS=$PWD/.artifacts` until the script is fixed.
 - [T031 claude] If the stored password won't decrypt (for example a ciphertext moved from another connection), the test returns a generic error, not a result, and never binds.
+- [T034 claude] Until this task, `app.Build` failed its declared-vs-mounted route check because T028's yaml routes had no handler.
