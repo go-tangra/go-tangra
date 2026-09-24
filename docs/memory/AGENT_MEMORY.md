@@ -6,10 +6,6 @@
 
 ## Decisions
 
-- [T024 claude] Invalid or empty bind/base DNs (including the root DSE `""`), a DN over 1024 bytes, a bad name (empty or over 80), a bad kind or tls_mode, limits out of range and a bad attribute name (`^[A-Za-z][A-Za-z0-9-]{0,63}$`) all return `ErrValidation`. A URL over 512 bytes, or a scheme that doesn't match tls_mode (`ldaps`↔`ldaps://`), returns `ldapdir.ErrInvalidURL`. A base filter over 4096 bytes return…
-- [T024 claude] Plain mode is refused whenever `Production` is set, even with `AllowPlaintext`, and also in dev without the opt-out. The refusal is audited as `directory_connection_created`, outcome refused, reason `insecure_transport`. A `target_refused` create is audited the same way.
-- [T024 claude] Defaults: size limit is min(500, `MaxSizeLimit`) and time limit is min(15, `MaxTimeLimit` in seconds). Values above the deployment maximum are refused. The base filter is stored in canonical form (`DecompileFilter(CompileFilter)`), and an empty filter stays `""`. Setting `CAPEM: ""` on update clears the CA.
-- [T024 claude] Presets are filled into any empty `Mapping` fields. AD uses objectGUID/mail/displayName/givenName/sn. OpenLDAP uses entryUUID/mail/(cn or displayName)/givenName/sn; the test accepts either display-name value so it doesn't conflict with T039. `other` has no uid preset, so the uid attribute is required; its email attribute defaults to `mail`.
 - [T025 claude] Two methods, not one: `Test(ctx, actor tenantctx.Actor, tenantID string, in Input, connID string)` for unsaved settings (connID only supplies the stored password, never persists last_test) and `TestSaved(ctx, actor, tenantID, id string)` for `POST /{id}/test` (persists last_test). The contract lists only `Test`, so this is a deviation.
 - [T025 claude] A failing step is a `TestResult` with a nil error. Target refused (literal IP or port outside policy, found by `CheckURL`) is a result `{step: connect, reason: target_refused}` with no connection attempt, since the test route has no 422. Refused before connecting and returned as errors: malformed URL or scheme/TLS-mode mismatch (`ldapdir.ErrInvalidURL`), bad CA (`ldapdir.ErrInvalidCA`), unknown tl…
 - [T025 claude] Step mapping: `Open` error `ErrTLS` → tls, any other `Open` error → connect; an ldaps/starttls session whose `TLSState()` reports no completed handshake → tls/tls_failed with no bind; Bind → bind; BaseExists → search_base. Reason = `ldapdir.Reason(err)`. last_test outcome = "ok" or the reason.
@@ -56,10 +52,13 @@
 - [T036 codex] Reused inherited remote routes and manifest navigation; added standalone sidebar navigation separately.
 - [T036 codex] Retained T035’s owner/admin standalone route gate.
 - [T036 codex] Drawer tests use unsaved-input testing; they do not persist `last_test`.
+- [T038 claude] `ScopeBase(connBase, requested)`: a blank `requested` means no narrowing and returns the connection base. It succeeds only if `requested` equals `connBase` or is below it, compared per RDN and ignoring case. The result is compared as a parsed DN, so returning `DN.String()` is fine.
+- [T038 claude] Every failure returns `("", ErrInvalidBase)`: an invalid connection base, an invalid requested base, or one outside the base. The error text must not echo the input.
+- [T038 claude] `WithinBase` returns true for the base entry itself and for any descendant. It returns false if either DN is invalid.
+- [T038 claude] A DN counts as invalid if it is blank, fails `ldap.ParseDN`, has no RDNs, has an empty type or value (e.g. `cn=,…`), or is over 1024 bytes. These are the same rules as `directory.validDN`.
 
 ## Interfaces
 
-- [T021 claude] `type Query struct{ BaseDN string; Scope Scope; Filter string; Attributes []string; SizeLimit int; TimeLimit time.Duration }`.
 - [T021 claude] `type RawEntry struct{ DN string; Attrs map[string][][]byte }`. Attribute keys are lower-cased.
 - [T022 claude] `ldapdir.Directory{Open(ctx, ConnParams) (Session, error)}`; `ldapdir.Session{Bind(ctx, dn string, pw []byte) error; BaseExists(ctx, baseDN string) error; Search(ctx, Query) (Page, error); TLSState() (tls.ConnectionState, bool); Close() error}`.
 - [T022 claude] `type Page struct{ Entries []RawEntry; Truncated bool; Referrals int }`; `ConnParams`, `Query`, `RawEntry`, `Scope` (`ScopeSub`/`ScopeOne`) are as T021 defined them.
@@ -109,11 +108,10 @@
 - [T032 claude] `app.buildDirectory` now passes `directorydb.DBStore{St: a.Store}` as `Deps.Store`.
 - [T036 codex] Exports `directoryConnectionSchema`, `directoryCreateSchema`, `DirectoryInput`, `DirectoryConnection`, and `DirectoryTestResult`.
 - [T036 codex] `DirectoryDrawer` accepts `connection` and emits `close` and `saved`.
+- [T038 claude] `func ScopeBase(connBase, requested string) (string, error)` (errors: `ErrInvalidBase`); `func WithinBase(connBase, entryDN string) bool`.
 
 ## Gotchas
 
-- [T019 claude] `x509.CertPool.AppendCertsFromPEM` silently skips blocks it can't parse. T020 must decode with `pem.Decode` and `x509.ParseCertificate` on each block to get the strict behaviour.
-- [T019 claude] `pool.Subjects()` is deprecated, so the test uses it under a `//nolint:staticcheck`.
 - [T020 claude] To keep 100% coverage, the malformed-block-before-a-valid-certificate case is tested in `tlsconf_extra_test.go`.
 - [T020 claude] To pass golangci-lint, I changed `tlsconf_test.go`: `handshake` now takes `*testPKI`, deferred `Close` calls are wrapped, and one boolean expression was rewritten.
 - [T021 claude] go-ldap's `StartTLS` formats the handshake error with `%v`, so the x509 cause is lost. Classify by step: any StartTLS error means ErrTLS.
@@ -162,3 +160,5 @@
 - [T032 claude] Running `golangci-lint` on `internal/app` reports existing gocritic warnings (`hugeParam` on `Build`'s cfg, `sloppyReassign`, and others) that this task didn't introduce.
 - [T036 codex] Fixed T035’s mutation helper to exclude GET requests.
 - [T036 codex] npm requires a writable cache here: `--cache /tmp/t036-npm-cache`.
+- [T038 claude] go-ldap's `RelativeDN.EqualFold` already matches multi-valued RDN attributes in any order. `AncestorOfFold` plus `EqualFold` is enough; the suffix-trick and escaped-comma cases need no extra handling.
+- [T038 claude] `ldap.ParseDN("")` succeeds, so T045 must reject blank and empty-value DNs itself.
