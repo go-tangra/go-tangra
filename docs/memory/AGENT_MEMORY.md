@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T047 claude] Preview: the link of this connection decides first (user status `imported` → `imported`, anything else → `existing_user`). Then an e-mail match (case-insensitive) → `existing_user`, else `new`. Items that fail `Decode` get `invalid` plus `ldapdir.Reason`.
-- [T047 claude] Deadline = dial timeout + time limit + 2 s over the whole session. A `context.DeadlineExceeded` is mapped to `ldapdir.ErrTimeout`. Directory errors are returned as the ldapdir closed errors.
-- [T047 claude] Entries are capped client-side at `SizeLimit` again (marks truncated), even though the client already does this.
-- [T048 claude] Deviation from T032: `DBStore.Atomic` is now `Atomic(ctx, scope store.Scope, fn func(any) error)` (the contract/invitedb form, which memstore already has). It refuses system/operator scopes. The old tenant-id helper is now the unexported `tenantTx`.
-- [T048 claude] The re-fetch filter is built by hand as `"(&"+CompileUserFilter(base).String()+"("+attr+"="+ldap.EscapeFilter(v)+"))"`, not through `CompileUserFilter`/`Combine`, so arbitrary uid bytes never go through user-filter rules. `SizeLimit` is 2.
 - [T048 claude] Uids that `Decode` could never produce (a non-GUID for objectGUID, over 256 bytes, invalid UTF-8, control characters) are skipped as `not_found_in_directory` without a query. Entries outside the base count as not found. More than one match → failed `directory_error`.
 - [T048 claude] Decode errors are skipped with `ldapdir.Reason`. `duplicate_email` applies only against e-mails this request already created or updated.
 - [T048 claude] Only the connection's own link counts. Linked user not `imported` → skipped `already_active`, nothing written. Linked and still imported → names refreshed, and the e-mail changes only if no other user holds it.
@@ -56,13 +51,14 @@
 - [T057 claude] `MayAssign` only checks: it writes nothing and emits no audit event. `AssignRoles` still records the refused audit event (with the target user id) when it gets `ErrSelfEscalation`. Other errors pass through unchanged.
 - [T057 claude] The final permission check goes through `NewEscalation(a.authz).MayGrant`. System actors (`KindSystem`) are now exempt in `AssignRoles` too, which matches roles and groups.
 - [T057 claude] Order inside `MayAssign`: guard `Require(ctx, tenantID)` → return nil if there are no role ids → `RolesByID(dedupe(ids))` → owners allowed → an `owner`/`admin` slug gives `ErrSelfEscalation` → gather `RolePermissions` → `MayGrant`.
+- [T058 claude] Escalation is attached with `svc.WithEscalation(e)`, not an `invite.New` parameter. `app.go` calls `a.Invites.WithEscalation(authz.InviteEscalation{Assigner: a.Assigner, Groups: a.Groups})` after Groups is built.
+- [T058 claude] `InviteEscalation` exempts `KindOperator`/`KindSystem` actors after the tenant guard, because tenant creation (operator) invites the first `owner`.
+- [T058 claude] Validation (roles/groups exist, ≤ GroupsMax) runs in its own read Tx before escalation. `store.ErrNotFound` from escalation maps to `ErrBadEmail`.
+- [T058 claude] In `CreateWith` conversion, the invitation names come from Params when given, otherwise from the user row. `Activate` always uses the row.
+- [T058 claude] Cross-tenant audit (`cross_tenant_refused`, reason `foreign_user`, details `target_tenant`) runs a separate `Atomic(Scope{System:true})` with `Tx.UserAnyTenant`, only for UUID-shaped ids.
 
 ## Interfaces
 
-- [T042 claude] `ImportItem{UID, UserID string}` (`uid`, `user_id`); `ImportIssue{UID, Reason string}` (`uid`, `reason`).
-- [T042 claude] The tests read state through the memstore methods `LinksByUIDs`, `User`, `ListUsers`, `UpdateUserStatus`, `FailNext("UpsertLink")` and `Outbox`.
-- [T043 claude] `httpapi.DirectoryService` gains `Search(ctx, a, tid, connID string, q directory.SearchRequest) (directory.SearchResult, error)` and `Import(ctx, a, tid, connID string, uids []string) (directory.ImportResult, error)`. The fake implements both, in `directory_import_test.go`.
-- [T043 claude] `directory.SearchResult` and `directory.ImportResult` must decode their own wire form with `json.Unmarshal` (the tests build them that way), including `null` for `email`, `user_id` and `reason`.
 - [T043 claude] Needs `ldapdir.FilterError{Detail string}` as a pointer error (T037 pins this).
 - [T043 claude] console.yaml (T049): `POST /api/v1/admin/directories/{id}/search` and `/{id}/import`, each with csrf and a uuid path id. The request body is `$ref` SearchRequest / ImportRequest and the 200 response is `$ref` SearchResult / ImportResult. Search declares 400 (schema with `reason` and `message`), 429, 502 and 504; import declares 400, 502 and 504.
 - [T043 claude] Schemas:
@@ -109,11 +105,13 @@
 - [T061 kimi] Endpoints (contract §A): `POST /api/v1/admin/users/activate` → 200 `{items:[{user_id,outcome:'invited'|'failed',invitation_id,reason}]}`, 403 `{reason:'self_escalation'}`; `POST /api/v1/admin/users/{id}/remove-imported` → 204 / 409 `invalid_state`.
 - [T057 claude] `func (a *Assigner) MayAssign(ctx context.Context, actor tenantctx.Actor, tenantID string, roleIDs []string) error`. Returns `ErrSelfEscalation`, `store.ErrNotFound` for unknown or foreign role ids, or the guard's error for a foreign tenant. ctx must carry the actor, because the guard and `AllowedMany` need it.
 - [T057 claude] `*Assigner` satisfies T054's `Escalation` interface only through an adapter that also takes group ids. The adapter should check groups with `Escalation.MayGrant` on the groups' permissions.
+- [T058 claude] `invite.Tx` gains `UserByID(ctx, tid, id)` and `UserAnyTenant(ctx, id)`; memstore has `UserByID` (alias of `User`).
+- [T058 claude] `func (g *authz.Groups) MayJoin(ctx, actor, tenantID string, groupIDs []string) error`
+- [T058 claude] `type authz.InviteEscalation struct{ Assigner *Assigner; Groups *Groups }` satisfies `invite.Escalation`.
+- [T058 claude] `invite.ActivateItem{UserID, Outcome, InvitationID, Reason string}`, `ActivateMax=100`, `Outcome*`/`Reason*` consts.
 
 ## Gotchas
 
-- [T037 claude] go-ldap's canonical form turns UTF-8 into hex escapes (`ü` → `\c3\bc`) and decodes unnecessary escapes (`\2c` → `,`, `\41` → `A`). This is why canonical output can go over 4096 when the input doesn't.
-- [T041 claude] The suite reuses `ttSetup`, `ttAdmin`, `ttDetails` and `ttNoSecret` from `test_test.go`. New helpers use an `st` prefix, plus fixture methods `configure`, `search`, `mustSearch`, `lastSearch`, `noDirectoryCalls` and `searched`.
 - [T041 claude] `mustSearch` fails if any directory session is left open, so always `Close` the session, including on errors.
 - [T041 claude] `TestSearchTimeout` relies on the caller's ctx deadline reaching the session, and T047 should also apply its own time limit + 2 s deadline.
 - [T042 claude] An injected `ldapdir.ErrTimeout` kills an ldapfake session, and later calls on it return `ErrUnreachable`. After a timeout the implementation must reopen the session or report the remaining entries as failed; the tests allow either. Always close every session: `OpenSessions()==0` is checked.
@@ -162,3 +160,5 @@
 - [T061 kimi] Env: `npm install` at repo root, then `npm run kit` before console tests; npm churns `package-lock.json` — restore with `git checkout`.
 - [T057 claude] The tenant guard runs even when the role list is empty, so a foreign tenant with no roles is still refused.
 - [T057 claude] `golangci-lint` `hugeParam` on `actor` is expected; the signature was fixed by T053.
+- [T058 claude] In invitedb, `UserByID`/`UserAnyTenant` return `ErrNotFound` for non-UUID ids, to avoid a Postgres uuid cast error aborting the tx.
+- [T058 claude] `httpapi/admin_test.go` `withUS2` now wires `InviteEscalation`; handler tests for activate should reuse `withUS2`.
