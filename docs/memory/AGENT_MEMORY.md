@@ -6,9 +6,6 @@
 
 ## Decisions
 
-- [T052 codex] Preserved flat API error fields in kit `ApiError.detail` to display filter parse messages.
-- [T055 claude] Rejecting non-imported users happens in `RemoveImported` after `lookup`, which returns `ErrInvalidState`. The store's `ErrNotFound` for a non-imported user is only a fallback.
-- [T055 claude] The `imported_user_deleted` row must have Outcome `ok`, SubjectKind `user`, SubjectID set to the uid, and ActorUserID set to the actor. Its details must not contain the user's e-mail (SR-007).
 - [T053 claude] `MayAssign` is a pure check: no tuple writes, no bindings, no target user, so every role in the list counts as new. Only `AssignRoles` exempts roles the target already has.
 - [T053 claude] A role id from another tenant must return `store.ErrNotFound`, not `ErrSelfEscalation`.
 - [T053 claude] Roles granted through groups are not part of `MayAssign`. Callers pass the permissions a group grants to `Escalation.MayGrant`; the test builds them with the unexported `Groups.groupGrants`.
@@ -56,11 +53,12 @@
 - [T067 claude] No CA key is kept anywhere: `gen-certs.sh` signs the server cert and then deletes the CA key. `ca.pem` is gitignored by the existing `*.pem` rule and only changes after `down -v`.
 - [T067 claude] The stack config also sets `deny_cidrs: ["172.16.0.0/12"]` (research D5, stack networks refused) and allows only `172.31.250.2/32`, so the stack LDAP is the only internal target.
 - [T067 claude] Mailpit's 8025 is not published on the host: it clashes with another project's Mailpit on this machine.
+- [T063 kimi] Echo-in-diagnostics is modeled with real text-bearing errors only on the connection-test flow (`rsEchoDir`), which provably reduces failures to closed reasons; search/import use the closed error shapes the ldapdir client produces (code-only `DirectoryError`), because the client boundary — not the directory service — drops server diagnostics (research D4/D9, covered by ldapdir client tests). Do…
+- [T063 kimi] Fixed `TestSearchAudit/filter_capped_at_1_KiB` test data to respect the D6 policy (≤64 filter components): fewer, longer components; the policy cap itself is correct per research, don't lower it.
+- [T063 kimi] Fixed `services/auth/scripts/redaction-scan.sh` to export an absolute `FREYA_CAPTURE_DIR` (T031's unowned follow-up); `ARTIFACTS=$PWD/.artifacts` workaround no longer needed.
 
 ## Interfaces
 
-- [T048 claude] `directorydb.dbTx.InsertUser` writes `status='imported'` and `display_name_explicit` exactly as decoded. It deliberately avoids `store.InsertUser`, whose `DisplayNameExplicit` heuristic would mark a derived "First Last" name as explicit.
-- [T049 claude] operationIds `searchDirectory` and `importDirectory`. TS types: `components["schemas"]["SearchRequest"|"SearchResult"|"SearchError"|"ImportRequest"|"ImportResult"|"ImportItem"|"ImportIssue"]`. `User.directory` is `{connection_id: uuid|null, connection_name, directory_uid, last_imported_at}|null`, and `User.invitation_id` is `uuid|null`.
 - [T050 claude] `user.DirectoryOrigin{ConnectionID *string; ConnectionName, DirectoryUID, LastImportedAt string}`. `UserView.Directory` and `UserView.InvitationID` are always serialized, as `null` when empty.
 - [T051 kimi] Route `/admin/directories/import`, name `admin-directory-import`, roles owner/admin; page root `data-test="directory-import"`.
 - [T051 kimi] `data-test` contract: `connection` (picker, lists `GET /api/v1/admin/directories`), `filter`/`base`/`scope`/`search-directory` (form hidden until a connection is chosen), `search-error` (server `message` verbatim for invalid_filter, else `reasonMessage(reason)`), `effective-filter`, `truncation`, `preview-row`/`preview-name`/`preview-email`/`preview-status`/`preview-reason`, row checkbox `input[ty…
@@ -109,13 +107,11 @@
 - [T065 kimi] `container(t, req)` now returns `(testcontainers.Container, host, ports)`.
 - [T067 claude] Start: `docker compose -p freya-stack -f deploy/stack/compose.yaml --profile ldap up -d --build openldap`. Connection: `ldaps://openldap:636` (or `ldap://openldap:389` + StartTLS), CA `deploy/stack/ldap/ca.pem`, bind `cn=reader,dc=example,dc=test` / `reader-password`, base `ou=Engineering,dc=example,dc=test`.
 - [T067 claude] Compose: services `ldap-certs`, `openldap` (image `freya/openldap-test:dev`), network `ldap` (172.31.250.0/29), volume `ldap-tls` (ca.crt, server.crt, server.key). `auth` now has `networks: [default, ldap]`.
+- [T063 kimi] `rsEchoDir`/`rsEchoSession` in redaction_test.go wrap an `ldapdir.Directory` so Bind/BaseExists/Open failures echo the presented bind password in diagnostic text; reusable for future redaction tests.
+- [T063 kimi] Capture files: `$FREYA_CAPTURE_DIR/directory-TestRedaction*.txt` (views/results as `%+v` + JSON bodies, errors, full audit rows).
 
 ## Gotchas
 
-- [T047 claude] Verification used throwaway stand-ins for T044/T045 in `ldapdir`, since deleted. The T041 tests need `CompileUserFilter` to reject NUL, `:dn:` and anything over 4096 bytes, and `WithinBase` to reject "not a dn" and "".
-- [T047 claude] memstore `UsersByEmails` keys the map by the stored (original-case) e-mail, so lower-case the keys before matching.
-- [T048 claude] The `directory` package still won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter`) and T045 (`WithinBase`, `ScopeBase`) land.
-- [T048 claude] memstore's `Atomic` has no rollback. After an injected `UpsertLink` failure the user row stays in memstore; only directorydb rolls it back.
 - [T048 claude] golangci-lint flags `hugeParam` in T042's `import_test.go:184` (`itAccounted`); I left it alone.
 - [T049 claude] In `console.yaml`, flow-style descriptions containing `(` or `,` must be quoted, or kin-openapi fails with "extra sibling fields".
 - [T049 claude] The service still won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter`, `FilterError`) and T045 (`ScopeBase`, `WithinBase`) land. I checked this task with a stub that I've since deleted.
@@ -162,3 +158,7 @@
 - [T067 claude] libldap's hostname check fails for `ldaps://localhost` inside the container even though `localhost` is in the SAN, so the healthcheck uses `127.0.0.1`.
 - [T067 claude] The first `up` after this change recreates `auth`, because its network set changed.
 - [T067 claude] `make redaction-scan` exits 1 even with passing integration tests; it seems to stop right after counting zero matches. Not investigated further.
+- [T063 kimi] Sentinels must keep the `LDAP-MARKER-PW-<alnum>` shape — the shell scan pattern needs an alphanumeric right after the prefix.
+- [T063 kimi] Never print a swept value on failure (suite log is itself scanned); all `rsNoSecret*` helpers report only the sink name.
+- [T063 kimi] `f.dir.Binds()` records plaintext passwords — fine in memory, but never include it in failure messages or captures.
+- [T063 kimi] Root-level `make redaction-scan` (repo root Makefile) fails for a pre-existing reason unrelated to feature 016: its script greps without `|| true` and dies under `set -e` when a pattern has 0 matches, even though its integration suite passes.
