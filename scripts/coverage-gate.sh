@@ -2,7 +2,7 @@
 # Coverage gate (Constitution Principle IV): >=80% overall, 100% for security packages.
 set -euo pipefail
 PROFILE="${1:-coverage.out}"
-MODULE="github.com/go-freya/freya"
+MODULE="github.com/go-tangra/go-tangra/v4"
 SECURITY_PKGS=("identity" "authn" "authz" "transport/tlsconf")
 total=$(go tool cover -func="$PROFILE" | awk '/^total:/ {gsub("%","",$3); print $3}')
 echo "coverage: total ${total}%"

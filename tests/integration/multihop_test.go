@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya"
-	"github.com/go-freya/freya/authn"
-	inventoryv1 "github.com/go-freya/freya/examples/two-services/api/inventory/v1"
-	"github.com/go-freya/freya/internal/testutil"
-	"github.com/go-freya/freya/observe"
+	"github.com/go-tangra/go-tangra/v4"
+	"github.com/go-tangra/go-tangra/v4/authn"
+	inventoryv1 "github.com/go-tangra/go-tangra/v4/examples/two-services/api/inventory/v1"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
+	"github.com/go-tangra/go-tangra/v4/observe"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )

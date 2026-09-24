@@ -3,7 +3,7 @@ package authz
 import (
 	"fmt"
 
-	"github.com/go-freya/freya/config"
+	"github.com/go-tangra/go-tangra/v4/config"
 )
 
 // fileSourceFactory is set by authz/file's init to avoid an import cycle.
@@ -18,7 +18,7 @@ func NewSourceFromConfig(cfg config.Authz) (Source, error) {
 	switch cfg.Source {
 	case config.AuthzFile:
 		if fileSourceFactory == nil {
-			return nil, fmt.Errorf("authz: file source not linked; import github.com/go-freya/freya/authz/file")
+			return nil, fmt.Errorf("authz: file source not linked; import github.com/go-tangra/go-tangra/v4/authz/file")
 		}
 		return fileSourceFactory(cfg.Path)
 	case config.AuthzValkey:

@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/go-freya/freya/identity"
+	"github.com/go-tangra/go-tangra/v4/identity"
 )
 
 // MemoryRevocationChecker is an in-memory identity.RevocationChecker: the

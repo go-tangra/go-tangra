@@ -1,9 +1,9 @@
-module github.com/go-freya/freya/contrib/audit-timescale
+module github.com/go-tangra/go-tangra/contrib/audit-timescale/v4
 
-go 1.25.0
+go 1.26.3
 
 require (
-	github.com/go-freya/freya v0.0.0
+	github.com/go-tangra/go-tangra/v4 v4.0.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/testcontainers/testcontainers-go v0.44.0
 )
@@ -61,7 +61,5 @@ require (
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 )
-
-replace github.com/go-freya/freya => ../..

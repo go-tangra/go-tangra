@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-freya/freya/identity"
+	"github.com/go-tangra/go-tangra/v4/identity"
 )
 
 func TestCacheHitMissAndBound(t *testing.T) {

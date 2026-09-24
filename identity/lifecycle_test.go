@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya/identity"
-	"github.com/go-freya/freya/internal/testutil"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
+	"github.com/go-tangra/go-tangra/v4/identity"
 )
 
 // renewingProvider wraps MemProvider with a Renew that may fail N times.

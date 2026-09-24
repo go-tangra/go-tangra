@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/go-freya/freya/identity"
+	"github.com/go-tangra/go-tangra/v4/identity"
 )
 
 // Rule is one policy rule (contracts/policy.schema.json).

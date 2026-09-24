@@ -139,7 +139,7 @@ const file_inventory_v1_inventory_proto_rawDesc = "" +
 	"\vreserved_by\x18\x02 \x01(\tR\n" +
 	"reservedBy2S\n" +
 	"\tInventory\x12F\n" +
-	"\aReserve\x12\x1c.inventory.v1.ReserveRequest\x1a\x1d.inventory.v1.ReserveResponseBNZLgithub.com/go-freya/freya/examples/two-services/api/inventory/v1;inventoryv1b\x06proto3"
+	"\aReserve\x12\x1c.inventory.v1.ReserveRequest\x1a\x1d.inventory.v1.ReserveResponseBVZTgithub.com/go-tangra/go-tangra/v4/examples/two-services/api/inventory/v1;inventoryv1b\x06proto3"
 
 var (
 	file_inventory_v1_inventory_proto_rawDescOnce sync.Once

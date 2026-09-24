@@ -4,7 +4,7 @@ import (
 	"context"
 	"net"
 
-	"github.com/go-freya/freya/transport"
+	"github.com/go-tangra/go-tangra/v4/transport"
 	"google.golang.org/grpc/credentials"
 )
 

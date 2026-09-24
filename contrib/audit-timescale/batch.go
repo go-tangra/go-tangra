@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-freya/freya/audit"
+	"github.com/go-tangra/go-tangra/v4/audit"
 )
 
 // Inserter writes a batch of rows in column order of the audit_events table.

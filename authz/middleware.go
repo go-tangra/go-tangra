@@ -4,13 +4,13 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/go-freya/freya/audit"
-	"github.com/go-freya/freya/authn"
-	"github.com/go-freya/freya/observe"
 	kerrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/transport"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
+	"github.com/go-tangra/go-tangra/v4/audit"
+	"github.com/go-tangra/go-tangra/v4/authn"
+	"github.com/go-tangra/go-tangra/v4/observe"
 )
 
 // ErrDenied is returned to callers for every refused authorization. The reason

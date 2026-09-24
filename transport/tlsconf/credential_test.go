@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya/internal/testutil"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
 )
 
 type rawCred struct {

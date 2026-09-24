@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-freya/freya/authn"
-	"github.com/go-freya/freya/config"
-	"github.com/go-freya/freya/identity"
+	"github.com/go-tangra/go-tangra/v4/authn"
+	"github.com/go-tangra/go-tangra/v4/config"
+	"github.com/go-tangra/go-tangra/v4/identity"
 )
 
 type badReader struct{}

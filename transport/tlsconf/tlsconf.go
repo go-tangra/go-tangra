@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-freya/freya/identity"
-	"github.com/go-freya/freya/internal/cred"
+	"github.com/go-tangra/go-tangra/v4/identity"
+	"github.com/go-tangra/go-tangra/v4/internal/cred"
 )
 
 // Options tune verification. TrustDomain is required.

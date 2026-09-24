@@ -3,7 +3,7 @@ package grpc
 import (
 	"context"
 
-	"github.com/go-freya/freya/observe"
+	"github.com/go-tangra/go-tangra/v4/observe"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )

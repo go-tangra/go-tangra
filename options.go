@@ -3,10 +3,10 @@ package freya
 import (
 	"log/slog"
 
-	"github.com/go-freya/freya/audit"
-	"github.com/go-freya/freya/authz"
-	"github.com/go-freya/freya/identity"
 	"github.com/go-kratos/kratos/v3/registry"
+	"github.com/go-tangra/go-tangra/v4/audit"
+	"github.com/go-tangra/go-tangra/v4/authz"
+	"github.com/go-tangra/go-tangra/v4/identity"
 	"go.opentelemetry.io/otel/trace"
 )
 

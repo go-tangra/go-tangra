@@ -5,11 +5,11 @@ Freya's web UI is one application composed at runtime: the **gateway shell**
 (`services/<module>/ui`, plus the auth console at `services/auth/console`) that the
 shell loads from `/m/<module>/mf-manifest.json` after the gateway announces it
 (`GET /gateway/v1/me/modules`). Feature 013 replaced the Vuetify-era front-ends
-with a single kit, `@freya/ui` (`ui/kit`), on FlyonUI + Tailwind 4 with Zod for
+with a single kit, `@go-tangra/ui` (`ui/kit`), on FlyonUI + Tailwind 4 with Zod for
 every form.
 
 ```
-ui/kit                      @freya/ui — components, forms (Zod), api client, theme, catalogue
+ui/kit                      @go-tangra/ui — components, forms (Zod), api client, theme, catalogue
 ui/scripts                  static checks (duplicates, legacy, bundle size) + their self-tests
 ui/MIGRATION.md             per-front-end status table read by the checks; bundle baseline
 services/gateway/shell      host: layouts, navigation, ops views, module boundaries
@@ -21,16 +21,16 @@ services/<module>/ui        remotes: src/remote/{routes,nav,header,boot}.ts expo
 
 - **Shared scope** (`specs/003-application-gateway/contracts/federation.md`, amended
   by `specs/013-flyonui-frontend-rework/contracts/federation-changes.md`): `vue`,
-  `vue-router`, `pinia`, `@casl/ability`, `@casl/vue`, `zod` (strict), `@freya/ui`,
-  `@freya/ui/forms`, `@freya/ui/api` (strict). The shell provides all of them; a
+  `vue-router`, `pinia`, `@casl/ability`, `@casl/vue`, `zod` (strict), `@go-tangra/ui`,
+  `@go-tangra/ui/forms`, `@go-tangra/ui/api` (strict). The shell provides all of them; a
   remote built against another kit major fails into its own error boundary
   (`ModuleBoundary` → `UiRemoteBoundary`) with a retry, the rest of the shell keeps
   working. Production remote builds declare these `import: false` so a module
   bundle contains only module code (`shell + asset` ≈ 58 % of the pre-migration
   baseline; `ui/scripts/check-bundle-size.mjs` enforces ≤ 75 %).
 - **Theme**: `useTheme()` sets `data-theme` (`freya-light` / `freya-dark`) on
-  `<html>`; the shell compiles `@freya/ui/theme.css`, remotes compile utilities
-  only. Both themes pass axe (WCAG 2.1 AA, zero serious/critical) on the
+  `<html>`; the shell compiles `@go-tangra/ui/theme.css` + `@go-tangra/ui/sources.css`
+  (the kit's `@source "./dist"`), remotes compile utilities only. Both themes pass axe (WCAG 2.1 AA, zero serious/critical) on the
   catalogue and on every module view (`tests/e2e/a11y.spec.ts`).
 - **CSP**: unchanged from feature 003 — no `unsafe-inline`, no inline `style`.
   Every e2e flow registers a `securitypolicyviolation` listener and fails on any
@@ -57,7 +57,7 @@ binds `:rules`, keeps an inline validator outside `src/schemas/`, or sets `style
 | Check | Local | CI |
 |---|---|---|
 | `node ui/scripts/check-duplicates.mjs` | `npm run check` | `ui-kit` job |
-| `node ui/scripts/check-no-legacy.mjs` | every front-end `npm run lint` | every front-end job |
+| `go-tangra-ui-check-no-legacy` (kit bin) | every front-end `npm run lint`; `npm run check` (`--root .`) | every front-end job |
 | `node ui/scripts/check-bundle-size.mjs` | after `npm run build` | `gateway-shell` job |
 | `node --test ui/scripts/tests/checks.spec.mjs` | `npm run check:self` | `ui-kit` job |
 | kit coverage thresholds | `npm run -w ui/kit test:coverage` | `ui-kit` job |

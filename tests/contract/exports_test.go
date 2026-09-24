@@ -1,10 +1,10 @@
 package contract
 
 import (
-	"github.com/go-freya/freya"
-	"github.com/go-freya/freya/transport/edge"
-	tgrpc "github.com/go-freya/freya/transport/grpc"
-	thttp "github.com/go-freya/freya/transport/http"
+	"github.com/go-tangra/go-tangra/v4"
+	"github.com/go-tangra/go-tangra/v4/transport/edge"
+	tgrpc "github.com/go-tangra/go-tangra/v4/transport/grpc"
+	thttp "github.com/go-tangra/go-tangra/v4/transport/http"
 )
 
 // The export lists are maintained by hand: adding a public constructor or option

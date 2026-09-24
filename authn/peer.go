@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/go-freya/freya/identity"
+	"github.com/go-tangra/go-tangra/v4/identity"
 )
 
 // PeerIdentity is the read-only, verified identity of the remote party.

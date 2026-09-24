@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-freya/freya/authz"
+	"github.com/go-tangra/go-tangra/v4/authz"
 )
 
 func FuzzPolicyLoad(f *testing.F) {

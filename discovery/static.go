@@ -7,8 +7,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/go-freya/freya/identity"
 	"github.com/go-kratos/kratos/v3/registry"
+	"github.com/go-tangra/go-tangra/v4/identity"
 )
 
 // Static resolves logical names from a fixed map. Endpoints are advertised with

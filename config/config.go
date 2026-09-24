@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-freya/freya/identity"
+	"github.com/go-tangra/go-tangra/v4/identity"
 )
 
 // Identity provider names settable through configuration. "localdev" is

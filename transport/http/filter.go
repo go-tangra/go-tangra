@@ -4,10 +4,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/go-freya/freya/transport"
 	"github.com/go-kratos/kratos/v3/middleware"
 	ktransport "github.com/go-kratos/kratos/v3/transport"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
+	"github.com/go-tangra/go-tangra/v4/transport"
 )
 
 // securityFilter runs the Kratos middleware chain for every HTTP request before

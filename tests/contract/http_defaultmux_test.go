@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-freya/freya/internal/testrt"
-	"github.com/go-freya/freya/internal/testutil"
-	thttp "github.com/go-freya/freya/transport/http"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testrt"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
+	thttp "github.com/go-tangra/go-tangra/v4/transport/http"
 )
 
 func TestHTTPServerNeverServesDefaultMux(t *testing.T) {

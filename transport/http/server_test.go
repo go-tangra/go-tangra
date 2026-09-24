@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya/authn"
-	"github.com/go-freya/freya/internal/testrt"
-	"github.com/go-freya/freya/internal/testutil"
+	"github.com/go-tangra/go-tangra/v4/authn"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testrt"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
 )
 
 func TestServerLimitsAndOverrides(t *testing.T) {

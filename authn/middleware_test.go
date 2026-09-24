@@ -7,10 +7,10 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/go-freya/freya/audit"
-	"github.com/go-freya/freya/internal/testutil"
-	"github.com/go-freya/freya/observe"
 	kerrors "github.com/go-kratos/kratos/v3/errors"
+	"github.com/go-tangra/go-tangra/v4/audit"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
+	"github.com/go-tangra/go-tangra/v4/observe"
 )
 
 type evSink struct{ evs []audit.Event }

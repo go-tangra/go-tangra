@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya"
-	"github.com/go-freya/freya/authn"
-	inventoryv1 "github.com/go-freya/freya/examples/two-services/api/inventory/v1"
+	"github.com/go-tangra/go-tangra/v4"
+	"github.com/go-tangra/go-tangra/v4/authn"
+	inventoryv1 "github.com/go-tangra/go-tangra/v4/examples/two-services/api/inventory/v1"
 )
 
 type countingInventory struct {

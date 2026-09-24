@@ -1,6 +1,6 @@
-module github.com/go-freya/freya
+module github.com/go-tangra/go-tangra/v4
 
-go 1.25.0
+go 1.26.3
 
 toolchain go1.26.8
 

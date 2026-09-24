@@ -1,7 +1,7 @@
 # Freya contrib modules
 
 Optional integrations, each an independent Go module so that its dependencies
-never enter the core `github.com/go-freya/freya` graph.
+never enter the core `github.com/go-tangra/go-tangra/v4` graph.
 
 | Module | Purpose | Extra dependency |
 |--------|---------|------------------|

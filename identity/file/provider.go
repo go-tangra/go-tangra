@@ -14,8 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-freya/freya/identity"
-	"github.com/go-freya/freya/internal/cred"
+	"github.com/go-tangra/go-tangra/v4/identity"
+	"github.com/go-tangra/go-tangra/v4/internal/cred"
 )
 
 // Config locates the PEM files.

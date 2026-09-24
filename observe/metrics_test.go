@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-freya/freya/authn"
-	"github.com/go-freya/freya/identity"
-	"github.com/go-freya/freya/observe"
 	kerrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/transport"
+	"github.com/go-tangra/go-tangra/v4/authn"
+	"github.com/go-tangra/go-tangra/v4/identity"
+	"github.com/go-tangra/go-tangra/v4/observe"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )

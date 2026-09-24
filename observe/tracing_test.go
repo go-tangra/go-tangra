@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/go-freya/freya/observe"
 	"github.com/go-kratos/kratos/v3/transport"
+	"github.com/go-tangra/go-tangra/v4/observe"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"

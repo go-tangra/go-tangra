@@ -3,7 +3,7 @@ package fuzz
 import (
 	"testing"
 
-	"github.com/go-freya/freya/identity"
+	"github.com/go-tangra/go-tangra/v4/identity"
 )
 
 func FuzzParseSPIFFEID(f *testing.F) {

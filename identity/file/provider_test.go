@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya/identity"
-	"github.com/go-freya/freya/internal/cred"
-	"github.com/go-freya/freya/internal/testutil"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
+	"github.com/go-tangra/go-tangra/v4/identity"
+	"github.com/go-tangra/go-tangra/v4/internal/cred"
 )
 
 func setup(t *testing.T) (*testutil.CA, string, string, string) {

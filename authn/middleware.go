@@ -5,14 +5,14 @@ import (
 	"crypto/x509"
 	"time"
 
-	"github.com/go-freya/freya/audit"
-	"github.com/go-freya/freya/identity"
-	"github.com/go-freya/freya/observe"
-	"github.com/go-freya/freya/transport/tlsconf"
 	kerrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/transport"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
+	"github.com/go-tangra/go-tangra/v4/audit"
+	"github.com/go-tangra/go-tangra/v4/identity"
+	"github.com/go-tangra/go-tangra/v4/observe"
+	"github.com/go-tangra/go-tangra/v4/transport/tlsconf"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 )

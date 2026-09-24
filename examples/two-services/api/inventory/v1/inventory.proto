@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package inventory.v1;
 
-option go_package = "github.com/go-freya/freya/examples/two-services/api/inventory/v1;inventoryv1";
+option go_package = "github.com/go-tangra/go-tangra/v4/examples/two-services/api/inventory/v1;inventoryv1";
 
 // Inventory reserves stock for orders. It is intentionally tiny: the point of
 // the example is the secure channel, not the domain.

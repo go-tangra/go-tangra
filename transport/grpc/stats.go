@@ -3,7 +3,7 @@ package grpc
 import (
 	"context"
 
-	"github.com/go-freya/freya/transport"
+	"github.com/go-tangra/go-tangra/v4/transport"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"

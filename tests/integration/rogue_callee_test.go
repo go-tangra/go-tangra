@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya"
-	"github.com/go-freya/freya/internal/testutil"
+	"github.com/go-tangra/go-tangra/v4"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

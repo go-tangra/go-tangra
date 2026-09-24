@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-freya/freya/transport"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
+	"github.com/go-tangra/go-tangra/v4/transport"
 )
 
 // RateLimit is a token bucket per client IP. Zero means the default (20/s, burst 40).

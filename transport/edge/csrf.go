@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/go-freya/freya/audit"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
+	"github.com/go-tangra/go-tangra/v4/audit"
 )
 
 // CSRF double-submit contract (contracts/token.md).

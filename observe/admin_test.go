@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya/config"
-	"github.com/go-freya/freya/identity"
-	"github.com/go-freya/freya/internal/testutil"
-	"github.com/go-freya/freya/transport/tlsconf"
+	"github.com/go-tangra/go-tangra/v4/config"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
+	"github.com/go-tangra/go-tangra/v4/identity"
+	"github.com/go-tangra/go-tangra/v4/transport/tlsconf"
 )
 
 func serve(t *testing.T, a *Admin) {

@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-freya/freya/audit"
-	"github.com/go-freya/freya/identity"
-	"github.com/go-freya/freya/observe"
-	"github.com/go-freya/freya/transport"
-	"github.com/go-freya/freya/transport/tlsconf"
+	"github.com/go-tangra/go-tangra/v4/audit"
+	"github.com/go-tangra/go-tangra/v4/identity"
+	"github.com/go-tangra/go-tangra/v4/observe"
+	"github.com/go-tangra/go-tangra/v4/transport"
+	"github.com/go-tangra/go-tangra/v4/transport/tlsconf"
 )
 
 // NewClient returns an HTTP client that presents the runtime's SVID and only

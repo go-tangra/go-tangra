@@ -9,12 +9,12 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/go-freya/freya/config"
-	"github.com/go-freya/freya/transport"
-	tgrpc "github.com/go-freya/freya/transport/grpc"
-	"github.com/go-freya/freya/transport/tlsconf"
 	"github.com/go-kratos/kratos/v3/middleware"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
+	"github.com/go-tangra/go-tangra/v4/config"
+	"github.com/go-tangra/go-tangra/v4/transport"
+	tgrpc "github.com/go-tangra/go-tangra/v4/transport/grpc"
+	"github.com/go-tangra/go-tangra/v4/transport/tlsconf"
 )
 
 // Server is a Kratos HTTP server that is always mutually authenticated and

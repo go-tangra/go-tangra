@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-freya/freya/authz"
+	"github.com/go-tangra/go-tangra/v4/authz"
 )
 
 // Source loads a policy file and polls it for changes. It never yields an

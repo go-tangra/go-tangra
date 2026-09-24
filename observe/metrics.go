@@ -35,7 +35,7 @@ type Metrics struct {
 func NewMetrics() (*Metrics, error) {
 	reader := sdkmetric.NewManualReader()
 	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	meter := mp.Meter("github.com/go-freya/freya")
+	meter := mp.Meter("github.com/go-tangra/go-tangra/v4")
 	m := &Metrics{reader: reader, provider: mp}
 	var err error
 	if m.calls, err = meter.Int64Counter("freya.calls", metric.WithDescription("Calls handled, by peer and outcome")); err != nil {

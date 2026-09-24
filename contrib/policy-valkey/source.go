@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-freya/freya/authz"
+	"github.com/go-tangra/go-tangra/v4/authz"
 )
 
 // Source loads the policy document from Valkey and reloads on pub/sub

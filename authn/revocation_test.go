@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/go-freya/freya/audit"
-	"github.com/go-freya/freya/identity"
-	"github.com/go-freya/freya/internal/testutil"
 	kerrors "github.com/go-kratos/kratos/v3/errors"
+	"github.com/go-tangra/go-tangra/v4/audit"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
+	"github.com/go-tangra/go-tangra/v4/identity"
 )
 
 type failingChecker struct{}

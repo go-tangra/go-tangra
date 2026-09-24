@@ -10,15 +10,15 @@ import (
 	"os"
 	"time"
 
-	"github.com/go-freya/freya/audit"
-	"github.com/go-freya/freya/authn"
-	"github.com/go-freya/freya/authz"
-	"github.com/go-freya/freya/config"
-	"github.com/go-freya/freya/identity"
-	"github.com/go-freya/freya/observe"
-	"github.com/go-freya/freya/transport/tlsconf"
 	kerrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/middleware"
+	"github.com/go-tangra/go-tangra/v4/audit"
+	"github.com/go-tangra/go-tangra/v4/authn"
+	"github.com/go-tangra/go-tangra/v4/authz"
+	"github.com/go-tangra/go-tangra/v4/config"
+	"github.com/go-tangra/go-tangra/v4/identity"
+	"github.com/go-tangra/go-tangra/v4/observe"
+	"github.com/go-tangra/go-tangra/v4/transport/tlsconf"
 	"go.opentelemetry.io/otel/trace"
 )
 

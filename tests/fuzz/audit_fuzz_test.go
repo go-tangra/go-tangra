@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/go-freya/freya/audit"
+	"github.com/go-tangra/go-tangra/v4/audit"
 )
 
 func FuzzAuditEventUnmarshal(f *testing.F) {

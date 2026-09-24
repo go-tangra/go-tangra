@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-freya/freya/config"
+	"github.com/go-tangra/go-tangra/v4/config"
 )
 
 // Admin is the separate, non-public operations listener: health, readiness,

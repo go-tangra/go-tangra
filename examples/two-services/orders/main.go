@@ -10,10 +10,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/go-freya/freya"
-	"github.com/go-freya/freya/config"
-	inventoryv1 "github.com/go-freya/freya/examples/two-services/api/inventory/v1"
-	"github.com/go-freya/freya/observe"
+	"github.com/go-tangra/go-tangra/v4"
+	"github.com/go-tangra/go-tangra/v4/config"
+	inventoryv1 "github.com/go-tangra/go-tangra/v4/examples/two-services/api/inventory/v1"
+	"github.com/go-tangra/go-tangra/v4/observe"
 	"google.golang.org/grpc/metadata"
 )
 

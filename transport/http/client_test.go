@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya/audit"
-	"github.com/go-freya/freya/authn"
-	"github.com/go-freya/freya/identity"
-	"github.com/go-freya/freya/internal/testrt"
-	"github.com/go-freya/freya/internal/testutil"
+	"github.com/go-tangra/go-tangra/v4/audit"
+	"github.com/go-tangra/go-tangra/v4/authn"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testrt"
+	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
+	"github.com/go-tangra/go-tangra/v4/identity"
 )
 
 func TestNewClientMutualTLSAndPinning(t *testing.T) {

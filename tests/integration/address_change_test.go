@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya"
-	inventoryv1 "github.com/go-freya/freya/examples/two-services/api/inventory/v1"
 	"github.com/go-kratos/kratos/v3/registry"
+	"github.com/go-tangra/go-tangra/v4"
+	inventoryv1 "github.com/go-tangra/go-tangra/v4/examples/two-services/api/inventory/v1"
 )
 
 // fakeRegistry is a mutable registry.Discovery: SetEndpoint moves a service to

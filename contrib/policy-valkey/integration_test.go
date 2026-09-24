@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-freya/freya/identity"
+	"github.com/go-tangra/go-tangra/v4/identity"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	valkeygo "github.com/valkey-io/valkey-go"
