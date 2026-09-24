@@ -6,9 +6,6 @@
 
 ## Decisions
 
-- [T042 claude] One Search per uid. Filter is `(&<base filter>(<AttrUID>=<escaped uid>))`, compared after parsing (root AND, first child = canonical base filter, second child = equality with the literal uid bytes). Base = connection base, ScopeSub, mapped attributes only.
-- [T042 claude] Entries are processed in request order. The second entry with the same e-mail is `duplicate_email`, and the tests inject a directory error on the Nth search to hit the Nth uid.
-- [T042 claude] Request refused with `ErrValidation` before any directory call when there are 0 or more than 500 uids, a duplicate uid or a blank uid.
 - [T042 claude] Open/TLS/Bind failure: `Import` returns the bare ldapdir sentinel (e.g. `ErrUnreachable`, `ErrTLS`, `ErrInvalidCredentials`) and nothing is imported. A per-entry Search error goes into `failed` with `directory_error`/`timeout`, and a store error with `internal`.
 - [T042 claude] An existing link whose user is not `imported` (invited, active or deactivated) gives `skipped: already_active` and the profile is untouched. An imported user whose new directory e-mail belongs to another user is still `updated`, with names refreshed and the old e-mail kept.
 - [T043 claude] Search 400 for a `*ldapdir.FilterError` (found via `errors.As`) is `{"reason":"invalid_filter","message":fe.Detail}`, exactly 2 keys. A bare `ErrInvalidFilter`, `invalid_base` and every other refusal stay `{"reason":…}` only.
@@ -56,10 +53,12 @@
 - [T052 codex] Preserved flat API error fields in kit `ApiError.detail` to display filter parse messages.
 - [T055 claude] Rejecting non-imported users happens in `RemoveImported` after `lookup`, which returns `ErrInvalidState`. The store's `ErrNotFound` for a non-imported user is only a fallback.
 - [T055 claude] The `imported_user_deleted` row must have Outcome `ok`, SubjectKind `user`, SubjectID set to the uid, and ActorUserID set to the actor. Its details must not contain the user's e-mail (SR-007).
+- [T053 claude] `MayAssign` is a pure check: no tuple writes, no bindings, no target user, so every role in the list counts as new. Only `AssignRoles` exempts roles the target already has.
+- [T053 claude] A role id from another tenant must return `store.ErrNotFound`, not `ErrSelfEscalation`.
+- [T053 claude] Roles granted through groups are not part of `MayAssign`. Callers pass the permissions a group grants to `Escalation.MayGrant`; the test builds them with the unexported `Groups.groupGrants`.
 
 ## Interfaces
 
-- [T039 claude] `type Person struct{ UID, DN, Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool }` (comparable, compared with `==`)
 - [T039 claude] `func DefaultMapping(kind string) Mapping`; `func Decode(m Mapping, e RawEntry) (Person, error)`. RawEntry attribute keys are lower-case, so `Decode` must look up `strings.ToLower(attr)`.
 - [T039 claude] Sentinels `ErrNoEmail`, `ErrInvalidEmail`, `ErrValueTooLong`, `ErrMultiValuedUID`, `ErrInvalidUID`. `Reason(err)` must return `no_email`, `invalid_email`, `value_too_long`, `multi_valued_uid`, `invalid_uid`, so add them to `closedErrors` and `reasons` in `errors.go`. Error text must not contain directory values.
 - [T037 claude] `const MaxFilterBytes = 4096`
@@ -109,11 +108,10 @@
 - [T052 codex] Import route inherits remote mounting through existing route mapping.
 - [T052 codex] Directories now links to the import page.
 - [T055 claude] The test expects `func (a *Admin) RemoveImported(ctx context.Context, actor tenantctx.Actor, uid string) error`. `AdminStore` should gain `DeleteImportedUser(ctx, tenantID, userID string) error`, which memstore already implements.
+- [T053 claude] `func (a *Assigner) MayAssign(ctx context.Context, actor tenantctx.Actor, tenantID string, roleIDs []string) error`. Returns `ErrSelfEscalation` when the actor may not grant a role. Owners may grant anything. Duplicate role ids must be tolerated.
 
 ## Gotchas
 
-- [T031 claude] `scripts/redaction-scan.sh` fails with the default relative `ARTIFACTS`: the CRUD `capture()` helper can't open `.artifacts/capture/...` from the package directory. Run it with `ARTIFACTS=$PWD/.artifacts` until the script is fixed.
-- [T031 claude] If the stored password won't decrypt (for example a ciphertext moved from another connection), the test returns a generic error, not a result, and never binds.
 - [T034 claude] Until this task, `app.Build` failed its declared-vs-mounted route check because T028's yaml routes had no handler.
 - [T032 claude] `directorydb` imports `directory` (for the interface assertion), so `directory` must never import `directorydb`.
 - [T032 claude] Running `golangci-lint` on `internal/app` reports existing gocritic warnings (`hugeParam` on `Build`'s cfg, `sloppyReassign`, and others) that this task didn't introduce.
@@ -162,3 +160,5 @@
 - [T052 codex] Build the UI kit before running console tests.
 - [T055 claude] memstore's `DeleteImportedUser` already removes the link, sessions, bindings and group memberships. T059 only needs the `userdb` side, which wraps `store.DeleteImportedUser(ctx, tx, tid, uid)` in a tenant transaction.
 - [T055 claude] The test uses `lookup`'s existing cross-tenant audit. Use `a.lookup` instead of the store directly, or the `cross_tenant_refused` assertion fails.
+- [T053 claude] `ctx` must carry the actor (`tenantctx.WithActor`), because `Client.AllowedMany` goes through the tenant guard; with a bare ctx it fails with `tenantctx: no actor`. The tests pass an actor-bearing ctx, and invite callers already have one.
+- [T053 claude] A throwaway implementation that passes the whole authz package: guard `Require(ctx, tenantID)` → `RolesByID(dedupe(ids))` → return nil for owners → `owner`/`admin` slug gives `ErrSelfEscalation` → collect `RolePermissions` → `NewEscalation(a.authz).MayGrant`. `AssignRoles` must keep skipping roles the target already has before calling it.
