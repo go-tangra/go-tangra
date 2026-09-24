@@ -6,10 +6,6 @@
 
 ## Decisions
 
-- [T039 claude] Caps: DN ≤ 1024 bytes, uid ≤ 256, trimmed mail ≤ 254, each name ≤ 100 bytes after trimming (`user.NameMax`, counted in bytes, not runes). Anything over a cap gives `ErrValueTooLong`.
-- [T037 claude] Length: input ≤ `MaxFilterBytes` (4096) and canonical output ≤ 4096. The contract and data model say 4096; `gen.go`'s comment says 4000 and is out of date.
-- [T037 claude] Depth counts filter elements on the longest root-to-leaf path, including the leaf, and must be ≤ 16. Components count every node (and/or/not plus leaves) and must be ≤ 64.
-- [T037 claude] Empty or whitespace-only input → `(objectClass=*)`. Refuse invalid UTF-8, a raw NUL, and `\00` in any assertion value (equality/substrings/ge/le/approx/extensible).
 - [T037 claude] Attribute description: `^[A-Za-z][A-Za-z0-9-]*(;[A-Za-z0-9-]+)*$` or a numeric OID. It applies to extensible-match types too. Matching rule must be a descriptor or an OID. Refuse `dnAttributes` and any case-insensitive "dn" matching rule (go-ldap parses `:DN:` as a rule name).
 - [T037 claude] Grammar refusals: `FilterError.Detail` == go-ldap inner message with the `ldap: ` prefix removed. The UTF-8 check runs before the parser. Detail must be valid UTF-8 with no control characters, so replace them in the parser's echoed trailing input.
 - [T041 claude] The effective filter is always `"(&" + canon(base_filter) + canon(user_filter) + ")"`. An empty filter on either side becomes `(objectClass=*)`, so an empty base filter still produces the `(&…)` form. Canonical means `DecompileFilter(CompileFilter(x))`.
@@ -56,12 +52,13 @@
 - [T051 kimi] `directorySearchSchema` in `schemas/directory.ts`: blank `filter`/`base`/`scope` → `undefined` (preprocess), filter trimmed ≤4096, base trimmed ≤1024, scope enum `one|sub`; the page POSTs the zod output verbatim (blank keys dropped by JSON.stringify).
 - [T051 kimi] After a successful import the page re-runs the last search (statuses refresh) and clears the selection; import-issue lines are `<display name from preview, else uid>: <reasonMessage(reason)>`; summary sentence is `Import finished: N created, N updated, N skipped, N failed.`
 - [T051 kimi] Preview status labels pinned: `New` / `Existing user` / `Imported` / `Invalid`; invalid rows also show `reasonMessage(reason)` (e.g. `no_email` → `The directory entry has no email address.`).
+- [T044 claude] Empty or all-whitespace input → `(objectClass=*)`. Leading whitespace before a real filter is a grammar error (the parser's message), as the tests require.
+- [T044 claude] Grammar refusals: `Detail` is go-ldap's inner message without the `ldap: ` prefix. Control characters and invalid UTF-8 are replaced by U+FFFD, and it is cut on a rune boundary at 256 bytes with "…" appended. Policy refusals use fixed texts that never quote the input.
+- [T044 claude] Caps: depth ≤16 elements on the longest path, ≤64 components (and/or/not nodes count too), input and canonical form each ≤4096 bytes. `Combine`'s output is not length-capped, so two filters at the cap still combine (up to 8195 bytes).
+- [T044 claude] Attribute descriptions must be a descriptor or a numeric OID (no leading zeros), optionally followed by `;option`s. Matching rules must be a descriptor or an OID. `:dn:` is refused in every spelling, including a rule that equals "dn" in any case. A NUL is refused raw or escaped in any assertion value.
 
 ## Interfaces
 
-- [T031 claude] Constants `StepConnect`, `StepTLS`, `StepBind`, `StepSearchBase`.
-- [T031 claude] Unexported `s.allow(ctx, tenantID) error` is the shared per-tenant limiter. Search (US2) should call it so tests and searches share `rate_per_minute`.
-- [T034 claude] `App.Directories *directory.Service` (nil when disabled); `(*App).buildDirectory() error`.
 - [T034 claude] `Production` for the service comes from `cfg.IsProduction()`, `Cache` from `a.Cache` and `Authz` from `a.Authz`.
 - [T032 claude] `directorydb.DBStore{St *store.Store}`; `(DBStore).Atomic(ctx context.Context, tenantID string, fn func(pgx.Tx) error) error`; plus the 8 `directory.Store` methods (compile-time assertion `var _ directory.Store = DBStore{}`).
 - [T032 claude] `app.buildDirectory` now passes `directorydb.DBStore{St: a.Store}` as `Deps.Store`.
@@ -109,11 +106,12 @@
 - [T051 kimi] `data-test` contract: `connection` (picker, lists `GET /api/v1/admin/directories`), `filter`/`base`/`scope`/`search-directory` (form hidden until a connection is chosen), `search-error` (server `message` verbatim for invalid_filter, else `reasonMessage(reason)`), `effective-filter`, `truncation`, `preview-row`/`preview-name`/`preview-email`/`preview-status`/`preview-reason`, row checkbox `input[ty…
 - [T051 kimi] Skip/fail reason wording T052 must register in `api/client.ts` registerReasons: `no_email`=`The directory entry has no email address.`, `email_in_use`=`That email address already belongs to a user.` (plus `invalid_email`, `duplicate_email`, `already_active`, `not_found_in_directory`, `value_too_long`, `multi_valued_uid`, `invalid_uid`, `internal`); `timeout`/`directory_error` already registered.
 - [T051 kimi] `userStatuses` in `api/vocab.ts` becomes `['invited','active','deactivated','imported']` (status select options pinned: `['','invited','active','deactivated','imported']`).
+- [T044 claude] `type Filter struct{ canon string }` (comparable; the zero value is refused by `Combine`), `func (Filter) String() string`
+- [T044 claude] `const MaxFilterBytes = 4096`; `func CompileUserFilter(s string) (Filter, error)`; `func Combine(base, user Filter) (Filter, error)`
+- [T044 claude] `type FilterError struct{ Detail string }`, used as a pointer. `Error()` = `"ldapdir: invalid filter: " + Detail`, and it matches `ErrInvalidFilter` (so `Reason` returns `invalid_filter`).
 
 ## Gotchas
 
-- [T028 claude] The request validator rejects an empty `bind_password` (minLength 1) with 400 `validation_failed` before the service runs. The console must leave the field out, not send `""`.
-- [T028 claude] Running `npm install` at the repo root changes the root `package-lock.json`. Revert it unless a task means to change it.
 - [T029 claude] `services/auth/tests/contract` and `services/auth/internal/app` do not build yet: `internal/httpapi/directory.go` refers to `directory.Connection`, `directory.Input`, `directory.TestResult` and `directory.ErrNotFound`, which later tasks still have to add. The manifest itself is fine.
 - [T030 claude] The directory package test binary won't compile until T031 adds `Test` and `TestSaved`. To run only the CRUD tests, move `test_test.go` aside temporarily.
 - [T030 claude] `ldap.ParseDN("")` succeeds, and `cn=,dc=x` parses with an empty value. `validDN` refuses both explicitly.
@@ -162,3 +160,5 @@
 - [T051 kimi] jsdom runs at 1280px (`setup.ts` `__vw`), so `UiDataTable` renders the table layout, not stacked cards; kit field wrappers (`UiInput`/`UiSelect`) put the native control inside `[data-test] ... input`/`select`.
 - [T051 kimi] A failing test that skips `w.unmount()` leaves stale DOM attached and `q()` (document-wide) matches it first — cascade failures after the first real one; the root failure was the kit `:checked` pitfall above.
 - [T051 kimi] Environment setup for a fresh worktree: `npm install` at repo root (writable cache: `--cache /tmp/...`), then `npm run kit`; npm may churn `package-lock.json` `dev` flags — restore it with `git checkout` if untouched deps.
+- [T044 claude] `filter_test.go` already declares a `parserDetail` test helper, so the production function is named `filterParseDetail`.
+- [T044 claude] `ldapdir` tests, the `directory` package, `app` and `tests/fuzz` still won't compile until T045 (`ScopeBase`, `WithinBase`) lands. Until then, move `dn_test.go` aside or use a throwaway stub.
