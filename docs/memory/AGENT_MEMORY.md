@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T040 kimi] The file intentionally does not compile until T044–T046 land (tests-first, same as T037/T039's suites).
-- [T046 claude] Error precedence in `Decode`: uid error first, then any over-long value (DN, names, e-mail), then no/invalid e-mail. On error the returned `Person` still has every field that decoded (for the preview row); the failing field is empty.
-- [T046 claude] A uid from any attribute other than objectGUID is used exactly as returned. It is refused as `invalid_uid` if blank or whitespace-only, invalid UTF-8, or containing a control character. Refusing these keeps the import re-fetch filter from ever carrying `\00`. objectGUID must be exactly 16 bytes; the attribute name is matched case-insensitively.
-- [T046 claude] E-mail: first value only, normalised as `invite.normEmail` does, but invalid UTF-8 and control characters are also refused (`invalid_email`). The UTF-8 check runs before `ToLower`.
-- [T046 claude] Names: first value through `user.ValidateName`. Over 100 bytes after trimming gives `value_too_long`. Invalid UTF-8 or a control character drops that name without refusing the entry. The display name falls back to `user.DeriveDisplayName(first, last, "", normalisedEmail)` with `DisplayNameExplicit=false`.
 - [T046 claude] Unknown kinds get the same preset as `"other"` (`Mapping{Email: "mail"}`).
 - [T047 claude] Order: lookup → scope/filter/base validation → `s.allow` rate limit → unseal → directory. Validation failures don't count against the rate limit (this differs from T031's Test).
 - [T047 claude] Audit `directory_searched`: subject = connection. Refused (`invalid_filter`/`invalid_base`/`rate_limited`) has no details. Failed/ok details = `filter` (canonical user filter, cut to 1024 bytes), `scope`, `count`, `truncated`, and `base` only when narrowed. A scope `ErrValidation` is not audited.
@@ -56,12 +51,14 @@
 - [T056 claude] Self-escalation is checked once for the whole request before any write: 403 `{"reason":"self_escalation"}` (exactly 1 key), no invitation, outbox row or status change. Owners may grant `owner`.
 - [T056 claude] `ActivateResult` is exactly `{items}`. There is one item per requested id (tests match by `user_id`, not order), and each item has exactly the keys `user_id, outcome, invitation_id, reason`, with null where there is no value. Failure reasons: `invalid_state` (active or already invited), `not_found` (unknown or other tenant).
 - [T056 claude] Plain `POST /admin/invitations` for an imported e-mail (case-insensitive) → the same 202 bytes as for a new or active address. It converts that row to `invited` with no second user row, and one invitation. An admin inviting with `r-owner` → 403 `self_escalation`.
+- [T061 kimi] `activateSchema` uses plain `z.string().min(1)` arrays (no uuid format check), mirroring `inviteSchema`; the server enforces uuid.
+- [T061 kimi] Activate POST body mirrors InviteDialog: `role_ids` always sent (possibly `[]`), `group_ids` only when non-empty; empty pickers → `{ user_ids: [...], role_ids: [] }`.
+- [T061 kimi] Summary format `Activation finished: N invited, N failed.`; failure lines `<email>: <reasonMessage(reason)>` — mirrors T051's import summary.
+- [T061 kimi] `invalid_state` wording pinned: `That operation is not possible in the current state.` — T062 must register it in `api/client.ts` `registerReasons` (used by both the remove 409 alert and per-user activation failures).
+- [T061 kimi] Resend reuses the existing `POST /api/v1/admin/invitations/{id}/resend` → 202 with `User.invitation_id`.
 
 ## Interfaces
 
-- [T041 claude] `type SearchResult struct{ Items []SearchItem; Truncated bool; OutOfScope int; EffectiveFilter string }` (JSON `items`, `truncated`, `out_of_scope`, `effective_filter`). `Items` is never nil.
-- [T041 claude] `type SearchItem struct{ UID, DN, Email, DisplayName, FirstName, LastName, Status, UserID, Reason string }`. It marshals to exactly 9 keys: `uid`, `dn`, `email`, `display_name`, `first_name`, `last_name`, `status`, `user_id`, `reason`. An empty `email`, `user_id` or `reason` marshals as `null`, which needs a custom `MarshalJSON`.
-- [T041 claude] `directory.Store` must gain `UsersByEmails` and `LinksByUIDs` (memstore already has both).
 - [T042 claude] `func (s *Service) Import(ctx context.Context, actor tenantctx.Actor, tenantID, connID string, uids []string) (ImportResult, error)`
 - [T042 claude] `ImportResult{Created, Updated []ImportItem; Skipped, Failed []ImportIssue}`, JSON `created/updated/skipped/failed`, empty lists marshal as `[]`.
 - [T042 claude] `ImportItem{UID, UserID string}` (`uid`, `user_id`); `ImportIssue{UID, Reason string}` (`uid`, `reason`).
@@ -109,13 +106,12 @@
 - [T056 claude] `ActivateRequest`: closed; `required: [user_ids]` only.
 - [T056 claude] `user_ids`: minItems 1, maxItems 100, uniqueItems, uuid strings.
 - [T056 claude] `role_ids`: uuid strings, minItems 0.
+- [T061 kimi] `activateSchema` exported from `schemas/directory.ts`: `{user_ids: string[] min 1 max 100 unique, role_ids?: string[], group_ids?: string[] max 50}`; `parse({user_ids:['u3']})` returns exactly `{user_ids}` (no extra keys).
+- [T061 kimi] `data-test` contract for T062: row actions `activate`/`remove-imported`/`resend`; row checkbox `input[type=checkbox]` disabled unless `status === 'imported'`; `select-all`; `activate-selected`; drawer `activate-drawer`/`activate-targets`/`activate-roles`/`activate-groups`/`activate-send`; results `activate-summary`/`activate-failure`; remove confirm label `Remove`; self_escalation alert findable v…
+- [T061 kimi] Endpoints (contract §A): `POST /api/v1/admin/users/activate` → 200 `{items:[{user_id,outcome:'invited'|'failed',invitation_id,reason}]}`, 403 `{reason:'self_escalation'}`; `POST /api/v1/admin/users/{id}/remove-imported` → 204 / 409 `invalid_state`.
 
 ## Gotchas
 
-- [T038 claude] go-ldap's `RelativeDN.EqualFold` already matches multi-valued RDN attributes in any order. `AncestorOfFold` plus `EqualFold` is enough; the suffix-trick and escaped-comma cases need no extra handling.
-- [T038 claude] `ldap.ParseDN("")` succeeds, so T045 must reject blank and empty-value DNs itself.
-- [T039 claude] A struct field with an elided composite type (`{DN: ...}` inside a struct literal) won't compile; spell out `RawEntry{...}`.
-- [T039 claude] The test helper is named `rawEntry` (and `testDN`, `adGUIDBytes`, `inviteNormEmail`, `openLDAPMapping`) to avoid clashing with the parallel T037/T038 test files.
 - [T037 claude] The tests read the corpus from `../../tests/fuzz/testdata/ldap/filters`, relative to the package directory.
 - [T037 claude] A connection with no base filter should call `CompileUserFilter("")` for the base, not pass a zero `Filter` to `Combine`.
 - [T037 claude] go-ldap's canonical form turns UTF-8 into hex escapes (`ü` → `\c3\bc`) and decodes unnecessary escapes (`\2c` → `,`, `\41` → `A`). This is why canonical output can go over 4096 when the input doesn't.
@@ -162,3 +158,7 @@
 - [T056 claude] The tests use the real `withUS2`/`withGroups` stack, so self-escalation only fires if the escalation check is wired there. If T058 adds it via a setter rather than a `invite.New` parameter, update `withUS2` in `admin_test.go` (or check in the handler).
 - [T056 claude] The OpenAPI validator does not enforce `format: uuid`, so fixture ids like `r-owner` pass. Don't write tests expecting a 400 for a non-uuid id.
 - [T056 claude] `u.call` always sends the CSRF header; `activate_test.go` has `callNoCSRF` for the missing-header case.
+- [T061 kimi] `UiDrawer` teleports to `document.body`: `wrapper.findAll` cannot see drawer content — use document-wide `q()`/`querySelectorAll` and native `el.click()` for picker checkboxes (`setValue` only works on in-wrapper elements).
+- [T061 kimi] The kit toast store is a module-level singleton; earlier tests' toasts stay in the DOM — assert on the joined text of all `[role=status]` nodes, not the first.
+- [T061 kimi] A test failing before `w.unmount()` leaves stale mounted wrappers whose document-wide `q()` matches shadow later tests (the T051 pitfall) — cascade failures after the first real one.
+- [T061 kimi] Env: `npm install` at repo root, then `npm run kit` before console tests; npm churns `package-lock.json` — restore with `git checkout`.
