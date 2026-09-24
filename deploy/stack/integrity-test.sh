@@ -11,7 +11,7 @@
 # Start the stack in integrity mode first (short certs + fast renewer), then run
 # this script:
 #   CERT_TTL=5m RENEW_INTERVAL=210 \
-#     docker compose -p freya-stack -f deploy/stack/compose.yaml up -d --build
+#     docker compose -p freya-stack -f deploy/stack/compose.yaml up -d
 #   bash deploy/stack/apply-allow.sh          # (or the gateway-bootstrap service)
 #   bash deploy/stack/integrity-test.sh
 set -uo pipefail

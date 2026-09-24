@@ -44,19 +44,19 @@ thereafter (has an SVID):
 Only two things ever cross hosts, and both are safe: the **public trust bundle**
 (no secret) and a **short-lived, single-use join token** (ephemeral). The join
 token is an EdDSA JWT minted and verified by **auth**, single-use via a burned
-`jti`. `lcmidentity.NetProvider` (`services/lcm/pkg/lcmidentity/net.go`)
+`jti`. `lcmidentity.NetProvider` (`sdk/pkg/lcmidentity/net.go` in go-tangra-lcm, module
+`github.com/go-tangra/go-tangra-lcm/sdk/v4`)
 implements the client.
 
 ## Enroll a NEW service — recipe
 
 Do the same as `notification`:
 
-1. **Depend on lcm's client package** — in the service `go.mod`:
+1. **Depend on lcm's client sdk** — in the service repository:
    ```
-   require github.com/go-freya/freya/services/lcm v0.0.0-00010101000000-000000000000
-   replace github.com/go-freya/freya/services/lcm => ../lcm
+   go get github.com/go-tangra/go-tangra-lcm/sdk/v4@v4.0.0
    ```
-   then `go mod tidy`.
+   then `go mod tidy` (import `github.com/go-tangra/go-tangra-lcm/sdk/v4/pkg/lcmidentity`).
 
 2. **Config** — add an `Enroll` struct to the service config and, in the stack
    config yaml, set identity to injected and add the enroll block:
@@ -73,7 +73,7 @@ Do the same as `notification`:
    ```
 
 3. **app.Build** — before `freya.New`, when `cfg.Enroll.Enabled`, build the
-   provider and inject it (see `services/notification/internal/app/app.go`):
+   provider and inject it (see `internal/app/app.go` in go-tangra-notification):
    ```go
    prov, _ := lcmidentity.NewNet(ctx, lcmidentity.NetConfig{
      EnrollURL: cfg.Enroll.EnrollURL, LCMGRPCTarget: cfg.Enroll.LCMGRPCTarget,
@@ -89,7 +89,7 @@ Do the same as `notification`:
    mount, add `tokens:ro` and a `<svc>-state` volume):
    ```yaml
    <svc>-token:
-     image: freya/auth:dev
+     image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
      command: ["mint-enrollment-token","-config","deploy/container.yaml",
        "-spiffe","spiffe://example.org/svc/<svc>","-ttl","30m","-out","/tokens/<svc>.token"]
      volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]

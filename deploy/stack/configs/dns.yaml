@@ -35,7 +35,7 @@ kek: { source: file, path: deploy/kek.dev }
 # The API keys are DEV file references generated once by dns-secrets-init into
 # the dns-secrets volume; production uses warden references
 # (api_key_ref: warden:<secret-id> + secrets.token_file) — see
-# services/dns/deploy/README.md.
+# deploy/README.md in go-tangra-dns.
 pdns:
   api_url: http://pdns-auth:8081
   server_id: localhost

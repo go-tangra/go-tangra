@@ -1,6 +1,6 @@
-# Freya platform stack — quick setup
+# go-tangra platform stack — quick setup
 
-A one-command, fully containerized Freya platform, bootstrapped end to end by
+A one-command, fully containerized go-tangra v4 platform, bootstrapped end to end by
 **lcm** (the SPIFFE certificate authority). Every service runs in a container
 and obtains its identity automatically; the only manual step is accepting the
 first operator invite. Workstation credentials only — never use these outside a
@@ -8,30 +8,85 @@ laptop.
 
 Services: `lcm` (CA), `auth` (identity/tokens), `gateway` (edge + module proxy),
 `notification`, `warden` (secrets, backed by Vault), `deployer` (certificate
-deployment to infrastructure targets — see `services/deployer/deploy/README.md`),
+deployment to infrastructure targets — see `deploy/README.md` in go-tangra-deployer),
 `paperless` (document management: S3 blobs, async text extraction, full-text
-search, Zanzibar sharing — see `services/paperless/deploy/README.md`),
+search, Zanzibar sharing — see `deploy/README.md` in go-tangra-paperless),
 `inventory` (IT asset inventory: endpoint agents report hardware/software/network
 snapshots to a central server with change tracking — see
-`services/inventory/deploy/README.md`),
+`deploy/README.md` in go-tangra-inventory),
 `ipam` (IP Address Management: subnets/IPs/devices/VLANs/locations/groups + active
 network discovery scanning and out-of-band IPMI/KVM control — see
-`services/ipam/deploy/README.md`),
+`deploy/README.md` in go-tangra-ipam),
 `asset` (IT Asset Management: assets with an assign/unassign lifecycle, photos and
 documents in RustFS, categories/locations/suppliers, consumables/licenses/insurance,
 depreciation, lifecycle alerts and inventory-sync against `inventory` — see
-`services/asset/deploy/README.md`),
+`deploy/README.md` in go-tangra-asset),
 `ticket` (helpdesk: tickets, conversations with emailed replies via Mailpit, CEL
 triage rules, tags, mailboxes, and an off-mesh inbound mail edge published on
-`https://localhost:9957/inbound/mail` — see `services/ticket/deploy/README.md`),
+`https://localhost:9957/inbound/mail` — see `deploy/README.md` in go-tangra-ticket),
 `dns` (PowerDNS management plane: zones/records/templates/supermasters on the
 shared `pdns-auth` server, forwarding through `pdns-recursor`, IPAM sync, the
-Freya DNS ACME provider for lcm, server configuration with container restarts
-via the Docker socket, dashboard — see `services/dns/deploy/README.md`).
+go-tangra DNS ACME provider for lcm, server configuration with container restarts
+via the Docker socket, dashboard — see `deploy/README.md` in go-tangra-dns).
 Infra: TimescaleDB, Valkey,
 OpenFGA, Mailpit, Vault, RustFS (object store), Tika + Gotenberg (extraction),
 PowerDNS Authoritative 4.9 + Recursor 5.3 (optional Prometheus: `--profile metrics`;
 optional test OpenLDAP for the auth directory import: `--profile ldap`).
+
+## Images and versions
+
+Every service runs from its published image,
+`ghcr.io/go-tangra/<repo>:${TANGRA_VERSION:-4.0.0}`; nothing is built from this
+repository except the optional test OpenLDAP (`ldap/openldap`). Set
+`TANGRA_VERSION` to run another release (all services share one version):
+
+```sh
+TANGRA_VERSION=4.0.1 deploy/stack/up.sh
+```
+
+| Compose service | Image repository |
+|---|---|
+| `auth` (+ `auth-bootstrap`, `*-token` init jobs) | `ghcr.io/go-tangra/go-tangra-auth` |
+| `gateway` (+ `gateway-bootstrap`) | `ghcr.io/go-tangra/go-tangra-portal` |
+| `lcm` (+ `lcm-bootstrap`, `renewer`) | `ghcr.io/go-tangra/go-tangra-lcm` |
+| `notification`, `warden`, `deployer`, `paperless`, `inventory`, `ipam`, `asset`, `ticket`, `dns` | `ghcr.io/go-tangra/go-tangra-<name>` |
+
+Each image carries its own `deploy/` directory (policy files included) at
+`/app/deploy`; the stack only mounts its container config
+(`configs/<svc>.yaml` → `/app/deploy/container.yaml`). The PowerDNS configs the
+stack needs live in `pdns/` (copied from go-tangra-dns `deploy/pdns`).
+
+### Running a service from a local checkout
+
+To try unreleased service code, build it from a checkout of its repository with
+a `deploy/stack/compose.override.yaml` (git-ignored by convention; compose merges
+it when passed with a second `-f`):
+
+```yaml
+# deploy/stack/compose.override.yaml
+services:
+  ipam:
+    image: go-tangra/ipam:local
+    build:
+      context: ../../../go-tangra-ipam   # path to your checkout
+      secrets: [npm_token]
+      args: { APP_VERSION: local }
+    volumes:
+      # optional: use the checkout's policy instead of the one baked into the image
+      - "../../../go-tangra-ipam/deploy/policy.yaml:/app/deploy/policy.yaml:ro"
+secrets:
+  npm_token: { environment: NODE_AUTH_TOKEN }
+```
+
+```sh
+NODE_AUTH_TOKEN=$(gh auth token) docker compose -p freya-stack -f deploy/stack/compose.yaml \
+  -f deploy/stack/compose.override.yaml up -d --build ipam
+```
+
+`up.sh` adds the override file automatically when it exists. Service images
+install `@go-tangra/ui` from GitHub Packages during the build, so the build
+needs `NODE_AUTH_TOKEN` with `read:packages` (passed as the `npm_token` build
+secret; it never lands in an image layer).
 
 > Docker note: if your shell isn't in the active `docker` group, prefix commands
 > with `sg docker -c '…'`.
@@ -40,12 +95,12 @@ optional test OpenLDAP for the auth directory import: `--profile ldap`).
 
 ```sh
 OPERATOR_EMAIL=you@example.org \
-  docker compose -p freya-stack -f deploy/stack/compose.yaml up -d --build
+  docker compose -p freya-stack -f deploy/stack/compose.yaml up -d
 # convenience wrapper (prints the operator accept link):
 OPERATOR_EMAIL=you@example.org sg docker -c 'deploy/stack/up.sh'
 ```
 
-This is idempotent (safe to re-run). It builds the images, then in order:
+This is idempotent (safe to re-run). It pulls the service images, then in order:
 
 1. **infra** — TimescaleDB (+ `init-db.sql`), Valkey (ACL users), OpenFGA, Mailpit, Vault.
 2. **`lcm-bootstrap`** — ensures the ONE DB-sealed **mesh root** and its default
@@ -82,7 +137,7 @@ To stop seeing the warning at all, trust it once on the host:
 ```sh
 docker compose -p freya-stack cp edge-cert-init:/edge/tls.crt ./freya-dev-edge.crt
 # Linux (Chrome/Chromium use the NSS store):
-certutil -d sql:$HOME/.pki/nssdb -A -t "P,," -n "Freya dev stack" -i ./freya-dev-edge.crt
+certutil -d sql:$HOME/.pki/nssdb -A -t "P,," -n "go-tangra dev stack" -i ./freya-dev-edge.crt
 # macOS: open the file in Keychain Access and set it to "Always Trust".
 ```
 
@@ -95,7 +150,7 @@ Docker volume.
 - **Integrity mode** (short-lived SVIDs, proves non-disruptive rotation):
   ```sh
   CERT_TTL=5m RENEW_INTERVAL=210 \
-    docker compose -p freya-stack -f deploy/stack/compose.yaml up -d --build
+    docker compose -p freya-stack -f deploy/stack/compose.yaml up -d
   bash deploy/stack/integrity-test.sh   # leaves rotate; root stays constant; leases hold
   ```
 
@@ -139,15 +194,14 @@ Pebble's ACME directory is also exposed on the host at
 
 ## Web UI
 
-Every module's UI is a federated remote on the shared kit `@freya/ui`
-(`ui/kit`, FlyonUI + Zod — see `docs/frontend.md`). Images build the kit and the
-module UI inside the Dockerfile's workspace stage, so a UI change needs an image
-rebuild: `docker compose -p freya-stack -f deploy/stack/compose.yaml build <service>`
-then `up -d <service>`. The shell lists a module in its navigation once the
+Every module's UI is a federated remote on the shared kit `@go-tangra/ui`
+(`ui/kit`, FlyonUI + Zod — see `docs/frontend.md`). Each service image embeds its
+UI, built against the published kit, so a UI change ships with a new service
+image (or a local build through `compose.override.yaml`, above). The shell lists a module in its navigation once the
 module registers (`registered:true` in its health output); a remote built against
 another kit major shows an error card with a retry in its own area only.
 
-Browser flows (`services/<module>/ui/tests/e2e/*-flow.spec.ts`, `a11y.spec.ts`)
+Browser flows (`ui/tests/e2e/*-flow.spec.ts`, `a11y.spec.ts` in each service repository)
 run against this stack with `E2E_OPERATOR_EMAIL` / `E2E_OPERATOR_PASSWORD`
 (`PW_CHANNEL=chrome` to use the system Chrome).
 
@@ -165,7 +219,10 @@ docker compose -p freya-stack -f deploy/stack/compose.yaml down -v   # wipes DB,
   The allow-list is idempotent **per SPIFFE id** — to change an existing entry's
   prefixes you must update the `allow_list` row (see ENROLLMENT.md).
 - **`lcm-bootstrap` (or another init) fails with `connection refused` to timescaledb on a *fresh* `up`:** a rare Postgres init-server race. The healthcheck is hardened (TCP probe) to prevent it; if you still hit it, just re-run `docker compose … up -d` — timescaledb is healthy by then and the idempotent init containers complete.
-- **Disk fills up after many rebuilds** (`ENOSPC`): `docker builder prune -af`.
+- **Disk fills up after many local builds** (`ENOSPC`): `docker builder prune -af`.
+- **`pull access denied` / `manifest unknown` for a `ghcr.io/go-tangra/...` image:**
+  that `TANGRA_VERSION` is not published for the service; pick a released version
+  or build it locally with `compose.override.yaml`.
 - **A restarted workload can't enroll:** its single-use token was already burned.
   With SVID persistence (a `*-state` volume) a restart reuses the stored SVID; a
   hard reset (`down -v`) clears state + mints a fresh token.
@@ -182,7 +239,7 @@ TOKEN=$(docker compose -p freya-stack exec -T ticket cat /secrets/relay.token)
 curl -sk https://localhost:9957/inbound/mail \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: message/rfc822" \
   -H "X-Iris-Recipient: support@example.org" \
-  --data-binary @services/ticket/testdata/mail/plain.eml
+  --data-binary @testdata/mail/plain.eml   # from a go-tangra-ticket checkout
 # -> 202 {"outcome":"created","ticket_id":"…"}
 ```
 
@@ -204,15 +261,15 @@ dig @127.0.0.1 -p 5301 www.example.test A      # resolver (pdns-recursor)
 exported by `up.sh`) so a platform admin's Configuration save can restart
 `freya-pdns-auth` / `freya-pdns-recursor` — and nothing else. The socket is
 root-equivalent on the host; see the risk note in
-`services/dns/deploy/README.md`. Prometheus for the DNS dashboard:
+`deploy/README.md` in go-tangra-dns. Prometheus for the DNS dashboard:
 `docker compose -p freya-stack --profile metrics up -d prometheus` (without it
 the dashboard shows "metrics unavailable").
 
 ## LDAP directory import (dev, optional profile `ldap`)
 
 The `ldap` profile adds a seeded test OpenLDAP (`openldap`, built from
-`services/auth/tests/integration/testdata/openldap/` — the same image the auth
-integration tests use) for trying the auth console's Directories → import flow:
+`deploy/stack/ldap/openldap/` — a copy of go-tangra-auth
+`tests/integration/testdata/openldap/`, the image the auth integration tests use) for trying the auth console's Directories → import flow:
 
 ```sh
 docker compose -p freya-stack -f deploy/stack/compose.yaml --profile ldap up -d --build openldap
@@ -236,6 +293,6 @@ only after `down -v`). Connection settings for the console:
 bridge ranges (`deny_cidrs: 172.16.0.0/12`) and re-allows exactly
 `172.31.250.2/32` — auth logs the matching `allow_cidrs` warning at startup.
 Without the profile the `ldap` network still exists but is empty. The console
-e2e `services/auth/console/tests/e2e/directory.spec.ts` uses these defaults
+e2e `console/tests/e2e/directory.spec.ts` (go-tangra-auth) uses these defaults
 (Mailpit's UI is not published on the host here — point `E2E_MAILPIT_URL` at a
 reachable Mailpit).

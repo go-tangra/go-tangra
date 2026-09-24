@@ -52,3 +52,6 @@ ui/kit/coverage/
 ui/kit/catalogue/dist/
 ui/kit/test-results/
 ui/kit/playwright-report/
+
+# Local per-developer stack overrides (e.g. build a service from a checkout)
+deploy/stack/compose.override.yaml

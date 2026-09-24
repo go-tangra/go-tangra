@@ -44,7 +44,7 @@ object_store:
 # ticket-secrets volume (read it with:
 #   docker compose -p freya-stack exec ticket cat /secrets/relay.token).
 # Production: a warden reference (relay_token_ref: warden:<secret-id>) plus
-# secrets.token_file — see services/ticket/deploy/README.md.
+# secrets.token_file — see deploy/README.md in go-tangra-ticket.
 inbound:
   addr: 0.0.0.0:9957
   tls_cert_file: /edge/tls.crt

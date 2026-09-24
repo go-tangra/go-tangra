@@ -1,10 +1,14 @@
 # Full containerized platform stack, bootstrapped end to end by lcm as the CA.
-# One command brings it up from a clean machine (builds images, plants the CA +
+# Service images are pulled from ghcr.io/go-tangra/<repo>:${TANGRA_VERSION:-4.0.0}
+# (each service lives in its own go-tangra-<name> repository; the policy files
+# are baked into the images at /app/deploy). To run a service from a local
+# checkout instead, add a compose.override.yaml (see README.md).
+# One command brings it up from a clean machine (pulls images, plants the CA +
 # SVIDs, applies the gateway allow-list, seeds the operator); the only manual
 # step left is accepting the operator invite (password + TOTP). Workstation
 # credentials only.  Bring up:
 #   OPERATOR_EMAIL=you@example.org \
-#     docker compose -p freya-stack -f deploy/stack/compose.yaml up -d --build
+#     docker compose -p freya-stack -f deploy/stack/compose.yaml up -d
 # Integrity (short-lived-SVID) mode: prefix CERT_TTL=5m RENEW_INTERVAL=210.
 # (warden is omitted here: its Vault AppRole bootstrap is a separate concern.)
 name: freya-stack
@@ -139,7 +143,7 @@ services:
   # its own identity from the same root at startup, so the whole mesh chains to
   # one root. Idempotent; needs the DB + KEK (runs as root to read both).
   lcm-bootstrap:
-    image: freya/lcm:dev
+    image: ghcr.io/go-tangra/go-tangra-lcm:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["bootstrap","-config","deploy/container.yaml","-out","/certs","-services","gateway,auth,lcm,notification","-ttl","${CERT_TTL:-12h}"]
     volumes: ["certs:/certs","./configs/lcm.yaml:/app/deploy/container.yaml:ro"]
@@ -155,7 +159,7 @@ services:
   # certs immediately (no expiry gap). Defaults: 12h certs refreshed every 6h;
   # integrity test overrides CERT_TTL=5m RENEW_INTERVAL=210.
   renewer:
-    image: freya/lcm:dev
+    image: ghcr.io/go-tangra/go-tangra-lcm:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     entrypoint: ["sh","-c"]
     command: ["while true; do lcmsvc bootstrap -config deploy/container.yaml -out /certs -services gateway,auth,lcm,notification -ttl ${CERT_TTL:-12h} && echo renewed $$(date -u +%H:%M:%S); sleep ${RENEW_INTERVAL:-21600}; done"]
@@ -166,7 +170,7 @@ services:
   # directly into the gateway DB. Idempotent per row; runs on every up so the
   # allow-list is never "lost" after a DB reset. Replaces apply-allow.sh.
   gateway-bootstrap:
-    image: freya/gateway:dev
+    image: ghcr.io/go-tangra/go-tangra-portal:${TANGRA_VERSION:-4.0.0}
     command: ["bootstrap","-config","deploy/container.yaml",
       "-allow","spiffe://example.org/svc/auth=/api/v1,/authorize,/.well-known,/console;auth",
       "-allow","spiffe://example.org/svc/lcm=/api/lcm;lcm",
@@ -189,7 +193,7 @@ services:
   # invitation (idempotent: reuses a pending invite, skips if already accepted).
   # The accept URL is printed to this container's logs and emailed to mailpit.
   auth-bootstrap:
-    image: freya/auth:dev
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["bootstrap","-config","deploy/container.yaml","-operator-email","${OPERATOR_EMAIL:-admin@example.org}"]
     volumes: ["certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
@@ -201,8 +205,7 @@ services:
       lcm-bootstrap: { condition: service_completed_successfully }
 
   lcm:
-    image: freya/lcm:dev
-    build: { context: ../.., dockerfile: services/lcm/Dockerfile }
+    image: ghcr.io/go-tangra/go-tangra-lcm:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
     # SSL_CERT_FILE points Go's system trust pool at the base OS roots plus the
@@ -213,7 +216,6 @@ services:
       SSL_CERT_FILE: /pebble-ca/bundle.pem
     volumes:
       - "./configs/lcm.yaml:/app/deploy/container.yaml:ro"
-      - "../../services/lcm/deploy/policy.yaml:/app/deploy/policy.yaml:ro"
       - "pebble-certs:/pebble-ca:ro"
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9591/readyz"], interval: 5s, timeout: 3s, retries: 40, start_period: 5s }
     depends_on:
@@ -223,8 +225,7 @@ services:
       pebble-certs: { condition: service_completed_successfully }
 
   auth:
-    image: freya/auth:dev
-    build: { context: ../.., dockerfile: services/auth/Dockerfile }
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
     # `ldap` is the isolated network of the optional openldap service (profile
@@ -247,7 +248,7 @@ services:
   # Mint the gateway's single-use join token (it enrolls direct to lcm's keyless
   # listener, since it cannot enroll through itself).
   gateway-token:
-    image: freya/auth:dev
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/gateway","-ttl","30m","-out","/tokens/gateway.token"]
     volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
@@ -259,8 +260,7 @@ services:
       auth-bootstrap: { condition: service_completed_successfully }
 
   gateway:
-    image: freya/gateway:dev
-    build: { context: ../.., dockerfile: services/gateway/Dockerfile }
+    image: ghcr.io/go-tangra/go-tangra-portal:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     ports: ["8443:8443"]
     command: ["-config","deploy/container.yaml"]
@@ -280,7 +280,7 @@ services:
   # running auth) into the shared tokens volume. Demonstrates the multi-host
   # bootstrap: in production the gateway/console mints these per workload.
   notification-token:
-    image: freya/auth:dev
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/notification","-ttl","30m","-out","/tokens/notification.token"]
     volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
@@ -294,8 +294,7 @@ services:
   # notification enrolls over the network (no /certs mount): first SVID via the
   # public HTTP enroll route with its join token, then mTLS renewal direct to lcm.
   notification:
-    image: freya/notification:dev
-    build: { context: ../.., dockerfile: services/notification/Dockerfile }
+    image: ghcr.io/go-tangra/go-tangra-notification:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
     volumes: ["tokens:/tokens:ro","notification-state:/state","./configs/notification.yaml:/app/deploy/container.yaml:ro"]
@@ -310,7 +309,7 @@ services:
 
   # Mint warden's join token (workload; enrolls via the gateway edge like notification).
   warden-token:
-    image: freya/auth:dev
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/warden","-ttl","30m","-out","/tokens/warden.token"]
     volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
@@ -322,11 +321,10 @@ services:
       auth-bootstrap: { condition: service_completed_successfully }
 
   warden:
-    image: freya/warden:dev
-    build: { context: ../.., dockerfile: services/warden/Dockerfile }
+    image: ghcr.io/go-tangra/go-tangra-warden:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","warden-state:/state","vault-creds:/vault-creds:ro","./configs/warden.yaml:/app/deploy/container.yaml:ro","../../services/warden/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    volumes: ["tokens:/tokens:ro","warden-state:/state","vault-creds:/vault-creds:ro","./configs/warden.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9490/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
       timescaledb: { condition: service_healthy }
@@ -339,7 +337,7 @@ services:
 
   # Mint the deployer's single-use join token (enrolls via the gateway edge).
   deployer-token:
-    image: freya/auth:dev
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/deployer","-ttl","30m","-out","/tokens/deployer.token"]
     volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
@@ -354,11 +352,10 @@ services:
   # public HTTP enroll route with its join token, then mTLS renewal to lcm.
   # It distributes lcm-issued certs to endpoints via pluggable providers.
   deployer:
-    image: freya/deployer:dev
-    build: { context: ../.., dockerfile: services/deployer/Dockerfile }
+    image: ghcr.io/go-tangra/go-tangra-deployer:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","deployer-state:/state","./configs/deployer.yaml:/app/deploy/container.yaml:ro","../../services/deployer/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    volumes: ["tokens:/tokens:ro","deployer-state:/state","./configs/deployer.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9690/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
       timescaledb: { condition: service_healthy }
@@ -370,7 +367,7 @@ services:
 
   # Mint paperless's single-use join token (enrolls via the gateway edge).
   paperless-token:
-    image: freya/auth:dev
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/paperless","-ttl","30m","-out","/tokens/paperless.token"]
     volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
@@ -386,11 +383,10 @@ services:
   # stores document bytes in RustFS, extracts via Tika/Gotenberg, and publishes
   # processing events to the platform bus.
   paperless:
-    image: freya/paperless:dev
-    build: { context: ../.., dockerfile: services/paperless/Dockerfile }
+    image: ghcr.io/go-tangra/go-tangra-paperless:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","paperless-state:/state","./configs/paperless.yaml:/app/deploy/container.yaml:ro","../../services/paperless/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    volumes: ["tokens:/tokens:ro","paperless-state:/state","./configs/paperless.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9790/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
       timescaledb: { condition: service_healthy }
@@ -406,7 +402,7 @@ services:
   # Mint inventory's single-use join token (the SERVER enrolls via the gateway edge
   # for its own mesh SVID; endpoint AGENTS enroll separately at the ingest edge).
   inventory-token:
-    image: freya/auth:dev
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/inventory","-ttl","30m","-out","/tokens/inventory.token"]
     volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
@@ -422,11 +418,10 @@ services:
   # AND a separate off-mesh INGEST EDGE (:9977) that authenticated endpoint agents
   # post snapshots to. The ingest port is published for agents outside the mesh.
   inventory:
-    image: freya/inventory:dev
-    build: { context: ../.., dockerfile: services/inventory/Dockerfile }
+    image: ghcr.io/go-tangra/go-tangra-inventory:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","inventory-state:/state","./configs/inventory.yaml:/app/deploy/container.yaml:ro","../../services/inventory/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    volumes: ["tokens:/tokens:ro","inventory-state:/state","./configs/inventory.yaml:/app/deploy/container.yaml:ro"]
     ports: ["9977:9977"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9810/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
@@ -439,7 +434,7 @@ services:
 
   # Mint ipam's single-use join token (enrolls via the gateway edge for its mesh SVID).
   ipam-token:
-    image: freya/auth:dev
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/ipam","-ttl","30m","-out","/tokens/ipam.token"]
     volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
@@ -455,12 +450,11 @@ services:
   # scanning needs NET_RAW; SNMP/TCP/IPMI/KVM reach lab hosts), and references BMC/
   # SNMP secrets via warden. The KVM console proxy is mounted at /bmc/ (token-gated).
   ipam:
-    image: freya/ipam:dev
-    build: { context: ../.., dockerfile: services/ipam/Dockerfile }
+    image: ghcr.io/go-tangra/go-tangra-ipam:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     cap_add: ["NET_RAW"]
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","ipam-state:/state","./configs/ipam.yaml:/app/deploy/container.yaml:ro","../../services/ipam/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    volumes: ["tokens:/tokens:ro","ipam-state:/state","./configs/ipam.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9820/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
       timescaledb: { condition: service_healthy }
@@ -473,7 +467,7 @@ services:
 
   # Mint asset's single-use join token (enrolls via the gateway edge for its mesh SVID).
   asset-token:
-    image: freya/auth:dev
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/asset","-ttl","30m","-out","/tokens/asset.token"]
     volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
@@ -489,11 +483,10 @@ services:
   # insurance, DDB depreciation, lifecycle scheduler, inventory-sync against the
   # inventory module over SPIFFE mTLS). Enrolls over the network for its mesh SVID.
   asset:
-    image: freya/asset:dev
-    build: { context: ../.., dockerfile: services/asset/Dockerfile }
+    image: ghcr.io/go-tangra/go-tangra-asset:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","asset-state:/state","./configs/asset.yaml:/app/deploy/container.yaml:ro","../../services/asset/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    volumes: ["tokens:/tokens:ro","asset-state:/state","./configs/asset.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9830/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
       timescaledb: { condition: service_healthy }
@@ -507,7 +500,7 @@ services:
 
   # Mint ticket's single-use join token (enrolls via the gateway edge for its mesh SVID).
   ticket-token:
-    image: freya/auth:dev
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/ticket","-ttl","30m","-out","/tokens/ticket.token"]
     volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
@@ -541,11 +534,10 @@ services:
   # posts raw RFC 822 messages to with the relay token. Attachments live in RustFS;
   # public replies and auto-acknowledgements go out through Mailpit.
   ticket:
-    image: freya/ticket:dev
-    build: { context: ../.., dockerfile: services/ticket/Dockerfile }
+    image: ghcr.io/go-tangra/go-tangra-ticket:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","ticket-state:/state","ticket-secrets:/secrets:ro","edge-cert:/edge:ro","./configs/ticket.yaml:/app/deploy/container.yaml:ro","../../services/ticket/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+    volumes: ["tokens:/tokens:ro","ticket-state:/state","ticket-secrets:/secrets:ro","edge-cert:/edge:ro","./configs/ticket.yaml:/app/deploy/container.yaml:ro"]
     ports: ["9957:9957"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9840/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
@@ -601,7 +593,7 @@ services:
   pdns-auth:
     image: powerdns/pdns-auth-49@sha256:b554df74bbde1afa7caedad4af9c91378be6d46d05807d089b3c7c443002e684
     container_name: freya-pdns-auth
-    volumes: ["pdns-auth-data:/var/lib/powerdns","pdns-auth-conf:/etc/powerdns/pdns.d","../../services/dns/deploy/pdns/pdns.conf:/etc/powerdns/pdns.conf:ro"]
+    volumes: ["pdns-auth-data:/var/lib/powerdns","pdns-auth-conf:/etc/powerdns/pdns.d","./pdns/pdns.conf:/etc/powerdns/pdns.conf:ro"]
     ports: ["127.0.0.1:5300:53/udp","127.0.0.1:5300:53/tcp"]
     healthcheck: { test: ["CMD","pdns_control","rping"], interval: 5s, timeout: 3s, retries: 30, start_period: 5s }
     restart: unless-stopped
@@ -611,7 +603,7 @@ services:
   pdns-recursor:
     image: powerdns/pdns-recursor-53@sha256:175d551ce52fa5c6bf0a0c19d6872791a4c928f6fb00a696534c1174693da3f7
     container_name: freya-pdns-recursor
-    volumes: ["pdns-recursor-conf:/etc/powerdns/recursor.d","pdns-recursor-api:/var/lib/pdns-recursor-api","../../services/dns/deploy/pdns/recursor.yml:/etc/powerdns/recursor.conf:ro"]
+    volumes: ["pdns-recursor-conf:/etc/powerdns/recursor.d","pdns-recursor-api:/var/lib/pdns-recursor-api","./pdns/recursor.yml:/etc/powerdns/recursor.conf:ro"]
     ports: ["127.0.0.1:5301:53/udp","127.0.0.1:5301:53/tcp"]
     healthcheck: { test: ["CMD","rec_control","ping"], interval: 5s, timeout: 3s, retries: 30, start_period: 5s }
     restart: unless-stopped
@@ -635,8 +627,8 @@ services:
     restart: "no"
 
   openldap:
-    image: freya/openldap-test:dev
-    build: { context: ../../services/auth/tests/integration/testdata/openldap }
+    image: go-tangra/openldap-test:dev
+    build: { context: ./ldap/openldap }
     profiles: ["ldap"]
     volumes: ["ldap-tls:/tls:ro"]
     networks:
@@ -663,7 +655,7 @@ services:
 
   # Mint dns's single-use join token (enrolls via the gateway edge for its mesh SVID).
   dns-token:
-    image: freya/auth:dev
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/dns","-ttl","30m","-out","/tokens/dns.token"]
     volumes: ["tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
@@ -680,16 +672,15 @@ services:
   # saves can restart ONLY freya-pdns-auth / freya-pdns-recursor (restart-only
   # client, container names from configs/dns.yaml). The socket is
   # root-equivalent on the host: production uses an API-filtering socket proxy
-  # or docker.enabled: false (see services/dns/deploy/README.md). DOCKER_GID is
+  # or docker.enabled: false (see deploy/README.md in go-tangra-dns). DOCKER_GID is
   # the socket's group (deploy/stack/up.sh exports it).
   dns:
-    image: freya/dns:dev
-    build: { context: ../.., dockerfile: services/dns/Dockerfile }
+    image: ghcr.io/go-tangra/go-tangra-dns:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     group_add: ["${DOCKER_GID:-999}"]
     command: ["-config","deploy/container.yaml"]
     volumes: ["tokens:/tokens:ro","dns-state:/state","dns-secrets:/secrets:ro","pdns-auth-conf:/pdns-auth-conf","pdns-recursor-conf:/pdns-recursor-conf",
-      "/var/run/docker.sock:/var/run/docker.sock","./configs/dns.yaml:/app/deploy/container.yaml:ro","../../services/dns/deploy/policy.yaml:/app/deploy/policy.yaml:ro"]
+      "/var/run/docker.sock:/var/run/docker.sock","./configs/dns.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9850/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
       timescaledb: { condition: service_healthy }
