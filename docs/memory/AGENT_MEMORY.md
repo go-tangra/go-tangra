@@ -6,10 +6,6 @@
 
 ## Decisions
 
-- [T028 claude] `size_limit` must be 1–1000 and `time_limit_seconds` 1–60 in both input and output. `last_test`, `TestResult.step`, `reason` and `tls` are `nullable: true`.
-- [T029 claude] `directory:manage` goes before `tenants:operate` in the operator grant list, and the nav entry comes right after Users (order 800) so entries stay sorted by order.
-- [T030 claude] `Input` uses pointer fields (T024 form); nil means default on create and keep on update. I converted T025's `test_test.go` to this form (`ttPtr(...)` only). A zero `Input{}` is still detectable with `reflect.ValueOf(in).IsZero()`, as T033 needs.
-- [T030 claude] `Connection` is a type alias for `View`. `TestResult` and `TLSInfo` are defined in `directory.go` (httpapi needs them). An empty `Step`/`Reason` marshals as JSON `null`.
 - [T030 claude] Only policy refusals are audited as refused (`insecure_transport`, `target_refused`, `limit_reached`) on created/updated. Plain input errors are not audited.
 - [T030 claude] Update audit details are `{"fields": [...]}` with field names only; a password change shows as `bind_credential`.
 - [T030 claude] DN and filter validation is local to `directory` (`validDN`, `canonicalFilter`) because ldapdir's filter/DN helpers don't exist yet (T044/T045).
@@ -56,11 +52,13 @@
 - [T043 claude] The handler passes uids verbatim; `*` and `a)(|(uid=*)` are the service's job to escape. Import bodies that are empty, contain duplicates, have more than 500 uids, or carry unknown fields → 400 before the service is called. kin-openapi enforces `uniqueItems`/`maxItems` when they are in the yaml.
 - [T043 claude] A zero `directory.ImportResult` must render all four arrays as `[]`, never `null`. A search with no results renders `items: []`.
 - [T043 claude] The users list: every item always carries the `directory` and `invitation_id` keys (as `null` when empty). `directory` has exactly `connection_id` (null once the connection is deleted), `connection_name`, `directory_uid` and `last_imported_at` (RFC 3339 UTC), and never the DN.
+- [T040 kimi] Fuzz targets assert the same invariants the table suites pin (T037/T038/T039), nothing stricter: canonical fixed-point via `again != got`, combined shape checked structurally on the go-ldap BER packet (root AND, 2 children, base first), caps asserted only on successful decode.
+- [T040 kimi] Refusal paths assert the closed vocabulary (`ErrInvalidFilter`/`ErrInvalidBase`/`ErrInvalidURL`/`ErrTargetRefused`) since the sentinels already exist in errors.go.
+- [T040 kimi] No length cap asserted on `Combine` output (T037 pins Combine-at-caps succeeds, so the combined filter may exceed 4 KiB); name cap asserted only when `Person.DisplayNameExplicit` (the derived "First Last" fallback can legitimately reach 201 bytes).
+- [T040 kimi] The file intentionally does not compile until T044–T046 land (tests-first, same as T037/T039's suites).
 
 ## Interfaces
 
-- [T026 claude] Sentinels the tests use: `directory.ErrValidation` (400 validation_failed), `ErrInsecureTransport` (400), `ErrDuplicate` (409 duplicate), `ErrLimitReached` (409 limit_reached), `ErrRateLimited` (429).
-- [T027 claude] `console.yaml`: `info.version: 1.2.0`; `DirectoryConnectionInput.bind_password` is `{type: string, minLength: 1, maxLength: 1024, writeOnly: true}`; maxLength is name 80, url 512, ca_pem 65536, bind_dn/base_dn 1024, base_filter 4096; `{id}` path params are `format: uuid`; `TestResult.step` enum is exactly `[connect, tls, bind, search_base]` (a `null` entry is ignored).
 - [T027 claude] Manifest: the Permission, Ability and Nav entry must match contract B exactly, word for word (the description too).
 - [T033 claude] `httpapi.PermDirectoryManage = "directory:manage"`.
 - [T033 claude] `RequirePermission(r *http.Request, az PermissionChecker, perm string) (tenantctx.Actor, error)`.
@@ -109,13 +107,11 @@
 - [T043 claude] Needs `ldapdir.FilterError{Detail string}` as a pointer error (T037 pins this).
 - [T043 claude] console.yaml (T049): `POST /api/v1/admin/directories/{id}/search` and `/{id}/import`, each with csrf and a uuid path id. The request body is `$ref` SearchRequest / ImportRequest and the 200 response is `$ref` SearchResult / ImportResult. Search declares 400 (schema with `reason` and `message`), 429, 502 and 504; import declares 400, 502 and 504.
 - [T043 claude] Schemas:
+- [T040 kimi] Consumes exactly the contracts §C / T037-pinned surface: `type Filter struct{...}` with `String() string` (comparable, zero = ""), `const MaxFilterBytes = 4096`, `CompileUserFilter(string) (Filter, error)`, `Combine(base, user Filter) (Filter, error)`; `ScopeBase(connBase, requested string) (string, error)`, `WithinBase(connBase, entryDN string) bool`; `Mapping{UID,Email,DisplayName,FirstName,Las…
+- [T040 kimi] Corpus is read at `testdata/ldap/{filters,dns,urls,objectguid}` relative to the fuzz package (files have no trailing newline; `.bin` fixtures are non-UTF-8 bytes in strings).
 
 ## Gotchas
 
-- [T024 claude] Test helper names start with `crud`/`newCRUD` (plus `sp`, `ip`, `bp`, `actorOf`, `validInput`, `capture`, `assertNoSecret`, `testCAPEM`, `bindAD`) so they don't collide with T025's `test_test.go` in the same package.
-- [T024 claude] The fixture uses `DenyCIDRs: 10.0.0.0/8`, so `ldaps://10.1.2.3` is expected to return `ErrTargetRefused`.
-- [T024 claude] Mapping `store.ErrConflict` to `ErrDuplicate` also has to happen on Update (renaming onto another connection's name).
-- [T025 claude] The test seeds connections directly into memstore, sealed with AD `ldap-bind:<tid>:<id>`. The service must decrypt using the tenant id and connection id.
 - [T025 claude] `TestTestStoreFailure` uses `ms.FailNext("SetDirectoryConnectionTest")`, so the memstore adapter must end up calling that memstore method.
 - [T025 claude] Plaintext must be refused when `Production` is true even if `AllowPlaintext` is set.
 - [T025 claude] The service must itself check the scheme against `TLSMode` and parse the CA before `Open`, because ldapfake's `Open` validates nothing.
@@ -162,3 +158,7 @@
 - [T043 claude] `directory_test.go`'s shared `fakeDirectories` now has `found`/`imp` fields and `dirCall.Search`/`dirCall.UIDs`. `dirRoutes()` includes search and import, so the existing permission, CSRF and feature-disabled tests cover them.
 - [T043 claude] `app.go` won't build once `DirectoryService` gains Search/Import until `*directory.Service` implements both.
 - [T043 claude] The users-list test uses the real memstore: `ListUsers` already fills `store.User.Directory` and `InvitationID`, so T050 only needs to map them onto `UserView`.
+- [T040 kimi] AD objectGUID bytes are not valid UTF-8 — never UTF-8-check the uid value before the GUID-length/decode branch (hit this in the stub).
+- [T040 kimi] `ldap.ParseDN` trims insignificant spaces, so `sameDNFold` comparisons accept spaced DN spellings; `EqualFold` handles multi-valued RDN order.
+- [T040 kimi] The ScopeBase no-echo fuzz guard is gated on `len(requested) >= 24` — short inputs like "a" appear in fixed error words and would false-positive.
+- [T040 kimi] Go fuzzing writes only failing inputs into `testdata`; passing runs never mutate the corpus.
