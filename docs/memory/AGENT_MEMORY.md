@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T026 claude] The handlers depend on an interface, not on `*directory.Service`, so the tests use a fake and don't depend on T024/T025's constructor.
-- [T026 claude] Every service method takes `(ctx, actor tenantctx.Actor, tenantID string, …)` and the handler always passes `a.TenantID`; the fake fails the test otherwise.
-- [T026 claude] Saved-connection test calls `Test(ctx, a, a.TenantID, directory.Input{}, id)`. A zero `Input` means "use the stored settings and persist last_test", following the single `Test` in contracts §C. Unsaved test passes the decoded body plus `connection_id` (empty if absent).
-- [T026 claude] Owner/admin pass without an authz call. Any other role needs `Allowed(...)==true`. An authz error means refused (fail closed).
-- [T026 claude] `Enabled:false` → every directory route answers 404 `{"reason":"not_found"}` before authentication or authz. T034 must register with `Enabled: cfg.Directory.Enabled` and not skip registration: a declared but unregistered route answers 501.
 - [T027 claude] The contract test expects create (POST) and update (PUT) request bodies to be `$ref: '#/components/schemas/DirectoryConnectionInput'`; POST 201, GET `/{id}` 200 and PUT 200 to be `$ref …/DirectoryConnection`; list 200 to be `{items: array of $ref DirectoryConnection}`; both test routes 200 to be `$ref …/TestResult`, all under `application/json`.
 - [T027 claude] `DirectoryConnection` may hold only the contract fields plus an optional `ca_pem`. `ca_pem` goes into the same schema, not a separate one.
 - [T027 claude] `POST /api/v1/admin/directories/test` needs its own flat, closed body schema with `connection_id` and a writeOnly `bind_password` (not `allOf`), because a closed schema can't be combined with `allOf`.
@@ -56,14 +51,14 @@
 - [T039 claude] A uid with more than one value gives `ErrMultiValuedUID` and no value is picked. A missing or unmapped uid gives `ErrInvalidUID`.
 - [T039 claude] Mail, display name, first name and last name use the first value.
 - [T039 claude] Caps: DN ≤ 1024 bytes, uid ≤ 256, trimmed mail ≤ 254, each name ≤ 100 bytes after trimming (`user.NameMax`, counted in bytes, not runes). Anything over a cap gives `ErrValueTooLong`.
+- [T037 claude] Length: input ≤ `MaxFilterBytes` (4096) and canonical output ≤ 4096. The contract and data model say 4096; `gen.go`'s comment says 4000 and is out of date.
+- [T037 claude] Depth counts filter elements on the longest root-to-leaf path, including the leaf, and must be ≤ 16. Components count every node (and/or/not plus leaves) and must be ≤ 64.
+- [T037 claude] Empty or whitespace-only input → `(objectClass=*)`. Refuse invalid UTF-8, a raw NUL, and `\00` in any assertion value (equality/substrings/ge/le/approx/extensible).
+- [T037 claude] Attribute description: `^[A-Za-z][A-Za-z0-9-]*(;[A-Za-z0-9-]+)*$` or a numeric OID. It applies to extensible-match types too. Matching rule must be a descriptor or an OID. Refuse `dnAttributes` and any case-insensitive "dn" matching rule (go-ldap parses `:DN:` as a rule name).
+- [T037 claude] Grammar refusals: `FilterError.Detail` == go-ldap inner message with the `ldap: ` prefix removed. The UTF-8 check runs before the parser. Detail must be valid UTF-8 with no control characters, so replace them in the parser's echoed trailing input.
 
 ## Interfaces
 
-- [T022 claude] Errors: `ErrUnreachable`, `ErrTimeout`, `ErrTLS`, `ErrInvalidCredentials`, `ErrBaseNotFound`, `ErrDirectory`, `ErrInvalidFilter`, `ErrInvalidBase` (in `errors.go`); `type DirectoryError struct{ Code int }` (matches `ErrDirectory`); `func Reason(err error) string` returns target_refused, unreachable, timeout, tls_failed, invalid_credentials, base_not_found, invalid_filter, invalid_base, invalid_url…
-- [T022 claude] `mapError(err) error` is unexported; T023's fake should return the exported sentinels or `*DirectoryError` directly.
-- [T023 claude] `ldapfake.New() *Directory` (implements `ldapdir.Directory`, safe for concurrent use); `type Entry struct{DN string; Attrs map[string][][]byte}`; `func Vals(...string) [][]byte`.
-- [T023 claude] Fixtures: `Add(Entry)` (panics on a bad DN), `AddAlias(dn, target)`, `AddReferral(dn, url)`, `SetCredentials(dn, pw)`, `SetDerefAliases(bool)`, `SetServerSizeLimit(n)` (0 = none), `SetTimeLimitAfter(n)` (negative = off, which is the default; otherwise returns n entries, Truncated), `SetDelay(d)`, `SetTLSVersion(v)` (default TLS 1.3; plain sessions report `ok=false`).
-- [T023 claude] `InjectError(op Op, errs ...error)` with `OpOpen|OpBind|OpBaseExists|OpSearch`; errors are used in order, one per call, and a nil entry lets that call run normally.
 - [T023 claude] Records: `Opens() []ldapdir.ConnParams`, `Binds() []BindCall{DN, Password}`, `BaseChecks() []string`, `Searches() []SearchCall{Query; Deref int (always ldap.NeverDerefAliases); WireSizeLimit (=SizeLimit+1); WireTimeLimit (whole seconds, rounded up)}`, `OpenSessions() int`.
 - [T024 claude] `type Deps struct{ Store Store; Directory ldapdir.Directory; Envelope *crypto.Envelope; Policy *ldapdir.TargetPolicy; Config config.Directory; Production bool; Cache *cache.Cache; Audit *audit.Writer; Now func() time.Time }`; `func New(Deps) *Service`. Passing `*memstore.Store` as `Store` must work.
 - [T024 claude] `(s *Service) Create(ctx, tenantctx.Actor, tenantID string, Input) (View, error)`; `Update(ctx, actor, tenantID, id string, Input) (View, error)`; `Get(ctx, actor, tenantID, id) (View, error)`; `List(ctx, actor, tenantID) ([]View, error)`; `Remove(ctx, actor, tenantID, id) error`.
@@ -109,12 +104,14 @@
 - [T039 claude] `type Person struct{ UID, DN, Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool }` (comparable, compared with `==`)
 - [T039 claude] `func DefaultMapping(kind string) Mapping`; `func Decode(m Mapping, e RawEntry) (Person, error)`. RawEntry attribute keys are lower-case, so `Decode` must look up `strings.ToLower(attr)`.
 - [T039 claude] Sentinels `ErrNoEmail`, `ErrInvalidEmail`, `ErrValueTooLong`, `ErrMultiValuedUID`, `ErrInvalidUID`. `Reason(err)` must return `no_email`, `invalid_email`, `value_too_long`, `multi_valued_uid`, `invalid_uid`, so add them to `closedErrors` and `reasons` in `errors.go`. Error text must not contain directory values.
+- [T037 claude] `const MaxFilterBytes = 4096`
+- [T037 claude] `type Filter struct{ /* unexported canonical string */ }`: comparable, and the zero value's `String()` is `""`; `func (Filter) String() string`
+- [T037 claude] `func CompileUserFilter(s string) (Filter, error)`: returns a zero `Filter` on error
+- [T037 claude] `func Combine(base, user Filter) (Filter, error)`: a zero Filter on either side → `ErrInvalidFilter`
+- [T037 claude] `type FilterError struct{ Detail string }`: `Error()` = `ErrInvalidFilter.Error()` + detail; `Is(ErrInvalidFilter)` only; `mapError` → bare `ErrInvalidFilter`; `Reason` → `invalid_filter`
 
 ## Gotchas
 
-- [T021 claude] go-ldap's `StartTLS` formats the handshake error with `%v`, so the x509 cause is lost. Classify by step: any StartTLS error means ErrTLS.
-- [T021 claude] When a server refuses TLS 1.3, the error is a `*net.OpError{Op:"remote error"}` wrapping an unexported alert type, not `tls.AlertError`. Without the Op check it maps to Unreachable.
-- [T021 claude] golangci-lint's gocritic flags `hugeParam` on `Search(ctx, q Query)` (80 bytes). The contract fixes it by value, so T022 needs a `//nolint:gocritic` on that function.
 - [T021 claude] errcheck flags `conn.Close()` calls in go-ldap. Use `_ =`.
 - [T021 claude] The test helpers reuse `newCA` from `tlsconf_test.go`, plus `mustPolicy`/`defaultTargets` from `policy_test.go`.
 - [T022 claude] The ldapdir test run takes about 18s, mostly the existing `TestHandshakeBehaviour` in `tlsconf_test.go` (three 5s subtests), not the client tests.
@@ -162,3 +159,6 @@
 - [T038 claude] `ldap.ParseDN("")` succeeds, so T045 must reject blank and empty-value DNs itself.
 - [T039 claude] A struct field with an elided composite type (`{DN: ...}` inside a struct literal) won't compile; spell out `RawEntry{...}`.
 - [T039 claude] The test helper is named `rawEntry` (and `testDN`, `adGUIDBytes`, `inviteNormEmail`, `openLDAPMapping`) to avoid clashing with the parallel T037/T038 test files.
+- [T037 claude] The tests read the corpus from `../../tests/fuzz/testdata/ldap/filters`, relative to the package directory.
+- [T037 claude] A connection with no base filter should call `CompileUserFilter("")` for the base, not pass a zero `Filter` to `Combine`.
+- [T037 claude] go-ldap's canonical form turns UTF-8 into hex escapes (`ü` → `\c3\bc`) and decodes unnecessary escapes (`\2c` → `,`, `\41` → `A`). This is why canonical output can go over 4096 when the input doesn't.
