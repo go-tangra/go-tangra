@@ -105,12 +105,22 @@ func TLSOptions(rt Runtime) tlsconf.Options {
 	return tlsconf.Options{TrustDomain: rt.TrustDomain(), SkewTolerance: rt.SkewTolerance()}
 }
 
-// ResolveEndpoint returns host:port for a bound listener, substituting a routable
-// interface address when the configured host is unspecified.
+// AdvertiseHostEnv names the environment variable that sets the host a service
+// advertises for listeners bound to an unspecified address. Needed when a
+// container sits on several networks: the first interface address is chosen by
+// kernel interface order, which may be a network the gateway cannot reach.
+const AdvertiseHostEnv = "FREYA_ADVERTISE_HOST"
+
+// ResolveEndpoint returns host:port for a bound listener. A concrete configured
+// host is used as-is; for an unspecified host (0.0.0.0, ::, empty) it uses
+// FREYA_ADVERTISE_HOST when set, else the first non-loopback IPv4 address.
 func ResolveEndpoint(configured string, lis net.Listener) string {
 	host, _, err := net.SplitHostPort(configured)
 	_, port, _ := net.SplitHostPort(lis.Addr().String())
 	if err != nil || host == "" || host == "0.0.0.0" || host == "::" {
+		if h := os.Getenv(AdvertiseHostEnv); h != "" {
+			return net.JoinHostPort(h, port)
+		}
 		if ip := firstNonLoopbackIPv4(); ip != "" {
 			return net.JoinHostPort(ip, port)
 		}
