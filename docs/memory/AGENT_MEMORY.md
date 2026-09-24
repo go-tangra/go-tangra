@@ -6,9 +6,6 @@
 
 ## Decisions
 
-- [T046 claude] Unknown kinds get the same preset as `"other"` (`Mapping{Email: "mail"}`).
-- [T047 claude] Order: lookup → scope/filter/base validation → `s.allow` rate limit → unseal → directory. Validation failures don't count against the rate limit (this differs from T031's Test).
-- [T047 claude] Audit `directory_searched`: subject = connection. Refused (`invalid_filter`/`invalid_base`/`rate_limited`) has no details. Failed/ok details = `filter` (canonical user filter, cut to 1024 bytes), `scope`, `count`, `truncated`, and `base` only when narrowed. A scope `ErrValidation` is not audited.
 - [T047 claude] Preview: the link of this connection decides first (user status `imported` → `imported`, anything else → `existing_user`). Then an e-mail match (case-insensitive) → `existing_user`, else `new`. Items that fail `Decode` get `invalid` plus `ldapdir.Reason`.
 - [T047 claude] Deadline = dial timeout + time limit + 2 s over the whole session. A `context.DeadlineExceeded` is mapped to `ldapdir.ErrTimeout`. Directory errors are returned as the ldapdir closed errors.
 - [T047 claude] Entries are capped client-side at `SizeLimit` again (marks truncated), even though the client already does this.
@@ -56,11 +53,12 @@
 - [T061 kimi] Summary format `Activation finished: N invited, N failed.`; failure lines `<email>: <reasonMessage(reason)>` — mirrors T051's import summary.
 - [T061 kimi] `invalid_state` wording pinned: `That operation is not possible in the current state.` — T062 must register it in `api/client.ts` `registerReasons` (used by both the remove 409 alert and per-user activation failures).
 - [T061 kimi] Resend reuses the existing `POST /api/v1/admin/invitations/{id}/resend` → 202 with `User.invitation_id`.
+- [T057 claude] `MayAssign` only checks: it writes nothing and emits no audit event. `AssignRoles` still records the refused audit event (with the target user id) when it gets `ErrSelfEscalation`. Other errors pass through unchanged.
+- [T057 claude] The final permission check goes through `NewEscalation(a.authz).MayGrant`. System actors (`KindSystem`) are now exempt in `AssignRoles` too, which matches roles and groups.
+- [T057 claude] Order inside `MayAssign`: guard `Require(ctx, tenantID)` → return nil if there are no role ids → `RolesByID(dedupe(ids))` → owners allowed → an `owner`/`admin` slug gives `ErrSelfEscalation` → gather `RolePermissions` → `MayGrant`.
 
 ## Interfaces
 
-- [T042 claude] `func (s *Service) Import(ctx context.Context, actor tenantctx.Actor, tenantID, connID string, uids []string) (ImportResult, error)`
-- [T042 claude] `ImportResult{Created, Updated []ImportItem; Skipped, Failed []ImportIssue}`, JSON `created/updated/skipped/failed`, empty lists marshal as `[]`.
 - [T042 claude] `ImportItem{UID, UserID string}` (`uid`, `user_id`); `ImportIssue{UID, Reason string}` (`uid`, `reason`).
 - [T042 claude] The tests read state through the memstore methods `LinksByUIDs`, `User`, `ListUsers`, `UpdateUserStatus`, `FailNext("UpsertLink")` and `Outbox`.
 - [T043 claude] `httpapi.DirectoryService` gains `Search(ctx, a, tid, connID string, q directory.SearchRequest) (directory.SearchResult, error)` and `Import(ctx, a, tid, connID string, uids []string) (directory.ImportResult, error)`. The fake implements both, in `directory_import_test.go`.
@@ -109,11 +107,11 @@
 - [T061 kimi] `activateSchema` exported from `schemas/directory.ts`: `{user_ids: string[] min 1 max 100 unique, role_ids?: string[], group_ids?: string[] max 50}`; `parse({user_ids:['u3']})` returns exactly `{user_ids}` (no extra keys).
 - [T061 kimi] `data-test` contract for T062: row actions `activate`/`remove-imported`/`resend`; row checkbox `input[type=checkbox]` disabled unless `status === 'imported'`; `select-all`; `activate-selected`; drawer `activate-drawer`/`activate-targets`/`activate-roles`/`activate-groups`/`activate-send`; results `activate-summary`/`activate-failure`; remove confirm label `Remove`; self_escalation alert findable v…
 - [T061 kimi] Endpoints (contract §A): `POST /api/v1/admin/users/activate` → 200 `{items:[{user_id,outcome:'invited'|'failed',invitation_id,reason}]}`, 403 `{reason:'self_escalation'}`; `POST /api/v1/admin/users/{id}/remove-imported` → 204 / 409 `invalid_state`.
+- [T057 claude] `func (a *Assigner) MayAssign(ctx context.Context, actor tenantctx.Actor, tenantID string, roleIDs []string) error`. Returns `ErrSelfEscalation`, `store.ErrNotFound` for unknown or foreign role ids, or the guard's error for a foreign tenant. ctx must carry the actor, because the guard and `AllowedMany` need it.
+- [T057 claude] `*Assigner` satisfies T054's `Escalation` interface only through an adapter that also takes group ids. The adapter should check groups with `Escalation.MayGrant` on the groups' permissions.
 
 ## Gotchas
 
-- [T037 claude] The tests read the corpus from `../../tests/fuzz/testdata/ldap/filters`, relative to the package directory.
-- [T037 claude] A connection with no base filter should call `CompileUserFilter("")` for the base, not pass a zero `Filter` to `Combine`.
 - [T037 claude] go-ldap's canonical form turns UTF-8 into hex escapes (`ü` → `\c3\bc`) and decodes unnecessary escapes (`\2c` → `,`, `\41` → `A`). This is why canonical output can go over 4096 when the input doesn't.
 - [T041 claude] The suite reuses `ttSetup`, `ttAdmin`, `ttDetails` and `ttNoSecret` from `test_test.go`. New helpers use an `st` prefix, plus fixture methods `configure`, `search`, `mustSearch`, `lastSearch`, `noDirectoryCalls` and `searched`.
 - [T041 claude] `mustSearch` fails if any directory session is left open, so always `Close` the session, including on errors.
@@ -162,3 +160,5 @@
 - [T061 kimi] The kit toast store is a module-level singleton; earlier tests' toasts stay in the DOM — assert on the joined text of all `[role=status]` nodes, not the first.
 - [T061 kimi] A test failing before `w.unmount()` leaves stale mounted wrappers whose document-wide `q()` matches shadow later tests (the T051 pitfall) — cascade failures after the first real one.
 - [T061 kimi] Env: `npm install` at repo root, then `npm run kit` before console tests; npm churns `package-lock.json` — restore with `git checkout`.
+- [T057 claude] The tenant guard runs even when the role list is empty, so a foreign tenant with no roles is still refused.
+- [T057 claude] `golangci-lint` `hugeParam` on `actor` is expected; the signature was fixed by T053.
