@@ -1,4 +1,5 @@
-# Freya
+# go-tangra
+/freya-devca
 .dev/
 .artifacts/
 coverage.out
@@ -18,33 +19,9 @@ vendor/
 .DS_Store
 Thumbs.db
 *.tmp
-# services
-services/*/console/node_modules/
-services/*/console/dist/
-services/*/console/dist-remote/
-services/*/.artifacts/
-services/*/shell/node_modules/
-services/*/shell/dist/
-services/*/ui/node_modules/
-services/*/ui/dist/
-services/*/ui/test-results/
-services/*/ui/playwright-report/
-services/warden/deploy/.vault/
-
-services/notification/deploy/kek.dev
-services/notification/ui/dist-remote/
-services/notification/coverage.out
 # local tool state / stray builds
 .playwright-mcp/
 .spec-router/
-# service binaries built at a service root (files only; cmd/<x>svc source dirs stay tracked)
-/services/*/*svc
-!/services/*/*svc/
-/services/*/inventory-agent
-/services/*/inventory-agent.exe
-/services/*/lcm-devca
-services/*/bin/
-services/*/coverage.out
 # shared UI kit / npm workspace
 node_modules/
 ui/kit/dist/

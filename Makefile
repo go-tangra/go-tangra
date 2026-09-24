@@ -34,8 +34,9 @@ cover:
 	$(GO) test -count=1 -coverprofile=$(COVER_OUT) -coverpkg=./... $(PKGS)
 	./scripts/coverage-gate.sh $(COVER_OUT)
 
+# Throw-away dev CA + SVIDs for the examples (the stack's CA is lcm, see deploy/stack).
 testca:
-	cd services/lcm && $(GO) run ./cmd/lcm-devca -out ../../.dev/ca -trust-domain example.org -services orders,inventory,billing,auth,gateway,hello,warden,notification,lcm
+	$(GO) run ./cmd/freya-devca -out .dev/ca -trust-domain example.org -services orders,inventory,billing,hello
 
 redaction-scan:
 	./scripts/redaction-scan.sh
