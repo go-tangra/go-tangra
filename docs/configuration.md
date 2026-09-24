@@ -34,6 +34,32 @@ defaults are logged at startup (`config.Warnings`).
 | `server.grpc_addr` | `:9443` | |
 | `server.http_addr` | `""` | empty disables the HTTP server |
 
+## Enrollment TLS (`config.EnrollTLS`)
+
+A service that obtains its SVID by network enrollment (the lcm SDK's
+`lcmidentity.NewNet`) embeds `config.EnrollTLS` inline in its `enroll` /
+`mesh_enroll` block. It governs only the **first** enrollment, a
+server-auth-only HTTPS call authenticated by the join token; renewals run over
+mTLS and are always SPIFFE-verified. Build the client configuration with
+`tlsconf.LoadEnrollClientConfig(e, trustDomain)` and call
+`e.Validate(trustDomain, cfg.IsProduction())` from the service's `Validate`.
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `enroll.ca_file` | `""` | PEM mesh trust bundle. Set: the server must chain to these roots and present `server_spiffe_id` (one SPIFFE URI SAN; no host name check; TLS 1.3). Unset: system roots + host name of the enroll URL (TLS 1.2+) |
+| `enroll.server_spiffe_id` | `spiffe://<trust_domain>/svc/lcm` | expected server identity; requires `ca_file`; must be in `trust_domain` |
+| `enroll.insecure` | `false` | no server verification; excludes `ca_file`; warns; **refused in production** |
+
+Which mode:
+
+- enrolling **through the gateway edge** (`https://<public host>:8443/api/lcm/v1/enroll`):
+  leave `ca_file` empty; the edge presents a publicly verifiable certificate;
+- enrolling **directly at lcm's keyless listener** (`https://lcm:9947`, the
+  gateway, which cannot enroll through itself): `ca_file` = the mesh root
+  bundle (for example `/certs/ca.pem` written by `lcmsvc bootstrap`). lcm
+  presents its own SVID, which has no DNS name and no public root, so the
+  public mode can never verify it.
+
 ## Programmatic options
 
 | Option | Effect |

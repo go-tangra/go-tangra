@@ -173,6 +173,25 @@ func verifier(p identity.Provider, o Options, expected *identity.SPIFFEID) func(
 }
 
 func verify(p identity.Provider, o Options, expected *identity.SPIFFEID, raw [][]byte) error {
+	return verifyWith(func(claimed string) ([]*x509.Certificate, error) {
+		_, bundle, err := p.Current(context.Background())
+		if err != nil {
+			return nil, &identity.VerifyError{Reason: identity.ReasonProviderUnavailable, Claimed: claimed}
+		}
+		roots := bundle.Roots()
+		if len(roots) == 0 {
+			return nil, &identity.VerifyError{Reason: identity.ReasonBundleEmpty, Claimed: claimed}
+		}
+		return roots, nil
+	}, o, expected, x509.ExtKeyUsageAny, raw)
+}
+
+// verifyWith is the SPIFFE verification shared by the mesh and the enroll
+// client: exactly one SPIFFE URI SAN in o.TrustDomain, a chain to the roots
+// returned by rootsFor (called only after the SAN checks), validity within the
+// skew tolerance, the key usage, and (when expected is set) the exact ID.
+func verifyWith(rootsFor func(claimed string) ([]*x509.Certificate, error), o Options, expected *identity.SPIFFEID,
+	usage x509.ExtKeyUsage, raw [][]byte) error {
 	if len(raw) == 0 {
 		return &identity.VerifyError{Reason: identity.ReasonNoIdentity}
 	}
@@ -196,13 +215,9 @@ func verify(p identity.Provider, o Options, expected *identity.SPIFFEID, raw [][
 	if id.TrustDomain() != o.TrustDomain {
 		return &identity.VerifyError{Reason: identity.ReasonUntrusted, Detail: "foreign trust domain", Claimed: claimed}
 	}
-	_, bundle, err := p.Current(context.Background())
+	roots, err := rootsFor(claimed)
 	if err != nil {
-		return &identity.VerifyError{Reason: identity.ReasonProviderUnavailable, Claimed: claimed}
-	}
-	roots := bundle.Roots()
-	if len(roots) == 0 {
-		return &identity.VerifyError{Reason: identity.ReasonBundleEmpty, Claimed: claimed}
+		return err
 	}
 	now := o.Now()
 	at := now
@@ -228,7 +243,7 @@ func verify(p identity.Provider, o Options, expected *identity.SPIFFEID, raw [][
 	}
 	if _, err := leaf.Verify(x509.VerifyOptions{
 		Roots: pool, Intermediates: inter, CurrentTime: at,
-		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+		KeyUsages: []x509.ExtKeyUsage{usage},
 	}); err != nil {
 		var inv x509.CertificateInvalidError
 		if errors.As(err, &inv) && inv.Reason == x509.Expired {
