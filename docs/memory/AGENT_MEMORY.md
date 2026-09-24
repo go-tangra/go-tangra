@@ -6,8 +6,6 @@
 
 ## Decisions
 
-- [T038 claude] `WithinBase` returns true for the base entry itself and for any descendant. It returns false if either DN is invalid.
-- [T038 claude] A DN counts as invalid if it is blank, fails `ldap.ParseDN`, has no RDNs, has an empty type or value (e.g. `cn=,…`), or is over 1024 bytes. These are the same rules as `directory.validDN`.
 - [T039 claude] The uid is decoded as a GUID only when the uid attribute is `objectGUID` (any letter case). The value must be exactly 16 raw bytes. Output is lower-case `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` with the first three groups little-endian. Any other length, including the 36-byte text form, gives `ErrInvalidUID`.
 - [T039 claude] String uids (entryUUID, other) are used exactly as received (no trimming or case change) so the import re-fetch filter matches. They must be valid UTF-8, non-empty and ≤ 256 bytes.
 - [T039 claude] A uid with more than one value gives `ErrMultiValuedUID` and no value is picked. A missing or unmapped uid gives `ErrInvalidUID`.
@@ -56,10 +54,11 @@
 - [T049 claude] The import handler checks 1..`directory.MaxImportUIDs` unique uids itself as well as through the OpenAPI validator, and gives 400 `validation_failed`. The uids are passed to the service unchanged.
 - [T049 claude] Import declares no 429, because import has no rate limit (T048). Both routes declare 403/404.
 - [T049 claude] Added 409 `invalid_state` to `/admin/users/{id}/roles`, `/deactivate` and `/reactivate` (T016 follow-up).
+- [T050 claude] No change to `userdb/db.go`: `store.ListUsers` (pgx) and memstore already fill `Directory` and `InvitationID`, and filter by status.
+- [T050 claude] `DirectoryOrigin` has exactly `connection_id` (nil once the connection is deleted), `connection_name`, `directory_uid` and `last_imported_at` (RFC 3339 UTC). It never includes the DN, per T043.
 
 ## Interfaces
 
-- [T030 claude] Deps and `New` are exactly as T024/T025 specified; `Now` defaults to `time.Now`.
 - [T030 claude] Errors: `ErrValidation`, `ErrInsecureTransport`, `ErrDuplicate`, `ErrLimitReached`, `ErrNotFound`, `ErrRateLimited`. URL, target, CA and filter problems return bare ldapdir sentinels.
 - [T030 claude] Internal helpers T031 can reuse:
 - [T030 claude] `s.lookup(ctx, &actor, tid, id)`: tenant lookup with the cross-tenant audit.
@@ -109,10 +108,10 @@
 - [T048 claude] `ImportResult{Created, Updated []ImportItem; Skipped, Failed []ImportIssue}` with `MarshalJSON` (nil → `[]`); constants `MaxImportUIDs=500`, `ReasonEmailInUse`, `ReasonDuplicateEmail`, `ReasonAlreadyActive`, `ReasonNotFound`, `ReasonDirectoryError`, `ReasonTimeout`, `ReasonInternal`.
 - [T048 claude] `directorydb.dbTx.InsertUser` writes `status='imported'` and `display_name_explicit` exactly as decoded. It deliberately avoids `store.InsertUser`, whose `DisplayNameExplicit` heuristic would mark a derived "First Last" name as explicit.
 - [T049 claude] operationIds `searchDirectory` and `importDirectory`. TS types: `components["schemas"]["SearchRequest"|"SearchResult"|"SearchError"|"ImportRequest"|"ImportResult"|"ImportItem"|"ImportIssue"]`. `User.directory` is `{connection_id: uuid|null, connection_name, directory_uid, last_imported_at}|null`, and `User.invitation_id` is `uuid|null`.
+- [T050 claude] `user.DirectoryOrigin{ConnectionID *string; ConnectionName, DirectoryUID, LastImportedAt string}`. `UserView.Directory` and `UserView.InvitationID` are always serialized, as `null` when empty.
 
 ## Gotchas
 
-- [T033 claude] The internal handlers take `*tenantctx.Actor` to satisfy gocritic's `hugeParam` check. The service interface still takes the actor by value, as the tests require.
 - [T035 kimi] Fresh worktree has no node_modules and the kit `dist/` is missing: run `npm install` at repo root and `npm run kit` before `npx vitest run` in `services/auth/console`.
 - [T035 kimi] Zod v4 parsed objects keep optional fields as own-keys with value `undefined` — only `JSON.stringify` (and thus the POST body) drops them; assert `toBeUndefined()`, never `'key' in obj`.
 - [T035 kimi] The whole `vitest run`/`npm run lint` (vue-tsc) stays red until T036 lands, by design (same pattern as T024–T026).
@@ -162,3 +161,4 @@
 - [T049 claude] In `console.yaml`, flow-style descriptions containing `(` or `,` must be quoted, or kin-openapi fails with "extra sibling fields".
 - [T049 claude] The service still won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter`, `FilterError`) and T045 (`ScopeBase`, `WithinBase`) land. I checked this task with a stub that I've since deleted.
 - [T049 claude] The console `vue-tsc` fails in this worktree on the missing `qrcode` module in `useMfa.ts`, which this task didn't touch.
+- [T050 claude] The service still doesn't compile until T044/T045 land. I checked this task with a temporary `ldapdir` stub (`zz_t050_stub.go`) and deleted it afterwards. With the stub, `internal/httpapi`, `internal/user/...` and `tests/contract` all pass.
