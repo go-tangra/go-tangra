@@ -6,9 +6,6 @@
 
 ## Decisions
 
-- [T045 claude] A DN is valid only if it is non-blank, at most `MaxDNBytes` (1024), parses with `ldap.ParseDN`, has at least one RDN, and has no attribute with an empty type or value. These are the same rules as `directory.validDN`.
-- [T045 claude] Every failure returns `("", ErrInvalidBase)`, and the error text never includes the input.
-- [T052 codex] Selection permits only new/imported entries, capped at 500.
 - [T052 codex] Preserved flat API error fields in kit `ApiError.detail` to display filter parse messages.
 - [T055 claude] Rejecting non-imported users happens in `RemoveImported` after `lookup`, which returns `ErrInvalidState`. The store's `ErrNotFound` for a non-imported user is only a fallback.
 - [T055 claude] The `imported_user_deleted` row must have Outcome `ok`, SubjectKind `user`, SubjectID set to the uid, and ActorUserID set to the actor. Its details must not contain the user's e-mail (SR-007).
@@ -56,11 +53,12 @@
 - [T065 kimi] deny_cidrs test set = `10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fd00::/8` (all docker default pools); allow_cidrs = the pg container IP /32 (or /128), so the deny case uses `pgIP.Next()` — refused pre-dial, deterministic regardless of what holds that address.
 - [T068 claude] Documented values come from the code (`config.Default`/`validate`, `ldapdir` constants, `httpapi/directory.go` status mapping), not the spec. If a limit changes, update both docs.
 - [T068 claude] operations.md's sample `deny_cidrs` is the private ranges (10/8, 172.16/12, 192.168/16, fd00::/8), the same set T065's SSRF test uses.
+- [T067 claude] No CA key is kept anywhere: `gen-certs.sh` signs the server cert and then deletes the CA key. `ca.pem` is gitignored by the existing `*.pem` rule and only changes after `down -v`.
+- [T067 claude] The stack config also sets `deny_cidrs: ["172.16.0.0/12"]` (research D5, stack networks refused) and allows only `172.31.250.2/32`, so the stack LDAP is the only internal target.
+- [T067 claude] Mailpit's 8025 is not published on the host: it clashes with another project's Mailpit on this machine.
 
 ## Interfaces
 
-- [T048 claude] `directory.ImportTx{UserByEmail, User, LinksByUIDs, InsertUser, UpdateImportedUser, UpsertLink}`; `directory.Store` gained `Atomic(ctx, store.Scope, func(tx any) error) error`.
-- [T048 claude] `ImportResult{Created, Updated []ImportItem; Skipped, Failed []ImportIssue}` with `MarshalJSON` (nil → `[]`); constants `MaxImportUIDs=500`, `ReasonEmailInUse`, `ReasonDuplicateEmail`, `ReasonAlreadyActive`, `ReasonNotFound`, `ReasonDirectoryError`, `ReasonTimeout`, `ReasonInternal`.
 - [T048 claude] `directorydb.dbTx.InsertUser` writes `status='imported'` and `display_name_explicit` exactly as decoded. It deliberately avoids `store.InsertUser`, whose `DisplayNameExplicit` heuristic would mark a derived "First Last" name as explicit.
 - [T049 claude] operationIds `searchDirectory` and `importDirectory`. TS types: `components["schemas"]["SearchRequest"|"SearchResult"|"SearchError"|"ImportRequest"|"ImportResult"|"ImportItem"|"ImportIssue"]`. `User.directory` is `{connection_id: uuid|null, connection_name, directory_uid, last_imported_at}|null`, and `User.invitation_id` is `uuid|null`.
 - [T050 claude] `user.DirectoryOrigin{ConnectionID *string; ConnectionName, DirectoryUID, LastImportedAt string}`. `UserView.Directory` and `UserView.InvitationID` are always serialized, as `null` when empty.
@@ -109,12 +107,11 @@
 - [T065 kimi] `Start(t *testing.T, mutate ...func(*config.Config, string)) *Env` — variadic config hooks; second arg is the TimescaleDB container IP. T064 can reuse this to allow the OpenLDAP container CIDR.
 - [T065 kimi] `Env.PGIP string` — TimescaleDB container address on the docker network.
 - [T065 kimi] `container(t, req)` now returns `(testcontainers.Container, host, ports)`.
+- [T067 claude] Start: `docker compose -p freya-stack -f deploy/stack/compose.yaml --profile ldap up -d --build openldap`. Connection: `ldaps://openldap:636` (or `ldap://openldap:389` + StartTLS), CA `deploy/stack/ldap/ca.pem`, bind `cn=reader,dc=example,dc=test` / `reader-password`, base `ou=Engineering,dc=example,dc=test`.
+- [T067 claude] Compose: services `ldap-certs`, `openldap` (image `freya/openldap-test:dev`), network `ldap` (172.31.250.0/29), volume `ldap-tls` (ca.crt, server.crt, server.key). `auth` now has `networks: [default, ldap]`.
 
 ## Gotchas
 
-- [T046 claude] The `ldapdir` test binary won't compile until T044 (filter.go) and T045 (dn.go) land. To run the other tests, move `filter_test.go` and `dn_test.go` aside temporarily.
-- [T046 claude] `strings.ToLower` silently replaces invalid UTF-8 with U+FFFD, so validate before normalising.
-- [T047 claude] The `directory` package (and so `app`) won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter.String`) and T045 (`ScopeBase`, `WithinBase`) land. Its tests also need T048's `Import`, because of `import_test.go`.
 - [T047 claude] Verification used throwaway stand-ins for T044/T045 in `ldapdir`, since deleted. The T041 tests need `CompileUserFilter` to reject NUL, `:dn:` and anything over 4096 bytes, and `WithinBase` to reject "not a dn" and "".
 - [T047 claude] memstore `UsersByEmails` keys the map by the stored (original-case) e-mail, so lower-case the keys before matching.
 - [T048 claude] The `directory` package still won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter`) and T045 (`WithinBase`, `ScopeBase`) land.
@@ -162,3 +159,6 @@
 - [T065 kimi] `AuditCount` sleeps 1.2 s (500 ms writer batch); call it once at the end, not per assertion.
 - [T068 claude] A KEK rotation makes sealed bind passwords unreadable (`errUnseal`, which surfaces as an internal error). The ops doc says tenants must re-enter them.
 - [T068 claude] There is no markdown linter in the repo, so nothing checked the docs automatically.
+- [T067 claude] libldap's hostname check fails for `ldaps://localhost` inside the container even though `localhost` is in the SAN, so the healthcheck uses `127.0.0.1`.
+- [T067 claude] The first `up` after this change recreates `auth`, because its network set changed.
+- [T067 claude] `make redaction-scan` exits 1 even with passing integration tests; it seems to stop right after counting zero matches. Not investigated further.
