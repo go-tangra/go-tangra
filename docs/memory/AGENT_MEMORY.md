@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T035 kimi] Kind presets fill only empty mapping fields (mirrors T024's server rule); `other` has no preset and changes nothing. OpenLDAP display-name preset pinned to `cn`.
-- [T035 kimi] Drawer Save/Test post the `useZodForm` schema output verbatim (zod normalisation is the wire contract); create body is asserted with exact `toEqual`.
-- [T028 claude] `DirectoryConnectionInput` has no `required` list because PUT reuses it for partial updates. The service must enforce the fields a create needs (name, kind, url, tls_mode, bind_dn, bind_password, base_dn).
-- [T028 claude] `POST /directories/test` uses its own closed schema `DirectoryTestInput`: the input fields plus `connection_id` (uuid). It is not an `allOf`, because the contract test needs a closed body.
-- [T028 claude] Attribute names use `DirectoryAttributeName` (maxLength 64, pattern `^([A-Za-z][A-Za-z0-9-]{0,63})?$`), which allows an empty string. `name` rejects control characters, as `GroupInput` does.
 - [T028 claude] `size_limit` must be 1–1000 and `time_limit_seconds` 1–60 in both input and output. `last_test`, `TestResult.step`, `reason` and `tls` are `nullable: true`.
 - [T029 claude] `directory:manage` goes before `tenants:operate` in the operator grant list, and the nav entry comes right after Users (order 800) so entries stay sorted by order.
 - [T030 claude] `Input` uses pointer fields (T024 form); nil means default on create and keep on update. I converted T025's `test_test.go` to this form (`ttPtr(...)` only). A zero `Input{}` is still detectable with `reflect.ValueOf(in).IsZero()`, as T033 needs.
@@ -56,14 +51,14 @@
 - [T042 claude] Request refused with `ErrValidation` before any directory call when there are 0 or more than 500 uids, a duplicate uid or a blank uid.
 - [T042 claude] Open/TLS/Bind failure: `Import` returns the bare ldapdir sentinel (e.g. `ErrUnreachable`, `ErrTLS`, `ErrInvalidCredentials`) and nothing is imported. A per-entry Search error goes into `failed` with `directory_error`/`timeout`, and a store error with `internal`.
 - [T042 claude] An existing link whose user is not `imported` (invited, active or deactivated) gives `skipped: already_active` and the profile is untouched. An imported user whose new directory e-mail belongs to another user is still `updated`, with names refreshed and the old e-mail kept.
+- [T043 claude] Search 400 for a `*ldapdir.FilterError` (found via `errors.As`) is `{"reason":"invalid_filter","message":fe.Detail}`, exactly 2 keys. A bare `ErrInvalidFilter`, `invalid_base` and every other refusal stay `{"reason":…}` only.
+- [T043 claude] Import whole-request errors: `ErrValidation` → 400, unreachable/tls_failed/invalid_credentials/directory_error → 502, timeout → 504, rate_limited → 429, not found/cross-tenant → 404, anything else → 500 `internal`. This is the existing `directoryError` mapping.
+- [T043 claude] The handler passes uids verbatim; `*` and `a)(|(uid=*)` are the service's job to escape. Import bodies that are empty, contain duplicates, have more than 500 uids, or carry unknown fields → 400 before the service is called. kin-openapi enforces `uniqueItems`/`maxItems` when they are in the yaml.
+- [T043 claude] A zero `directory.ImportResult` must render all four arrays as `[]`, never `null`. A search with no results renders `items: []`.
+- [T043 claude] The users list: every item always carries the `directory` and `invitation_id` keys (as `null` when empty). `directory` has exactly `connection_id` (null once the connection is deleted), `connection_name`, `directory_uid` and `last_imported_at` (RFC 3339 UTC), and never the DN.
 
 ## Interfaces
 
-- [T025 claude] Sentinels whose `Error()` equals the reason: `ErrValidation`, `ErrNotFound`, `ErrRateLimited` ("rate_limited"), `ErrInsecureTransport` ("insecure_transport").
-- [T026 claude] `httpapi.DirectoryService`: `List(ctx, a, tid) ([]directory.Connection, error)`; `Get(ctx, a, tid, id) (directory.Connection, error)`; `Create(ctx, a, tid, directory.Input) (directory.Connection, error)`; `Update(ctx, a, tid, id, directory.Input) (directory.Connection, error)`; `Remove(ctx, a, tid, id) error`; `Test(ctx, a, tid, directory.Input, connID string) (directory.TestResult, error)`.
-- [T026 claude] `httpapi.PermissionChecker{ Allowed(ctx, tid, uid string, p authz.PermissionRef) (bool, error) }` (`*authz.Client` satisfies it); `RequirePermission(r *http.Request, az PermissionChecker, perm string) (tenantctx.Actor, error)` with perm `"directory:manage"`.
-- [T026 claude] `httpapi.DirectoryDeps{Enabled bool; Directories DirectoryService; Authz PermissionChecker}`; `(*Server).RegisterDirectory(DirectoryDeps)`.
-- [T026 claude] `directory.Input`, `directory.Connection` and `directory.TestResult` must JSON-encode/decode exactly the contracts §A wire names. The tests build values through `json.Unmarshal` and read `Input` back through `json.Marshal`, so for example `name`, `url`, `base_dn`, `allow_tls12` must round-trip. The handler decodes the body strictly into `directory.Input`, plus `connection_id` for `/directories/te…
 - [T026 claude] Sentinels the tests use: `directory.ErrValidation` (400 validation_failed), `ErrInsecureTransport` (400), `ErrDuplicate` (409 duplicate), `ErrLimitReached` (409 limit_reached), `ErrRateLimited` (429).
 - [T027 claude] `console.yaml`: `info.version: 1.2.0`; `DirectoryConnectionInput.bind_password` is `{type: string, minLength: 1, maxLength: 1024, writeOnly: true}`; maxLength is name 80, url 512, ca_pem 65536, bind_dn/base_dn 1024, base_filter 4096; `{id}` path params are `format: uuid`; `TestResult.step` enum is exactly `[connect, tls, bind, search_base]` (a `null` entry is ignored).
 - [T027 claude] Manifest: the Permission, Ability and Nav entry must match contract B exactly, word for word (the description too).
@@ -109,12 +104,14 @@
 - [T042 claude] `ImportResult{Created, Updated []ImportItem; Skipped, Failed []ImportIssue}`, JSON `created/updated/skipped/failed`, empty lists marshal as `[]`.
 - [T042 claude] `ImportItem{UID, UserID string}` (`uid`, `user_id`); `ImportIssue{UID, Reason string}` (`uid`, `reason`).
 - [T042 claude] The tests read state through the memstore methods `LinksByUIDs`, `User`, `ListUsers`, `UpdateUserStatus`, `FailNext("UpsertLink")` and `Outbox`.
+- [T043 claude] `httpapi.DirectoryService` gains `Search(ctx, a, tid, connID string, q directory.SearchRequest) (directory.SearchResult, error)` and `Import(ctx, a, tid, connID string, uids []string) (directory.ImportResult, error)`. The fake implements both, in `directory_import_test.go`.
+- [T043 claude] `directory.SearchResult` and `directory.ImportResult` must decode their own wire form with `json.Unmarshal` (the tests build them that way), including `null` for `email`, `user_id` and `reason`.
+- [T043 claude] Needs `ldapdir.FilterError{Detail string}` as a pointer error (T037 pins this).
+- [T043 claude] console.yaml (T049): `POST /api/v1/admin/directories/{id}/search` and `/{id}/import`, each with csrf and a uuid path id. The request body is `$ref` SearchRequest / ImportRequest and the 200 response is `$ref` SearchResult / ImportResult. Search declares 400 (schema with `reason` and `message`), 429, 502 and 504; import declares 400, 502 and 504.
+- [T043 claude] Schemas:
 
 ## Gotchas
 
-- [T023 claude] `BindCall.Password` keeps a copy of the password so tests can assert which one was used. Don't print it in tests: the redaction scan runs this suite with `-v`.
-- [T023 claude] `Open` doesn't check the URL, the TLS mode or the target policy. Inject errors on `OpOpen` to test those paths.
-- [T024 claude] The redaction scan greps `-----BEGIN`, so no test may log or capture a CA PEM or a Get view that contains one. `capture()` writes to `$FREYA_CAPTURE_DIR/directory-<test>.txt` only when that variable is set.
 - [T024 claude] Test helper names start with `crud`/`newCRUD` (plus `sp`, `ip`, `bp`, `actorOf`, `validInput`, `capture`, `assertNoSecret`, `testCAPEM`, `bindAD`) so they don't collide with T025's `test_test.go` in the same package.
 - [T024 claude] The fixture uses `DenyCIDRs: 10.0.0.0/8`, so `ldaps://10.1.2.3` is expected to return `ErrTargetRefused`.
 - [T024 claude] Mapping `store.ErrConflict` to `ErrDuplicate` also has to happen on Update (renaming onto another connection's name).
@@ -162,3 +159,6 @@
 - [T042 claude] An injected `ldapdir.ErrTimeout` kills an ldapfake session, and later calls on it return `ErrUnreachable`. After a timeout the implementation must reopen the session or report the remaining entries as failed; the tests allow either. Always close every session: `OpenSessions()==0` is checked.
 - [T042 claude] memstore's `FailNext` only works on directory methods (`UpsertLink`, `UpdateImportedUser`, …), not `InsertUser`. memstore has no rollback, so the tests don't check rollback after an `UpsertLink` failure; directorydb's per-entry transaction must provide it.
 - [T042 claude] Test helpers use an `it` prefix (`itSetup`, `itSwitch`, `itNewDirectory`, …) so they don't clash with the parallel T041 search suite.
+- [T043 claude] `directory_test.go`'s shared `fakeDirectories` now has `found`/`imp` fields and `dirCall.Search`/`dirCall.UIDs`. `dirRoutes()` includes search and import, so the existing permission, CSRF and feature-disabled tests cover them.
+- [T043 claude] `app.go` won't build once `DirectoryService` gains Search/Import until `*directory.Service` implements both.
+- [T043 claude] The users-list test uses the real memstore: `ListUsers` already fills `store.User.Directory` and `InvitationID`, so T050 only needs to map them onto `UserView`.
