@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T043 claude] A zero `directory.ImportResult` must render all four arrays as `[]`, never `null`. A search with no results renders `items: []`.
-- [T043 claude] The users list: every item always carries the `directory` and `invitation_id` keys (as `null` when empty). `directory` has exactly `connection_id` (null once the connection is deleted), `connection_name`, `directory_uid` and `last_imported_at` (RFC 3339 UTC), and never the DN.
-- [T040 kimi] Fuzz targets assert the same invariants the table suites pin (T037/T038/T039), nothing stricter: canonical fixed-point via `again != got`, combined shape checked structurally on the go-ldap BER packet (root AND, 2 children, base first), caps asserted only on successful decode.
-- [T040 kimi] Refusal paths assert the closed vocabulary (`ErrInvalidFilter`/`ErrInvalidBase`/`ErrInvalidURL`/`ErrTargetRefused`) since the sentinels already exist in errors.go.
-- [T040 kimi] No length cap asserted on `Combine` output (T037 pins Combine-at-caps succeeds, so the combined filter may exceed 4 KiB); name cap asserted only when `Person.DisplayNameExplicit` (the derived "First Last" fallback can legitimately reach 201 bytes).
 - [T040 kimi] The file intentionally does not compile until T044–T046 land (tests-first, same as T037/T039's suites).
 - [T046 claude] Error precedence in `Decode`: uid error first, then any over-long value (DN, names, e-mail), then no/invalid e-mail. On error the returned `Person` still has every field that decoded (for the preview row); the failing field is empty.
 - [T046 claude] A uid from any attribute other than objectGUID is used exactly as returned. It is refused as `invalid_uid` if blank or whitespace-only, invalid UTF-8, or containing a control character. Refusing these keeps the import re-fetch filter from ever carrying `\00`. objectGUID must be exactly 16 bytes; the attribute name is matched case-insensitively.
@@ -56,14 +51,14 @@
 - [T054 claude] Per-user results come back in request order, as `ActivateItem{UserID, Outcome, InvitationID, Reason string}` with empty strings where there is no value. Failed items have an empty `InvitationID`. Reasons are `invalid_state` (not imported), `not_found` (missing or other-tenant) and `internal` (store error).
 - [T054 claude] Activation audit: `invite_created`, Outcome `ok`, Reason `activation`, SubjectKind `user`, SubjectID = user id, Details `{"invitation_id": id}`, with no e-mail or names. A CreateWith conversion emits the same row. Other-tenant id: `cross_tenant_refused` with SubjectID = the id and no foreign e-mail in the details.
 - [T054 claude] CreateWith on an imported e-mail returns a non-empty invitation id and nil error, the same shape as any new invitation, and moves the user to `invited`. Escalation runs for every CreateWith call, before any write.
+- [T056 claude] Gate for both routes = `RequireAdmin` (owner/admin role). A custom role holding only `directory:manage` gets 403 `forbidden`.
+- [T056 claude] Activate body errors: schema refusals → 400 `validation_failed`; malformed JSON → 400 `malformed_body` (the existing DecodeJSON behaviour).
+- [T056 claude] Self-escalation is checked once for the whole request before any write: 403 `{"reason":"self_escalation"}` (exactly 1 key), no invitation, outbox row or status change. Owners may grant `owner`.
+- [T056 claude] `ActivateResult` is exactly `{items}`. There is one item per requested id (tests match by `user_id`, not order), and each item has exactly the keys `user_id, outcome, invitation_id, reason`, with null where there is no value. Failure reasons: `invalid_state` (active or already invited), `not_found` (unknown or other tenant).
+- [T056 claude] Plain `POST /admin/invitations` for an imported e-mail (case-insensitive) → the same 202 bytes as for a new or active address. It converts that row to `invited` with no second user row, and one invitation. An admin inviting with `r-owner` → 403 `self_escalation`.
 
 ## Interfaces
 
-- [T037 claude] `func CompileUserFilter(s string) (Filter, error)`: returns a zero `Filter` on error
-- [T037 claude] `func Combine(base, user Filter) (Filter, error)`: a zero Filter on either side → `ErrInvalidFilter`
-- [T037 claude] `type FilterError struct{ Detail string }`: `Error()` = `ErrInvalidFilter.Error()` + detail; `Is(ErrInvalidFilter)` only; `mapError` → bare `ErrInvalidFilter`; `Reason` → `invalid_filter`
-- [T041 claude] `func (s *Service) Search(ctx context.Context, actor tenantctx.Actor, tenantID, connID string, q SearchRequest) (SearchResult, error)`
-- [T041 claude] `type SearchRequest struct{ Filter, Base, Scope string }` (JSON `filter`, `base`, `scope`)
 - [T041 claude] `type SearchResult struct{ Items []SearchItem; Truncated bool; OutOfScope int; EffectiveFilter string }` (JSON `items`, `truncated`, `out_of_scope`, `effective_filter`). `Items` is never nil.
 - [T041 claude] `type SearchItem struct{ UID, DN, Email, DisplayName, FirstName, LastName, Status, UserID, Reason string }`. It marshals to exactly 9 keys: `uid`, `dn`, `email`, `display_name`, `first_name`, `last_name`, `status`, `user_id`, `reason`. An empty `email`, `user_id` or `reason` marshals as `null`, which needs a custom `MarshalJSON`.
 - [T041 claude] `directory.Store` must gain `UsersByEmails` and `LinksByUIDs` (memstore already has both).
@@ -109,12 +104,14 @@
 - [T054 claude] `func (s *Service) WithEscalation(e Escalation) *Service`
 - [T054 claude] `func (s *Service) Activate(ctx, actor tenantctx.Actor, tenantID string, userIDs []string, p Params) ([]ActivateItem, error)`
 - [T054 claude] Constants `ActivateMax = 100`, `OutcomeInvited = "invited"`, `OutcomeFailed = "failed"`, `ReasonInvalidState`, `ReasonNotFound`, `ReasonInternal`.
+- [T056 claude] console.yaml (T060): `POST /api/v1/admin/users/activate`: csrf, required body `$ref ActivateRequest`, 200 `$ref ActivateResult`, declares 400 and 403.
+- [T056 claude] console.yaml (T060): `POST /api/v1/admin/users/{id}/remove-imported`: csrf, required path `id` (uuid format not required, same as the sibling routes), no request body, 204 with no content, declares 403, 404 and 409.
+- [T056 claude] `ActivateRequest`: closed; `required: [user_ids]` only.
+- [T056 claude] `user_ids`: minItems 1, maxItems 100, uniqueItems, uuid strings.
+- [T056 claude] `role_ids`: uuid strings, minItems 0.
 
 ## Gotchas
 
-- [T032 claude] Running `golangci-lint` on `internal/app` reports existing gocritic warnings (`hugeParam` on `Build`'s cfg, `sloppyReassign`, and others) that this task didn't introduce.
-- [T036 codex] Fixed T035’s mutation helper to exclude GET requests.
-- [T036 codex] npm requires a writable cache here: `--cache /tmp/t036-npm-cache`.
 - [T038 claude] go-ldap's `RelativeDN.EqualFold` already matches multi-valued RDN attributes in any order. `AncestorOfFold` plus `EqualFold` is enough; the suffix-trick and escaped-comma cases need no extra handling.
 - [T038 claude] `ldap.ParseDN("")` succeeds, so T045 must reject blank and empty-value DNs itself.
 - [T039 claude] A struct field with an elided composite type (`{DN: ...}` inside a struct literal) won't compile; spell out `RawEntry{...}`.
@@ -162,3 +159,6 @@
 - [T053 claude] A throwaway implementation that passes the whole authz package: guard `Require(ctx, tenantID)` → `RolesByID(dedupe(ids))` → return nil for owners → `owner`/`admin` slug gives `ErrSelfEscalation` → collect `RolePermissions` → `NewEscalation(a.authz).MayGrant`. `AssignRoles` must keep skipping roles the target already has before calling it.
 - [T054 claude] The tests put `failingStore` in place of `svc.st`. It embeds `*memstore.Store` and passes itself as the Tx, so the per-user Tx calls must go through the `raw any` Tx given by `Atomic`, not through `s.st` directly. The invitation insert must also come before `UpdateUserStatus`, because memstore has no rollback and the test expects the failed user to stay imported.
 - [T054 claude] Cross-tenant detection needs an any-tenant lookup (memstore `UserAnyTenant`). The Tx is tenant-scoped under RLS, so in the pgx store T058 has to do this lookup outside the tenant transaction or under system scope.
+- [T056 claude] The tests use the real `withUS2`/`withGroups` stack, so self-escalation only fires if the escalation check is wired there. If T058 adds it via a setter rather than a `invite.New` parameter, update `withUS2` in `admin_test.go` (or check in the handler).
+- [T056 claude] The OpenAPI validator does not enforce `format: uuid`, so fixture ids like `r-owner` pass. Don't write tests expecting a 400 for a non-uuid id.
+- [T056 claude] `u.call` always sends the CSRF header; `activate_test.go` has `callNoCSRF` for the missing-header case.
