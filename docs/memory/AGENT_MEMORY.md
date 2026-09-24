@@ -6,10 +6,6 @@
 
 ## Decisions
 
-- [T036 codex] Retained T035’s owner/admin standalone route gate.
-- [T036 codex] Drawer tests use unsaved-input testing; they do not persist `last_test`.
-- [T038 claude] `ScopeBase(connBase, requested)`: a blank `requested` means no narrowing and returns the connection base. It succeeds only if `requested` equals `connBase` or is below it, compared per RDN and ignoring case. The result is compared as a parsed DN, so returning `DN.String()` is fine.
-- [T038 claude] Every failure returns `("", ErrInvalidBase)`: an invalid connection base, an invalid requested base, or one outside the base. The error text must not echo the input.
 - [T038 claude] `WithinBase` returns true for the base entry itself and for any descendant. It returns false if either DN is invalid.
 - [T038 claude] A DN counts as invalid if it is blank, fails `ldap.ParseDN`, has no RDNs, has an empty type or value (e.g. `cn=,…`), or is over 1024 bytes. These are the same rules as `directory.validDN`.
 - [T039 claude] The uid is decoded as a GUID only when the uid attribute is `objectGUID` (any letter case). The value must be exactly 16 raw bytes. Output is lower-case `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` with the first three groups little-endian. Any other length, including the 36-byte text form, gives `ErrInvalidUID`.
@@ -56,10 +52,13 @@
 - [T048 claude] Uids that `Decode` could never produce (a non-GUID for objectGUID, over 256 bytes, invalid UTF-8, control characters) are skipped as `not_found_in_directory` without a query. Entries outside the base count as not found. More than one match → failed `directory_error`.
 - [T048 claude] Decode errors are skipped with `ldapdir.Reason`. `duplicate_email` applies only against e-mails this request already created or updated.
 - [T048 claude] Only the connection's own link counts. Linked user not `imported` → skipped `already_active`, nothing written. Linked and still imported → names refreshed, and the e-mail changes only if no other user holds it.
+- [T049 claude] Search 400 for a `*ldapdir.FilterError` (checked with `errors.As` before `directoryError`) is `{"reason":"invalid_filter","message":fe.Detail}`. Every other error goes through `directoryError` and returns only the reason.
+- [T049 claude] The import handler checks 1..`directory.MaxImportUIDs` unique uids itself as well as through the OpenAPI validator, and gives 400 `validation_failed`. The uids are passed to the service unchanged.
+- [T049 claude] Import declares no 429, because import has no rate limit (T048). Both routes declare 403/404.
+- [T049 claude] Added 409 `invalid_state` to `/admin/users/{id}/roles`, `/deactivate` and `/reactivate` (T016 follow-up).
 
 ## Interfaces
 
-- [T030 claude] `type Store interface` (the 8 connection methods memstore already has, including `GetDirectoryConnectionAnyTenant` and `SetDirectoryConnectionTest`). T032's directorydb must satisfy it; later tasks add the import methods.
 - [T030 claude] Deps and `New` are exactly as T024/T025 specified; `Now` defaults to `time.Now`.
 - [T030 claude] Errors: `ErrValidation`, `ErrInsecureTransport`, `ErrDuplicate`, `ErrLimitReached`, `ErrNotFound`, `ErrRateLimited`. URL, target, CA and filter problems return bare ldapdir sentinels.
 - [T030 claude] Internal helpers T031 can reuse:
@@ -109,12 +108,10 @@
 - [T048 claude] `directory.ImportTx{UserByEmail, User, LinksByUIDs, InsertUser, UpdateImportedUser, UpsertLink}`; `directory.Store` gained `Atomic(ctx, store.Scope, func(tx any) error) error`.
 - [T048 claude] `ImportResult{Created, Updated []ImportItem; Skipped, Failed []ImportIssue}` with `MarshalJSON` (nil → `[]`); constants `MaxImportUIDs=500`, `ReasonEmailInUse`, `ReasonDuplicateEmail`, `ReasonAlreadyActive`, `ReasonNotFound`, `ReasonDirectoryError`, `ReasonTimeout`, `ReasonInternal`.
 - [T048 claude] `directorydb.dbTx.InsertUser` writes `status='imported'` and `display_name_explicit` exactly as decoded. It deliberately avoids `store.InsertUser`, whose `DisplayNameExplicit` heuristic would mark a derived "First Last" name as explicit.
+- [T049 claude] operationIds `searchDirectory` and `importDirectory`. TS types: `components["schemas"]["SearchRequest"|"SearchResult"|"SearchError"|"ImportRequest"|"ImportResult"|"ImportItem"|"ImportIssue"]`. `User.directory` is `{connection_id: uuid|null, connection_name, directory_uid, last_imported_at}|null`, and `User.invitation_id` is `uuid|null`.
 
 ## Gotchas
 
-- [T027 claude] No other test pins version `1.1.0`.
-- [T033 claude] T030's `directory.Input` must not define a custom `UnmarshalJSON`. It is embedded in the test-body struct, so a custom method would take over decoding and silently drop `connection_id`.
-- [T033 claude] T030 must export `directory.ErrNotFound` along with `ErrValidation`, `ErrInsecureTransport`, `ErrDuplicate`, `ErrLimitReached` and `ErrRateLimited`, or `directory.go` won't compile.
 - [T033 claude] The internal handlers take `*tenantctx.Actor` to satisfy gocritic's `hugeParam` check. The service interface still takes the actor by value, as the tests require.
 - [T035 kimi] Fresh worktree has no node_modules and the kit `dist/` is missing: run `npm install` at repo root and `npm run kit` before `npx vitest run` in `services/auth/console`.
 - [T035 kimi] Zod v4 parsed objects keep optional fields as own-keys with value `undefined` — only `JSON.stringify` (and thus the POST body) drops them; assert `toBeUndefined()`, never `'key' in obj`.
@@ -162,3 +159,6 @@
 - [T048 claude] The `directory` package still won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter`) and T045 (`WithinBase`, `ScopeBase`) land.
 - [T048 claude] memstore's `Atomic` has no rollback. After an injected `UpsertLink` failure the user row stays in memstore; only directorydb rolls it back.
 - [T048 claude] golangci-lint flags `hugeParam` in T042's `import_test.go:184` (`itAccounted`); I left it alone.
+- [T049 claude] In `console.yaml`, flow-style descriptions containing `(` or `,` must be quoted, or kin-openapi fails with "extra sibling fields".
+- [T049 claude] The service still won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter`, `FilterError`) and T045 (`ScopeBase`, `WithinBase`) land. I checked this task with a stub that I've since deleted.
+- [T049 claude] The console `vue-tsc` fails in this worktree on the missing `qrcode` module in `useMfa.ts`, which this task didn't touch.
