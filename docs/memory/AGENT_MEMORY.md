@@ -6,10 +6,6 @@
 
 ## Decisions
 
-- [T019 claude] CA parsing is strict. Up to 65536 bytes is allowed and 65537 is refused. Every PEM block must be `CERTIFICATE` and must parse; a key or public-key block, bad certificate contents, or a stray `-----BEGIN` without a matching END all give `ErrInvalidCA`. Text between blocks, CRLF line endings and a self-signed leaf certificate are accepted.
-- [T019 claude] An empty CA gives `ParseCA("") == (nil, nil)` and `RootCAs == nil`, which means the system roots are used.
-- [T019 claude] By default: `MinVersion = TLS13`, `CipherSuites == nil`. With `allow_tls12`: `MinVersion = TLS12`, a non-empty list containing only the six ECDHE_{ECDSA,RSA} AES-GCM/CHACHA20 suites, and TLS 1.3 still allowed (`MaxVersion` 0 or TLS13).
-- [T019 claude] `VerifyPeerCertificate` and `VerifyConnection` must be nil, `Renegotiation` must be `RenegotiateNever`, and every call must return a fresh config (a cipher slice it shares with the package would fail the mutation test).
 - [T020 claude] `ParseCA` is strict: the number of `-----BEGIN` markers must equal the number of decoded certificates. This is because `pem.Decode` silently skips a malformed block and returns the next good one.
 - [T020 claude] Only an exactly empty CA string means system roots. A whitespace-only string gives `ErrInvalidCA`.
 - [T020 claude] An empty `Endpoint.Host` returns an error wrapping `ErrInvalidURL`. No new error variable was added.
@@ -56,11 +52,13 @@
 - [T035 kimi] Drawer "Test connection" always posts to `POST /api/v1/admin/directories/test`; edit mode adds `connection_id` and omits `bind_password` when blank (reuse stored), create mode sends neither `connection_id` nor a blank password. The saved-test route `/{id}/test` is left for a possible row action later.
 - [T035 kimi] Kind presets fill only empty mapping fields (mirrors T024's server rule); `other` has no preset and changes nothing. OpenLDAP display-name preset pinned to `cn`.
 - [T035 kimi] Drawer Save/Test post the `useZodForm` schema output verbatim (zod normalisation is the wire contract); create body is asserted with exact `toEqual`.
+- [T028 claude] `DirectoryConnectionInput` has no `required` list because PUT reuses it for partial updates. The service must enforce the fields a create needs (name, kind, url, tls_mode, bind_dn, bind_password, base_dn).
+- [T028 claude] `POST /directories/test` uses its own closed schema `DirectoryTestInput`: the input fields plus `connection_id` (uuid). It is not an `allOf`, because the contract test needs a closed body.
+- [T028 claude] Attribute names use `DirectoryAttributeName` (maxLength 64, pattern `^([A-Za-z][A-Za-z0-9-]{0,63})?$`), which allows an empty string. `name` rejects control characters, as `GroupInput` does.
+- [T028 claude] `size_limit` must be 1–1000 and `time_limit_seconds` 1–60 in both input and output. `last_test`, `TestResult.step`, `reason` and `tls` are `nullable: true`.
 
 ## Interfaces
 
-- [T012 claude] `audit.DirectoryConnectionCreated`, `audit.DirectoryConnectionUpdated`, `audit.DirectoryConnectionDeleted`, `audit.DirectoryConnectionTested`, `audit.DirectorySearched`, `audit.DirectoryImported`, `audit.ImportedUserDeleted` (all `audit.EventType`).
-- [T013 claude] The sign-in test expects imported attempts to be recorded as `memstore.Attempt{UserID: "", Outcome: "refused", Reason: "unknown_account"}`. `signin_failed` audit rows must have `ActorUserID == nil` and `Reason == "unknown_account"`. There must be no `lockout` event and no `cache.RateKey("fail", uid)` key.
 - [T011 claude] `(m *Store) InsertDirectoryConnection(ctx, store.DirectoryConnection) error`; `GetDirectoryConnection(ctx, tid, id)`; `GetDirectoryConnectionAnyTenant(ctx, id)`; `ListDirectoryConnections(ctx, tid)`; `CountDirectoryConnections(ctx, tid) (int, error)`; `UpdateDirectoryConnection(ctx, c) error`; `SetDirectoryConnectionTest(ctx, tid, id, outcome string, at time.Time) error`; `DeleteDirectoryConnectio…
 - [T011 claude] `(m *Store) UsersByEmails(ctx, tid, []string) (map[string]store.User, error)`; `LinksByUIDs(ctx, tid, connID, []string) (map[string]store.DirectoryLink, error)`; `UpsertLink(ctx, store.DirectoryLink) error`; `UpdateImportedUser(ctx, tid, uid, store.ImportedProfile) error`; `DeleteImportedUser(ctx, tid, uid) error`.
 - [T011 claude] `(m *Store) FailNext(method string)` arms a one-shot error (unexported type `injectedErr`) for any of the directory methods above, by method name. It is not wired into older memstore methods.
@@ -109,12 +107,11 @@
 - [T035 kimi] `@/schemas/directory` exports `directoryConnectionSchema` (optional `bind_password`, blank→undefined = keep; `allow_tls12` defaults false; optional `size_limit` 1–1000 / `time_limit_seconds` 1–60 via `''`-preprocess) and `directoryCreateSchema` (refine: `bind_password` required, message `Enter the bind password.`). Pinned messages: `Enter an ldap:// or ldaps:// URL.`, `At most 80 characters.…
 - [T035 kimi] `data-test` contract: page `directories`; `directory-row`, `directory-name`, `directory-url`, `directory-tls`, `last-test` (chip `title` = raw ISO `at`); buttons `new-directory`, `edit`, `delete-directory`, `save-directory`, `test-connection`; drawer `directory-drawer`; fields `directory-name`, `directory-kind` (native `<select>` inside), `directory-url`, `directory-tls-mode`, `bind-dn`, `base-dn`…
 - [T035 kimi] Route pinned: `/admin/directories`, name `admin-directories`, roles owner/admin. Register reason wording T036 must add in `api/client.ts`: at least `tls_failed: 'The TLS handshake failed.'`.
+- [T028 claude] operationIds: `listDirectories`, `createDirectory`, `testDirectoryInput` (POST /directories/test), `getDirectory`, `updateDirectory`, `deleteDirectory` (POST /{id}/remove), `testDirectory` (POST /{id}/test).
+- [T028 claude] TS: `components["schemas"]["DirectoryConnection" | "DirectoryConnectionInput" | "DirectoryTestInput" | "TestResult" | "DirectoryAttributes"]`. `TestResult.step` is `"connect"|"tls"|"bind"|"search_base"|null`.
 
 ## Gotchas
 
-- [T013 claude] In the unknown branch, `u` still holds the imported row after T014's fix. That is harmless only because the unknown branch never uses `u.ID`, so keep it that way.
-- [T011 claude] `UpdateImportedUser` moves the user to a new map key when the e-mail changes, because `Users` is keyed by tenant and lower-cased e-mail.
-- [T011 claude] Connections are returned as copies (the `BindPasswordEnc` slice is copied), so tests can't change stored ciphertext through a returned value.
 - [T014 claude] Any new sign-in branch that reads `u` before checking `known` now gets a zero user for imported accounts. That is intended, so keep it that way.
 - [T015 claude] The `internal/user` package won't compile until T016 defines `ErrInvalidState`.
 - [T015 claude] The store test needs docker: `sg docker -c 'go test -tags integration -run TestGroupRepos ./internal/store/'`.
@@ -162,3 +159,6 @@
 - [T035 kimi] Fresh worktree has no node_modules and the kit `dist/` is missing: run `npm install` at repo root and `npm run kit` before `npx vitest run` in `services/auth/console`.
 - [T035 kimi] Zod v4 parsed objects keep optional fields as own-keys with value `undefined` — only `JSON.stringify` (and thus the POST body) drops them; assert `toBeUndefined()`, never `'key' in obj`.
 - [T035 kimi] The whole `vitest run`/`npm run lint` (vue-tsc) stays red until T036 lands, by design (same pattern as T024–T026).
+- [T028 claude] kin-openapi does not enforce `format: uuid` on path ids, so a malformed id reaches the handler, which must answer 404 `not_found` itself.
+- [T028 claude] The request validator rejects an empty `bind_password` (minLength 1) with 400 `validation_failed` before the service runs. The console must leave the field out, not send `""`.
+- [T028 claude] Running `npm install` at the repo root changes the root `package-lock.json`. Revert it unless a task means to change it.
