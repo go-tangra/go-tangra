@@ -21,3 +21,13 @@ kek: { source: file, path: deploy/dev-kek.b64 }
 email: { transport: smtp, host: mailpit, port: 1025, from: auth@example.org, allow_plaintext: true }
 profile: { avatar_max_bytes: 2097152, avatar_size: 512 }
 limits: { max_request_bytes: 2162688 }
+# LDAP import (feature 016). TLS only (ldaps:// or StartTLS). deny_cidrs refuses
+# the Docker bridge ranges the stack itself lives on; allow_cidrs re-opens ONLY
+# the optional openldap container (compose profile `ldap`, fixed address on the
+# `ldap` network). Real directories elsewhere stay reachable on 389/636/3268/3269.
+directory:
+  enabled: true
+  allow_plaintext: false
+  targets:
+    deny_cidrs: ["172.16.0.0/12"]
+    allow_cidrs: ["172.31.250.2/32"]

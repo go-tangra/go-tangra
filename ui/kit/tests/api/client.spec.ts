@@ -121,3 +121,14 @@ describe('api client (query edge)', () => {
     expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe('/b/x')
   })
 })
+
+
+describe('api client (flat error details)', () => {
+  it('preserves flat parser messages and prefers explicit detail objects', async () => {
+    const api = createApi({ base: '/b' })
+    mockFetch(400, { reason: 'invalid_filter', message: 'unexpected end', detail: 'ignored' })
+    await expect(api('POST', 'search', {})).rejects.toMatchObject({ reason: 'invalid_filter', detail: { message: 'unexpected end' } })
+    mockFetch(400, { reason: 'invalid_filter', message: 'flat', detail: { message: 'nested' } })
+    await expect(api('POST', 'search', {})).rejects.toMatchObject({ detail: { message: 'nested' } })
+  })
+})

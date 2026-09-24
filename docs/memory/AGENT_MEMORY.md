@@ -1,0 +1,164 @@
+# Agent memory
+
+> Maintained by spec-router. Decisions, interfaces and gotchas reported by coding
+> agents after each integrated task, shared with every agent on later tasks.
+> Humans may edit or prune entries; agents treat this file as read-only.
+
+## Decisions
+
+- [T056 claude] Plain `POST /admin/invitations` for an imported e-mail (case-insensitive) → the same 202 bytes as for a new or active address. It converts that row to `invited` with no second user row, and one invitation. An admin inviting with `r-owner` → 403 `self_escalation`.
+- [T061 kimi] `activateSchema` uses plain `z.string().min(1)` arrays (no uuid format check), mirroring `inviteSchema`; the server enforces uuid.
+- [T061 kimi] Activate POST body mirrors InviteDialog: `role_ids` always sent (possibly `[]`), `group_ids` only when non-empty; empty pickers → `{ user_ids: [...], role_ids: [] }`.
+- [T061 kimi] Summary format `Activation finished: N invited, N failed.`; failure lines `<email>: <reasonMessage(reason)>` — mirrors T051's import summary.
+- [T061 kimi] `invalid_state` wording pinned: `That operation is not possible in the current state.` — T062 must register it in `api/client.ts` `registerReasons` (used by both the remove 409 alert and per-user activation failures).
+- [T061 kimi] Resend reuses the existing `POST /api/v1/admin/invitations/{id}/resend` → 202 with `User.invitation_id`.
+- [T057 claude] `MayAssign` only checks: it writes nothing and emits no audit event. `AssignRoles` still records the refused audit event (with the target user id) when it gets `ErrSelfEscalation`. Other errors pass through unchanged.
+- [T057 claude] The final permission check goes through `NewEscalation(a.authz).MayGrant`. System actors (`KindSystem`) are now exempt in `AssignRoles` too, which matches roles and groups.
+- [T057 claude] Order inside `MayAssign`: guard `Require(ctx, tenantID)` → return nil if there are no role ids → `RolesByID(dedupe(ids))` → owners allowed → an `owner`/`admin` slug gives `ErrSelfEscalation` → gather `RolePermissions` → `MayGrant`.
+- [T058 claude] Escalation is attached with `svc.WithEscalation(e)`, not an `invite.New` parameter. `app.go` calls `a.Invites.WithEscalation(authz.InviteEscalation{Assigner: a.Assigner, Groups: a.Groups})` after Groups is built.
+- [T058 claude] `InviteEscalation` exempts `KindOperator`/`KindSystem` actors after the tenant guard, because tenant creation (operator) invites the first `owner`.
+- [T058 claude] Validation (roles/groups exist, ≤ GroupsMax) runs in its own read Tx before escalation. `store.ErrNotFound` from escalation maps to `ErrBadEmail`.
+- [T058 claude] In `CreateWith` conversion, the invitation names come from Params when given, otherwise from the user row. `Activate` always uses the row.
+- [T058 claude] Cross-tenant audit (`cross_tenant_refused`, reason `foreign_user`, details `target_tenant`) runs a separate `Atomic(Scope{System:true})` with `Tx.UserAnyTenant`, only for UUID-shaped ids.
+- [T059 claude] `RemoveImported` uses `a.lookup` so another tenant's id → `ErrNotFound` plus a `cross_tenant_refused` audit. A non-imported status → `ErrInvalidState` with nothing touched.
+- [T059 claude] If the lookup saw `imported` but the status-guarded delete then finds nothing (the user was invited or removed concurrently), it returns `ErrInvalidState`, not not found.
+- [T059 claude] Audit: `imported_user_deleted`, Outcome `ok`, SubjectKind `user`, SubjectID = uid, no details. Refusals are not audited.
+- [T059 claude] Sessions are not revoked explicitly: imported users can't sign in, and the DB cascade and memstore delete remove the user's other rows.
+- [T060 claude] `activateUsers` passes the body unchanged to `invite.Service.Activate`. Whole-request errors go through the existing `adminError` (`ErrBadEmail` → 400 `validation_failed`, `ErrSelfEscalation` → 403). Empty `InvitationID`/`Reason` strings are sent as JSON `null`.
+- [T060 claude] `removeImported` → `Admin.RemoveImported`: success gives 204 with an empty body, not found gives 404, and `ErrInvalidState` gives 409.
+- [T060 claude] No new error variables: `errInvalidState` and `errSelfEscalation` were already mapped in `adminError`.
+- [T062 codex] Bulk selection includes only imported users, capped at 100.
+- [T062 codex] Selection clears on filtering and list refresh.
+- [T066 kimi] Skip gate is `process.env.E2E_OPERATOR_PASSWORD` (not E2E_PASSWORD), per the task wording; the flow itself signs in as the tenant owner (`signIn(page)` defaults).
+- [T066 kimi] Import filter is pinned to `(|(uid=eng1)(uid=eng2)(uid=eng5))` (the three unique-mail fixtures in `people.ldif`) so the summary is deterministic; the assertion is `created+updated == count of enabled preview checkboxes` with 0 skipped/0 failed, making the suite re-runnable against the same stack.
+- [T066 kimi] Activation target is the first `user-row` having an `activate` button (dynamic email), not a fixed fixture, so re-runs work after a previous run invited eng1.
+- [T066 kimi] Connection CA comes from `E2E_LDAP_CA_PEM` / `E2E_LDAP_CA_FILE`, defaulting to `deploy/stack/ldap/ca.pem` (T067 path) resolved relative to the spec file; LDAP settings overridable via `E2E_LDAP_URL/BIND_DN/BIND_PASSWORD/BASE_DN`, Mailpit via `E2E_MAILPIT_URL` (default `http://127.0.0.1:8025`).
+- [T065 kimi] Refused targets are asserted via the `TestResult` body (`ok:false, step:connect, reason:target_refused|unreachable`), never via transport errors: the endpoint turns `ErrTargetRefused` into a failed connect step, so 200 + coarse reason is the contract.
+- [T065 kimi] `ldap://` URLs use `tls_mode:"plain"` with `directory.allow_plaintext: true` set in the test config hook (harness env is "test"); only `[::1]` uses `ldaps://` per the quickstart. Without this, checkTarget's insecure_transport check fires before the dial for allowed ldap:// targets.
+- [T065 kimi] deny_cidrs test set = `10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fd00::/8` (all docker default pools); allow_cidrs = the pg container IP /32 (or /128), so the deny case uses `pgIP.Next()` — refused pre-dial, deterministic regardless of what holds that address.
+- [T068 claude] Documented values come from the code (`config.Default`/`validate`, `ldapdir` constants, `httpapi/directory.go` status mapping), not the spec. If a limit changes, update both docs.
+- [T068 claude] operations.md's sample `deny_cidrs` is the private ranges (10/8, 172.16/12, 192.168/16, fd00::/8), the same set T065's SSRF test uses.
+- [T067 claude] No CA key is kept anywhere: `gen-certs.sh` signs the server cert and then deletes the CA key. `ca.pem` is gitignored by the existing `*.pem` rule and only changes after `down -v`.
+- [T067 claude] The stack config also sets `deny_cidrs: ["172.16.0.0/12"]` (research D5, stack networks refused) and allows only `172.31.250.2/32`, so the stack LDAP is the only internal target.
+- [T067 claude] Mailpit's 8025 is not published on the host: it clashes with another project's Mailpit on this machine.
+- [T063 kimi] Echo-in-diagnostics is modeled with real text-bearing errors only on the connection-test flow (`rsEchoDir`), which provably reduces failures to closed reasons; search/import use the closed error shapes the ldapdir client produces (code-only `DirectoryError`), because the client boundary — not the directory service — drops server diagnostics (research D4/D9, covered by ldapdir client tests). Do…
+- [T063 kimi] Fixed `TestSearchAudit/filter_capped_at_1_KiB` test data to respect the D6 policy (≤64 filter components): fewer, longer components; the policy cap itself is correct per research, don't lower it.
+- [T063 kimi] Fixed `services/auth/scripts/redaction-scan.sh` to export an absolute `FREYA_CAPTURE_DIR` (T031's unowned follow-up); `ARTIFACTS=$PWD/.artifacts` workaround no longer needed.
+- [T064 kimi] The container starts with **no wait strategy** (slapd only starts after certs are staged at `/tls`), then the harness generates a CA + IP-SAN server cert for the container address and `CopyToContainer`s it in; readiness is a host-side dial poll on 636. A port-based `WaitingFor` would deadlock.
+- [T064 kimi] The service dials the container's **docker-network IP** (loopback is always refused by the target policy); the `Start` hook denies the private ranges and allows exactly that host /32 (mirrors T065's hook and the stack config).
+- [T064 kimi] Fixture gotcha: eng6/eng7 have **no individual e-mail** — both share `eng-twins@example.test`; the match-all preview also returns the base OU and the alias as `invalid/no_email` items and the referral as a reference (not an entry). Look entries up by DN where e-mail is absent/shared.
+- [T064 kimi] Preview `uid` values are **entryUUIDs** (openldap mapping), generated per image build — tests must discover them from search results, never hardcode.
+- [T069 claude] The remaining `make lint` failures are revive (250 missing doc comments) and gocritic (hugeParam/rangeValCopy on by-value `tenantctx.Actor` and store structs). They existed before this feature and match how the whole service is written, so they were left alone. staticcheck and gosec are clean.
+- [T069 claude] `consoleHandler` now accepts a gateway-relayed nonce only if it is 128 characters or fewer, using only `[A-Za-z0-9+/=_-]`; anything else becomes an empty nonce.
+- [T070 claude] A stored bind password is reused only if `url`, `tls_mode` and `ca_pem` are all unchanged, on both Update and the unsaved Test with `connection_id`. Otherwise the result is `validation_failed`, audited as `refused`/`bind_password_required`. Clearing the CA also counts as a change.
+- [T070 claude] Import calls `s.allow` once per request and shares the per-tenant `directory.rate_per_minute` bucket with test and search.
+- [T070 claude] Search and import call `s.usable(&c)` right after lookup, refusing `plain` connections when in production or when `allow_plaintext` is off, before the password is unsealed.
+- [T070 claude] Base filters are validated at save with `ldapdir.CompileUserFilter` (the full policy); an empty filter is still stored as "".
+- [T071 claude] Created `specs/016-auth-ldap-import/` by copying `.spec-router-spec/` (without constitution.md), because the task's target file didn't exist in the repo; checkboxes left untouched for the orchestrator.
+- [T071 claude] Used a passwordless `imported` users row (removed afterwards) as the live fixture, since imported rows can only be created through an admin session.
+
+## Interfaces
+
+- [T044 claude] `const MaxFilterBytes = 4096`; `func CompileUserFilter(s string) (Filter, error)`; `func Combine(base, user Filter) (Filter, error)`
+- [T044 claude] `type FilterError struct{ Detail string }`, used as a pointer. `Error()` = `"ldapdir: invalid filter: " + Detail`, and it matches `ErrInvalidFilter` (so `Reason` returns `invalid_filter`).
+- [T045 claude] `func ScopeBase(connBase, requested string) (string, error)`
+- [T045 claude] `func WithinBase(connBase, entryDN string) bool`
+- [T045 claude] Unexported: `parseDN(string) (*ldap.DN, bool)` and `within(base, dn *ldap.DN) bool`.
+- [T052 codex] Added `directorySearchSchema`, `directoryImportSchema`, and generated API type aliases in `schemas/directory.ts`.
+- [T052 codex] Import route inherits remote mounting through existing route mapping.
+- [T052 codex] Directories now links to the import page.
+- [T055 claude] The test expects `func (a *Admin) RemoveImported(ctx context.Context, actor tenantctx.Actor, uid string) error`. `AdminStore` should gain `DeleteImportedUser(ctx, tenantID, userID string) error`, which memstore already implements.
+- [T053 claude] `func (a *Assigner) MayAssign(ctx context.Context, actor tenantctx.Actor, tenantID string, roleIDs []string) error`. Returns `ErrSelfEscalation` when the actor may not grant a role. Owners may grant anything. Duplicate role ids must be tolerated.
+- [T054 claude] `type Escalation interface{ MayAssign(ctx context.Context, actor tenantctx.Actor, tenantID string, roleIDs, groupIDs []string) error }`
+- [T054 claude] `func (s *Service) WithEscalation(e Escalation) *Service`
+- [T054 claude] `func (s *Service) Activate(ctx, actor tenantctx.Actor, tenantID string, userIDs []string, p Params) ([]ActivateItem, error)`
+- [T054 claude] Constants `ActivateMax = 100`, `OutcomeInvited = "invited"`, `OutcomeFailed = "failed"`, `ReasonInvalidState`, `ReasonNotFound`, `ReasonInternal`.
+- [T056 claude] console.yaml (T060): `POST /api/v1/admin/users/activate`: csrf, required body `$ref ActivateRequest`, 200 `$ref ActivateResult`, declares 400 and 403.
+- [T056 claude] console.yaml (T060): `POST /api/v1/admin/users/{id}/remove-imported`: csrf, required path `id` (uuid format not required, same as the sibling routes), no request body, 204 with no content, declares 403, 404 and 409.
+- [T056 claude] `ActivateRequest`: closed; `required: [user_ids]` only.
+- [T056 claude] `user_ids`: minItems 1, maxItems 100, uniqueItems, uuid strings.
+- [T056 claude] `role_ids`: uuid strings, minItems 0.
+- [T061 kimi] `activateSchema` exported from `schemas/directory.ts`: `{user_ids: string[] min 1 max 100 unique, role_ids?: string[], group_ids?: string[] max 50}`; `parse({user_ids:['u3']})` returns exactly `{user_ids}` (no extra keys).
+- [T061 kimi] `data-test` contract for T062: row actions `activate`/`remove-imported`/`resend`; row checkbox `input[type=checkbox]` disabled unless `status === 'imported'`; `select-all`; `activate-selected`; drawer `activate-drawer`/`activate-targets`/`activate-roles`/`activate-groups`/`activate-send`; results `activate-summary`/`activate-failure`; remove confirm label `Remove`; self_escalation alert findable v…
+- [T061 kimi] Endpoints (contract §A): `POST /api/v1/admin/users/activate` → 200 `{items:[{user_id,outcome:'invited'|'failed',invitation_id,reason}]}`, 403 `{reason:'self_escalation'}`; `POST /api/v1/admin/users/{id}/remove-imported` → 204 / 409 `invalid_state`.
+- [T057 claude] `func (a *Assigner) MayAssign(ctx context.Context, actor tenantctx.Actor, tenantID string, roleIDs []string) error`. Returns `ErrSelfEscalation`, `store.ErrNotFound` for unknown or foreign role ids, or the guard's error for a foreign tenant. ctx must carry the actor, because the guard and `AllowedMany` need it.
+- [T057 claude] `*Assigner` satisfies T054's `Escalation` interface only through an adapter that also takes group ids. The adapter should check groups with `Escalation.MayGrant` on the groups' permissions.
+- [T058 claude] `invite.Tx` gains `UserByID(ctx, tid, id)` and `UserAnyTenant(ctx, id)`; memstore has `UserByID` (alias of `User`).
+- [T058 claude] `func (g *authz.Groups) MayJoin(ctx, actor, tenantID string, groupIDs []string) error`
+- [T058 claude] `type authz.InviteEscalation struct{ Assigner *Assigner; Groups *Groups }` satisfies `invite.Escalation`.
+- [T058 claude] `invite.ActivateItem{UserID, Outcome, InvitationID, Reason string}`, `ActivateMax=100`, `Outcome*`/`Reason*` consts.
+- [T059 claude] `func (a *Admin) RemoveImported(ctx context.Context, actor tenantctx.Actor, uid string) error` returns nil, `ErrNotFound` (→ 404), `ErrInvalidState` (→ 409 `invalid_state`) or a store error.
+- [T059 claude] `AdminStore.DeleteImportedUser(ctx, tenantID, userID string) error` (memstore and `userdb.DBAdminStore` both implement it).
+- [T060 claude] operationIds `activateUsers` and `removeImportedUser`.
+- [T060 claude] TS types: `components["schemas"]["ActivateRequest"]` and `components["schemas"]["ActivateResult"]`. Result items are `{user_id, outcome: 'invited'|'failed', invitation_id: string|null, reason: string|null}`.
+- [T062 codex] `RoleGroupPickers.vue` shares `roleIds`/`groupIds` models between drawers.
+- [T062 codex] `ActivateDrawer.vue` emits `activated(ActivateResult)`.
+- [T062 codex] `schemas/directory.ts` exports `activateSchema` and `ActivateResult`.
+- [T066 kimi] New env knobs read by the spec: `E2E_LDAP_URL`, `E2E_LDAP_BIND_DN`, `E2E_LDAP_BIND_PASSWORD`, `E2E_LDAP_BASE_DN`, `E2E_LDAP_CA_PEM`, `E2E_LDAP_CA_FILE`, `E2E_MAILPIT_URL` (all optional, quickstart defaults).
+- [T066 kimi] Mailpit check mirrors the Go harness `LastMail`: `GET /api/v1/search?query=to:<email>` then `GET /api/v1/message/{ID}`; the invitation text must contain `/console/invite/accept?token=`.
+- [T065 kimi] `Start(t *testing.T, mutate ...func(*config.Config, string)) *Env` — variadic config hooks; second arg is the TimescaleDB container IP. T064 can reuse this to allow the OpenLDAP container CIDR.
+- [T065 kimi] `Env.PGIP string` — TimescaleDB container address on the docker network.
+- [T065 kimi] `container(t, req)` now returns `(testcontainers.Container, host, ports)`.
+- [T067 claude] Start: `docker compose -p freya-stack -f deploy/stack/compose.yaml --profile ldap up -d --build openldap`. Connection: `ldaps://openldap:636` (or `ldap://openldap:389` + StartTLS), CA `deploy/stack/ldap/ca.pem`, bind `cn=reader,dc=example,dc=test` / `reader-password`, base `ou=Engineering,dc=example,dc=test`.
+- [T067 claude] Compose: services `ldap-certs`, `openldap` (image `freya/openldap-test:dev`), network `ldap` (172.31.250.0/29), volume `ldap-tls` (ca.crt, server.crt, server.key). `auth` now has `networks: [default, ldap]`.
+- [T063 kimi] `rsEchoDir`/`rsEchoSession` in redaction_test.go wrap an `ldapdir.Directory` so Bind/BaseExists/Open failures echo the presented bind password in diagnostic text; reusable for future redaction tests.
+- [T063 kimi] Capture files: `$FREYA_CAPTURE_DIR/directory-TestRedaction*.txt` (views/results as `%+v` + JSON bodies, errors, full audit rows).
+- [T064 kimi] `startLDAP(t) (host string, caPEM []byte)` helper in the test file starts the container and returns the dial address + CA PEM; reusable by later integration tasks (e.g. T071 live smoke analogues).
+- [T064 kimi] Import/skip contract confirmed live: 4 created `{eng1,eng2,eng5,eng6}`, skipped `{eng4:no_email, eng7:duplicate_email}` when uids are passed in request order; re-import is all `updated`.
+- [T069 claude] `httpapi.relayedNonce(v string) string` (unexported).
+- [T070 claude] `directory.errCredentialRequired` (unexported, wraps `ErrValidation`); `targetChanged(old, c *store.DirectoryConnection) bool`; `(*Service).usable(c) error`.
+- [T070 claude] OpenAPI: `importDirectory` gains `429` and `400 insecure_transport`; `searchDirectory` `400` adds `insecure_transport`. `schema.d.ts` was regenerated.
+- [T070 claude] The console `bind-password` hint text is now `stored — leave blank to keep; required when the URL, TLS mode or CA changes`.
+
+## Gotchas
+
+- [T052 codex] Build the UI kit before running console tests.
+- [T055 claude] memstore's `DeleteImportedUser` already removes the link, sessions, bindings and group memberships. T059 only needs the `userdb` side, which wraps `store.DeleteImportedUser(ctx, tx, tid, uid)` in a tenant transaction.
+- [T055 claude] The test uses `lookup`'s existing cross-tenant audit. Use `a.lookup` instead of the store directly, or the `cross_tenant_refused` assertion fails.
+- [T053 claude] `ctx` must carry the actor (`tenantctx.WithActor`), because `Client.AllowedMany` goes through the tenant guard; with a bare ctx it fails with `tenantctx: no actor`. The tests pass an actor-bearing ctx, and invite callers already have one.
+- [T053 claude] A throwaway implementation that passes the whole authz package: guard `Require(ctx, tenantID)` → `RolesByID(dedupe(ids))` → return nil for owners → `owner`/`admin` slug gives `ErrSelfEscalation` → collect `RolePermissions` → `NewEscalation(a.authz).MayGrant`. `AssignRoles` must keep skipping roles the target already has before calling it.
+- [T054 claude] The tests put `failingStore` in place of `svc.st`. It embeds `*memstore.Store` and passes itself as the Tx, so the per-user Tx calls must go through the `raw any` Tx given by `Atomic`, not through `s.st` directly. The invitation insert must also come before `UpdateUserStatus`, because memstore has no rollback and the test expects the failed user to stay imported.
+- [T054 claude] Cross-tenant detection needs an any-tenant lookup (memstore `UserAnyTenant`). The Tx is tenant-scoped under RLS, so in the pgx store T058 has to do this lookup outside the tenant transaction or under system scope.
+- [T056 claude] The tests use the real `withUS2`/`withGroups` stack, so self-escalation only fires if the escalation check is wired there. If T058 adds it via a setter rather than a `invite.New` parameter, update `withUS2` in `admin_test.go` (or check in the handler).
+- [T056 claude] The OpenAPI validator does not enforce `format: uuid`, so fixture ids like `r-owner` pass. Don't write tests expecting a 400 for a non-uuid id.
+- [T056 claude] `u.call` always sends the CSRF header; `activate_test.go` has `callNoCSRF` for the missing-header case.
+- [T061 kimi] `UiDrawer` teleports to `document.body`: `wrapper.findAll` cannot see drawer content — use document-wide `q()`/`querySelectorAll` and native `el.click()` for picker checkboxes (`setValue` only works on in-wrapper elements).
+- [T061 kimi] The kit toast store is a module-level singleton; earlier tests' toasts stay in the DOM — assert on the joined text of all `[role=status]` nodes, not the first.
+- [T061 kimi] A test failing before `w.unmount()` leaves stale mounted wrappers whose document-wide `q()` matches shadow later tests (the T051 pitfall) — cascade failures after the first real one.
+- [T061 kimi] Env: `npm install` at repo root, then `npm run kit` before console tests; npm churns `package-lock.json` — restore with `git checkout`.
+- [T057 claude] The tenant guard runs even when the role list is empty, so a foreign tenant with no roles is still refused.
+- [T057 claude] `golangci-lint` `hugeParam` on `actor` is expected; the signature was fixed by T053.
+- [T058 claude] In invitedb, `UserByID`/`UserAnyTenant` return `ErrNotFound` for non-UUID ids, to avoid a Postgres uuid cast error aborting the tx.
+- [T058 claude] `httpapi/admin_test.go` `withUS2` now wires `InviteEscalation`; handler tests for activate should reuse `withUS2`.
+- [T059 claude] `golangci-lint --new-from-rev HEAD` flags gocritic `hugeParam` on `actor`. It is kept because the test and contract fix the signature and the sibling methods match.
+- [T060 claude] `npm run gen:api` runs openapi-typescript 7.13.0 even though `console/node_modules` isn't installed. The regenerated file only gained lines; nothing was removed.
+- [T060 claude] `internal/directory` `TestSearchAudit/filter_capped_at_1_KiB` fails ("filter has more than 64 components"). This is outside T060's scope and the package doesn't import `httpapi`.
+- [T066 kimi] The drawer's Test button for a *new* connection does not persist `last_test` (no `connection_id`), so after Save the badge reads "Never tested" — the spec asserts the row URL instead, not the badge.
+- [T066 kimi] `UiTextarea` for `ca_pem` has no `data-test`; select it via `textarea[data-field="ca_pem"]` (the `data-field` id convention also used by groups.spec.ts).
+- [T066 kimi] After activation the users list reloads under the still-active `imported` filter, so the activated row vanishes until the filter is cleared (`selectOption('')`).
+- [T066 kimi] `npx tsc -p tsconfig.node.json` fails on a pre-existing `@freya/ui/vite` typing issue in `vite.config.ts` (unrelated to this task; the lint gate only type-checks `tsconfig.app.json`, which excludes e2e).
+- [T066 kimi] npm install churns `package-lock.json` `dev` flags — restore with `git checkout` (done).
+- [T065 kimi] Run integration tests with `sg docker -c '...'` (stale docker group membership); images were already cached here, a cold run pulls 4 images first.
+- [T065 kimi] The allow-override dial relies on the host routing to the container bridge network (RST in ms). On rootless/remote-docker setups it would fall back to a 5 s dial timeout → `timeout` instead of `unreachable`.
+- [T065 kimi] `AuditCount` sleeps 1.2 s (500 ms writer batch); call it once at the end, not per assertion.
+- [T068 claude] A KEK rotation makes sealed bind passwords unreadable (`errUnseal`, which surfaces as an internal error). The ops doc says tenants must re-enter them.
+- [T068 claude] There is no markdown linter in the repo, so nothing checked the docs automatically.
+- [T067 claude] libldap's hostname check fails for `ldaps://localhost` inside the container even though `localhost` is in the SAN, so the healthcheck uses `127.0.0.1`.
+- [T067 claude] The first `up` after this change recreates `auth`, because its network set changed.
+- [T067 claude] `make redaction-scan` exits 1 even with passing integration tests; it seems to stop right after counting zero matches. Not investigated further.
+- [T063 kimi] Sentinels must keep the `LDAP-MARKER-PW-<alnum>` shape — the shell scan pattern needs an alphanumeric right after the prefix.
+- [T063 kimi] Never print a swept value on failure (suite log is itself scanned); all `rsNoSecret*` helpers report only the sink name.
+- [T063 kimi] `f.dir.Binds()` records plaintext passwords — fine in memory, but never include it in failure messages or captures.
+- [T063 kimi] Root-level `make redaction-scan` (repo root Makefile) fails for a pre-existing reason unrelated to feature 016: its script greps without `|| true` and dies under `set -e` when a pattern has 0 matches, even though its integration suite passes.
+- [T064 kimi] Run with `sg docker -c '...'`; the T003 image layers are docker-cached after first build (fast), cold runs build once.
+- [T064 kimi] `byEmail`-style maps key on `email` only — entries without mail or with shared mail are invisible there; use `itemByDN`.
+- [T064 kimi] `code, out := e.JSON(...)` inside `if` scopes shadows the outer pair — reassigning `out` later can silently mix responses; the lint `ineffassign` catches unread `code`.
+- [T064 kimi] Avoid `defer resp.Body.Close()` (errcheck); the harness style is `defer func() { _ = resp.Body.Close() }()`.
+- [T069 claude] In a worktree with no `node_modules`, vitest and vue-tsc silently pick up an older install from a parent directory, which causes a "qrcode not found" error and stale `@freya/ui` failures. Run `npm ci` at the worktree root, then `npm run kit` (builds ui/kit), before `npm run lint` or vitest in the console.
+- [T069 claude] `golangci-lint` stops at 50 issues per linter by default. Use `--max-issues-per-linter=0 --max-same-issues=0` for real counts, or `--new-from-rev=f67251a5` to see only feature-016 findings.
+- [T070 claude] Any new test that edits `url`, `tls_mode` or `ca_pem` on a saved connection, or unsaved-tests them with `connection_id`, must include `bind_password`.
+- [T070 claude] Import now uses up a rate-limit token, so tests with a small `rate` should budget for imports too.
+- [T071 claude] `services/auth/deploy/dev-kek.b64` is gitignored and missing in worktrees, so `auth` crashes on startup when rebuilt from one. Copy it from a stack container (`docker cp freya-stack-dns-token-1:/app/deploy/dev-kek.b64 services/auth/deploy/`) so it matches the key already sealing the stack DB.
+- [T071 claude] Unauthenticated POSTs return `400 validation_failed` (gateway CSRF guard) rather than 401, platform-wide.
+- [T071 claude] A production-env config can't be loaded against the stack config: it fails on the DB `sslmode` check before the directory plaintext check.
+- [T071 claude] freya-stack has only `admin@example.org` (credentials unknown); `E2E_OPERATOR_PASSWORD` is unset, so `console/tests/e2e/directory.spec.ts` skips.

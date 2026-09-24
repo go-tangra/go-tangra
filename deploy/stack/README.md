@@ -30,7 +30,8 @@ Freya DNS ACME provider for lcm, server configuration with container restarts
 via the Docker socket, dashboard — see `services/dns/deploy/README.md`).
 Infra: TimescaleDB, Valkey,
 OpenFGA, Mailpit, Vault, RustFS (object store), Tika + Gotenberg (extraction),
-PowerDNS Authoritative 4.9 + Recursor 5.3 (optional Prometheus: `--profile metrics`).
+PowerDNS Authoritative 4.9 + Recursor 5.3 (optional Prometheus: `--profile metrics`;
+optional test OpenLDAP for the auth directory import: `--profile ldap`).
 
 > Docker note: if your shell isn't in the active `docker` group, prefix commands
 > with `sg docker -c '…'`.
@@ -206,3 +207,35 @@ root-equivalent on the host; see the risk note in
 `services/dns/deploy/README.md`. Prometheus for the DNS dashboard:
 `docker compose -p freya-stack --profile metrics up -d prometheus` (without it
 the dashboard shows "metrics unavailable").
+
+## LDAP directory import (dev, optional profile `ldap`)
+
+The `ldap` profile adds a seeded test OpenLDAP (`openldap`, built from
+`services/auth/tests/integration/testdata/openldap/` — the same image the auth
+integration tests use) for trying the auth console's Directories → import flow:
+
+```sh
+docker compose -p freya-stack -f deploy/stack/compose.yaml --profile ldap up -d --build openldap
+```
+
+`ldap-certs` mints a stack test CA + server certificate (SANs `openldap`,
+`localhost`, `127.0.0.1`) once into the `ldap-tls` volume and writes the CA to
+**`deploy/stack/ldap/ca.pem`** (git-ignored; the CA key is discarded, a new CA
+only after `down -v`). Connection settings for the console:
+
+| Field | Value |
+|---|---|
+| URL | `ldaps://openldap:636` (or `ldap://openldap:389` with StartTLS) |
+| CA PEM | contents of `deploy/stack/ldap/ca.pem` |
+| Bind DN / password | `cn=reader,dc=example,dc=test` / `reader-password` |
+| Base DN | `ou=Engineering,dc=example,dc=test` |
+
+`openldap` publishes no host ports and shares the isolated `ldap` network
+(`172.31.250.0/29`, fixed address `172.31.250.2`) with `auth` only.
+`configs/auth.yaml` keeps `directory.allow_plaintext: false`, refuses the Docker
+bridge ranges (`deny_cidrs: 172.16.0.0/12`) and re-allows exactly
+`172.31.250.2/32` — auth logs the matching `allow_cidrs` warning at startup.
+Without the profile the `ldap` network still exists but is empty. The console
+e2e `services/auth/console/tests/e2e/directory.spec.ts` uses these defaults
+(Mailpit's UI is not published on the host here — point `E2E_MAILPIT_URL` at a
+reachable Mailpit).

@@ -4,6 +4,31 @@
 
 ### Added
 
+- `services/auth`: LDAP directory import (spec `016-auth-ldap-import`).
+  Tenant administrators with the new `directory:manage` permission manage
+  directory connections (Active Directory / OpenLDAP / other attribute
+  presets, `ldaps` or `starttls`, TLS 1.3 minimum with a per-connection
+  `allow_tls12` opt-in limited to ECDHE+AEAD suites, optional pinned CA,
+  bind password sealed with the KEK under per-connection associated data,
+  write-only). They can test a connection step by step, search with a
+  compiled and canonicalised RFC 4515 filter AND-combined with the base
+  filter, narrow the search to a base DN below the connection base, and
+  import selected people by unique id. Import re-fetches each person from the
+  directory and never sends e-mail. Imported people become `imported` users
+  (no password, indistinguishable from unknown accounts at sign-in, recovery
+  and accept; no lockout oracle). Administrators activate them in bulk (≤ 100)
+  with ordinary invitations carrying the chosen roles and groups, or remove
+  them while they are still imported. Outbound dials go through a dial-time
+  target policy: an always-denied set covering loopback, link-local and
+  metadata, unspecified and multicast addresses, plus operator `deny_cidrs`,
+  `allow_cidrs` overrides and allowed ports. Tests and searches report coarse
+  outcomes only and are rate limited per tenant. Limits cover search
+  size/time, filter size/depth, 500 ids per import, 8 MiB per LDAP message
+  and 10 connections per tenant. New `directory` config section, migration
+  `0008_ldap_import.sql`, console "Directories" page, import page and
+  activation drawer. Dev stack gets an optional `ldap` compose profile.
+  Everything is audited, with ids and counts only and no directory PII.
+
 - `services/dns`: PowerDNS management-plane module (spec `015-dns-service`,
   go-tangra-dns replica): tenant-owned zones on one shared PowerDNS
   Authoritative server with global name ownership and cross-tenant overlap
@@ -141,6 +166,13 @@
 
 ### Security
 
+- `services/auth` (behaviour change): plain invitations now run the same
+  role-grant escalation check as role assignment. A non-owner can no longer
+  invite someone with `owner`/`admin`, or with a role or group carrying a
+  permission they do not hold. Such requests get `403 self_escalation`.
+  Deactivate, reactivate, role assignment and group membership refuse
+  `imported` users with `409 invalid_state` (or skip them), so an imported
+  account cannot become active without an invitation.
 - `google.golang.org/grpc` upgraded to v1.83.2: `govulncheck` reported two
   advisories reachable from `transport/grpc` in v1.82.x.
 - `identity` jitter falls back to the midpoint deterministically when the

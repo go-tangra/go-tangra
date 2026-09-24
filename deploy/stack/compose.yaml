@@ -227,6 +227,9 @@ services:
     build: { context: ../.., dockerfile: services/auth/Dockerfile }
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
+    # `ldap` is the isolated network of the optional openldap service (profile
+    # `ldap`); auth is its only other member.
+    networks: [default, ldap]
     volumes: ["certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9190/readyz"], interval: 5s, timeout: 3s, retries: 40, start_period: 5s }
     depends_on:
@@ -611,6 +614,38 @@ services:
       dns-secrets-init: { condition: service_completed_successfully }
       pdns-auth: { condition: service_healthy }
 
+  # --- Optional (docker compose --profile ldap ...): repo-owned OpenLDAP test
+  # directory for the auth LDAP-import feature, built from the same Dockerfile as
+  # the integration tests and seeded with dc=example,dc=test (bind as
+  # cn=reader,dc=example,dc=test / reader-password). StartTLS on 389, LDAPS on
+  # 636, both with a stack test CA minted by ldap-certs; the CA PEM lands in
+  # deploy/stack/ldap/ca.pem. It sits alone with auth on the `ldap` network at a
+  # fixed address — the only internal target configs/auth.yaml allow-lists.
+  ldap-certs:
+    image: alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+    profiles: ["ldap"]
+    user: "0:0"
+    entrypoint: ["sh","/out/gen-certs.sh"]
+    volumes: ["ldap-tls:/tls","./ldap:/out"]
+    restart: "no"
+
+  openldap:
+    image: freya/openldap-test:dev
+    build: { context: ../../services/auth/tests/integration/testdata/openldap }
+    profiles: ["ldap"]
+    volumes: ["ldap-tls:/tls:ro"]
+    networks:
+      ldap: { ipv4_address: 172.31.250.2 }
+    healthcheck:
+      test: ["CMD-SHELL","LDAPTLS_CACERT=/tls/ca.crt ldapwhoami -x -H ldaps://127.0.0.1:636 -D cn=reader,dc=example,dc=test -w reader-password"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 3s
+    restart: unless-stopped
+    depends_on:
+      ldap-certs: { condition: service_completed_successfully }
+
   # Optional (docker compose --profile metrics ...): Prometheus scraping both
   # PowerDNS webservers for the dns dashboard (metrics.prometheus_url).
   prometheus:
@@ -663,7 +698,15 @@ services:
       pdns-recursor: { condition: service_healthy }
       ipam: { condition: service_healthy }
 
+networks:
+  # Fixed small subnet so configs/auth.yaml can allow-list exactly the openldap
+  # address (directory.targets.allow_cidrs); created even without the profile.
+  ldap:
+    ipam:
+      config: [{ subnet: 172.31.250.0/29 }]
+
 volumes:
+  ldap-tls:
   certs:
   edge-cert:
   pebble-certs:
