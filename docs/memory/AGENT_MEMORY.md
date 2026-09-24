@@ -6,9 +6,6 @@
 
 ## Decisions
 
-- [T023 claude] Parents are not created automatically. A base DN exists only if an entry was added for it, so tests must `Add` the base and OU entries.
-- [T023 claude] Every Search call is recorded, including invalid queries and ones that get an injected error. To test "zero directory calls", assert `len(d.Searches())==0`.
-- [T024 claude] The service only returns closed errors. It defines `ErrValidation`("validation_failed"), `ErrInsecureTransport`("insecure_transport"), `ErrDuplicate`("duplicate"), `ErrLimitReached`("limit_reached") and `ErrNotFound`("not_found"), and the tests check the exact text. URL, CA and filter problems return `ldapdir.ErrInvalidURL`, `ldapdir.ErrTargetRefused`, `ldapdir.ErrInvalidCA` or `ldapdir.ErrInvalid…
 - [T024 claude] Invalid or empty bind/base DNs (including the root DSE `""`), a DN over 1024 bytes, a bad name (empty or over 80), a bad kind or tls_mode, limits out of range and a bad attribute name (`^[A-Za-z][A-Za-z0-9-]{0,63}$`) all return `ErrValidation`. A URL over 512 bytes, or a scheme that doesn't match tls_mode (`ldaps`↔`ldaps://`), returns `ldapdir.ErrInvalidURL`. A base filter over 4096 bytes return…
 - [T024 claude] Plain mode is refused whenever `Production` is set, even with `AllowPlaintext`, and also in dev without the opt-out. The refusal is audited as `directory_connection_created`, outcome refused, reason `insecure_transport`. A `target_refused` create is audited the same way.
 - [T024 claude] Defaults: size limit is min(500, `MaxSizeLimit`) and time limit is min(15, `MaxTimeLimit` in seconds). Values above the deployment maximum are refused. The base filter is stored in canonical form (`DecompileFilter(CompileFilter)`), and an empty filter stays `""`. Setting `CAPEM: ""` on update clears the CA.
@@ -56,11 +53,12 @@
 - [T032 claude] `Atomic(ctx, tenantID, fn func(pgx.Tx) error)` forces tenant scope and returns an error for an empty tenant id (an empty `app.tenant_id` would silently match nothing). Only `GetDirectoryConnectionAnyTenant` uses `Scope{System: true}`.
 - [T032 claude] Each connection method is its own transaction via `Atomic`; the value-struct parameters carry `//nolint:gocritic` because `directory.Store` fixes those signatures.
 - [T032 claude] Deviation from invitedb's `Atomic(ctx, scope, func(any) error)`: this one takes a tenant id rather than a scope, so callers can't pick the system scope.
+- [T036 codex] Reused inherited remote routes and manifest navigation; added standalone sidebar navigation separately.
+- [T036 codex] Retained T035’s owner/admin standalone route gate.
+- [T036 codex] Drawer tests use unsaved-input testing; they do not persist `last_test`.
 
 ## Interfaces
 
-- [T021 claude] `type ConnParams struct{ URL, TLSMode, CAPEM string; AllowTLS12 bool; DialTimeout time.Duration }`. TLSMode is one of the literal strings "ldaps", "starttls" or "plain".
-- [T021 claude] `type Scope int` with `ScopeSub` (zero value, sent as wholeSubtree) and `ScopeOne` (sent as singleLevel).
 - [T021 claude] `type Query struct{ BaseDN string; Scope Scope; Filter string; Attributes []string; SizeLimit int; TimeLimit time.Duration }`.
 - [T021 claude] `type RawEntry struct{ DN string; Attrs map[string][][]byte }`. Attribute keys are lower-cased.
 - [T022 claude] `ldapdir.Directory{Open(ctx, ConnParams) (Session, error)}`; `ldapdir.Session{Bind(ctx, dn string, pw []byte) error; BaseExists(ctx, baseDN string) error; Search(ctx, Query) (Page, error); TLSState() (tls.ConnectionState, bool); Close() error}`.
@@ -109,11 +107,11 @@
 - [T034 claude] `Production` for the service comes from `cfg.IsProduction()`, `Cache` from `a.Cache` and `Authz` from `a.Authz`.
 - [T032 claude] `directorydb.DBStore{St *store.Store}`; `(DBStore).Atomic(ctx context.Context, tenantID string, fn func(pgx.Tx) error) error`; plus the 8 `directory.Store` methods (compile-time assertion `var _ directory.Store = DBStore{}`).
 - [T032 claude] `app.buildDirectory` now passes `directorydb.DBStore{St: a.Store}` as `Deps.Store`.
+- [T036 codex] Exports `directoryConnectionSchema`, `directoryCreateSchema`, `DirectoryInput`, `DirectoryConnection`, and `DirectoryTestResult`.
+- [T036 codex] `DirectoryDrawer` accepts `connection` and emits `close` and `saved`.
 
 ## Gotchas
 
-- [T018 claude] `url.Parse` already refuses an unterminated `[`, so the matching branch in `splitURLHost` is covered by calling that function directly in `policy_extra_test.go`.
-- [T018 claude] `scripts/coverage-gate.sh` expects an existing `coverage.out` in `services/auth`. Generate the profile first, or it exits with "open coverage.out: no such file".
 - [T019 claude] `x509.CertPool.AppendCertsFromPEM` silently skips blocks it can't parse. T020 must decode with `pem.Decode` and `x509.ParseCertificate` on each block to get the strict behaviour.
 - [T019 claude] `pool.Subjects()` is deprecated, so the test uses it under a `//nolint:staticcheck`.
 - [T020 claude] To keep 100% coverage, the malformed-block-before-a-valid-certificate case is tested in `tlsconf_extra_test.go`.
@@ -162,3 +160,5 @@
 - [T034 claude] Until this task, `app.Build` failed its declared-vs-mounted route check because T028's yaml routes had no handler.
 - [T032 claude] `directorydb` imports `directory` (for the interface assertion), so `directory` must never import `directorydb`.
 - [T032 claude] Running `golangci-lint` on `internal/app` reports existing gocritic warnings (`hugeParam` on `Build`'s cfg, `sloppyReassign`, and others) that this task didn't introduce.
+- [T036 codex] Fixed T035’s mutation helper to exclude GET requests.
+- [T036 codex] npm requires a writable cache here: `--cache /tmp/t036-npm-cache`.
