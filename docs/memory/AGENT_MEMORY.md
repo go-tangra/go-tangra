@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T042 claude] Open/TLS/Bind failure: `Import` returns the bare ldapdir sentinel (e.g. `ErrUnreachable`, `ErrTLS`, `ErrInvalidCredentials`) and nothing is imported. A per-entry Search error goes into `failed` with `directory_error`/`timeout`, and a store error with `internal`.
-- [T042 claude] An existing link whose user is not `imported` (invited, active or deactivated) gives `skipped: already_active` and the profile is untouched. An imported user whose new directory e-mail belongs to another user is still `updated`, with names refreshed and the old e-mail kept.
-- [T043 claude] Search 400 for a `*ldapdir.FilterError` (found via `errors.As`) is `{"reason":"invalid_filter","message":fe.Detail}`, exactly 2 keys. A bare `ErrInvalidFilter`, `invalid_base` and every other refusal stay `{"reason":…}` only.
-- [T043 claude] Import whole-request errors: `ErrValidation` → 400, unreachable/tls_failed/invalid_credentials/directory_error → 502, timeout → 504, rate_limited → 429, not found/cross-tenant → 404, anything else → 500 `internal`. This is the existing `directoryError` mapping.
-- [T043 claude] The handler passes uids verbatim; `*` and `a)(|(uid=*)` are the service's job to escape. Import bodies that are empty, contain duplicates, have more than 500 uids, or carry unknown fields → 400 before the service is called. kin-openapi enforces `uniqueItems`/`maxItems` when they are in the yaml.
 - [T043 claude] A zero `directory.ImportResult` must render all four arrays as `[]`, never `null`. A search with no results renders `items: []`.
 - [T043 claude] The users list: every item always carries the `directory` and `invitation_id` keys (as `null` when empty). `directory` has exactly `connection_id` (null once the connection is deleted), `connection_name`, `directory_uid` and `last_imported_at` (RFC 3339 UTC), and never the DN.
 - [T040 kimi] Fuzz targets assert the same invariants the table suites pin (T037/T038/T039), nothing stricter: canonical fixed-point via `again != got`, combined shape checked structurally on the go-ldap BER packet (root AND, 2 children, base first), caps asserted only on successful decode.
@@ -56,13 +51,14 @@
 - [T053 claude] `MayAssign` is a pure check: no tuple writes, no bindings, no target user, so every role in the list counts as new. Only `AssignRoles` exempts roles the target already has.
 - [T053 claude] A role id from another tenant must return `store.ErrNotFound`, not `ErrSelfEscalation`.
 - [T053 claude] Roles granted through groups are not part of `MayAssign`. Callers pass the permissions a group grants to `Escalation.MayGrant`; the test builds them with the unexported `Groups.groupGrants`.
+- [T054 claude] `New` keeps its signature (4 callers). Escalation is attached with `svc.WithEscalation(e) *Service`. A nil escalation means no check, so existing callers and tests keep working, and `app.go` must wire `authz.Assigner` in T058.
+- [T054 claude] Whole-request refusals return `(nil, err)`. `ErrBadEmail` (validation_failed) covers 0 / duplicate / more than `ActivateMax` ids, more than `GroupsMax` groups, and unknown roles or groups. `authz.ErrSelfEscalation` is returned after exactly one `MayAssign` call, made before any invitation or outbox write.
+- [T054 claude] Per-user results come back in request order, as `ActivateItem{UserID, Outcome, InvitationID, Reason string}` with empty strings where there is no value. Failed items have an empty `InvitationID`. Reasons are `invalid_state` (not imported), `not_found` (missing or other-tenant) and `internal` (store error).
+- [T054 claude] Activation audit: `invite_created`, Outcome `ok`, Reason `activation`, SubjectKind `user`, SubjectID = user id, Details `{"invitation_id": id}`, with no e-mail or names. A CreateWith conversion emits the same row. Other-tenant id: `cross_tenant_refused` with SubjectID = the id and no foreign e-mail in the details.
+- [T054 claude] CreateWith on an imported e-mail returns a non-empty invitation id and nil error, the same shape as any new invitation, and moves the user to `invited`. Escalation runs for every CreateWith call, before any write.
 
 ## Interfaces
 
-- [T039 claude] `func DefaultMapping(kind string) Mapping`; `func Decode(m Mapping, e RawEntry) (Person, error)`. RawEntry attribute keys are lower-case, so `Decode` must look up `strings.ToLower(attr)`.
-- [T039 claude] Sentinels `ErrNoEmail`, `ErrInvalidEmail`, `ErrValueTooLong`, `ErrMultiValuedUID`, `ErrInvalidUID`. `Reason(err)` must return `no_email`, `invalid_email`, `value_too_long`, `multi_valued_uid`, `invalid_uid`, so add them to `closedErrors` and `reasons` in `errors.go`. Error text must not contain directory values.
-- [T037 claude] `const MaxFilterBytes = 4096`
-- [T037 claude] `type Filter struct{ /* unexported canonical string */ }`: comparable, and the zero value's `String()` is `""`; `func (Filter) String() string`
 - [T037 claude] `func CompileUserFilter(s string) (Filter, error)`: returns a zero `Filter` on error
 - [T037 claude] `func Combine(base, user Filter) (Filter, error)`: a zero Filter on either side → `ErrInvalidFilter`
 - [T037 claude] `type FilterError struct{ Detail string }`: `Error()` = `ErrInvalidFilter.Error()` + detail; `Is(ErrInvalidFilter)` only; `mapError` → bare `ErrInvalidFilter`; `Reason` → `invalid_filter`
@@ -109,11 +105,13 @@
 - [T052 codex] Directories now links to the import page.
 - [T055 claude] The test expects `func (a *Admin) RemoveImported(ctx context.Context, actor tenantctx.Actor, uid string) error`. `AdminStore` should gain `DeleteImportedUser(ctx, tenantID, userID string) error`, which memstore already implements.
 - [T053 claude] `func (a *Assigner) MayAssign(ctx context.Context, actor tenantctx.Actor, tenantID string, roleIDs []string) error`. Returns `ErrSelfEscalation` when the actor may not grant a role. Owners may grant anything. Duplicate role ids must be tolerated.
+- [T054 claude] `type Escalation interface{ MayAssign(ctx context.Context, actor tenantctx.Actor, tenantID string, roleIDs, groupIDs []string) error }`
+- [T054 claude] `func (s *Service) WithEscalation(e Escalation) *Service`
+- [T054 claude] `func (s *Service) Activate(ctx, actor tenantctx.Actor, tenantID string, userIDs []string, p Params) ([]ActivateItem, error)`
+- [T054 claude] Constants `ActivateMax = 100`, `OutcomeInvited = "invited"`, `OutcomeFailed = "failed"`, `ReasonInvalidState`, `ReasonNotFound`, `ReasonInternal`.
 
 ## Gotchas
 
-- [T034 claude] Until this task, `app.Build` failed its declared-vs-mounted route check because T028's yaml routes had no handler.
-- [T032 claude] `directorydb` imports `directory` (for the interface assertion), so `directory` must never import `directorydb`.
 - [T032 claude] Running `golangci-lint` on `internal/app` reports existing gocritic warnings (`hugeParam` on `Build`'s cfg, `sloppyReassign`, and others) that this task didn't introduce.
 - [T036 codex] Fixed T035’s mutation helper to exclude GET requests.
 - [T036 codex] npm requires a writable cache here: `--cache /tmp/t036-npm-cache`.
@@ -162,3 +160,5 @@
 - [T055 claude] The test uses `lookup`'s existing cross-tenant audit. Use `a.lookup` instead of the store directly, or the `cross_tenant_refused` assertion fails.
 - [T053 claude] `ctx` must carry the actor (`tenantctx.WithActor`), because `Client.AllowedMany` goes through the tenant guard; with a bare ctx it fails with `tenantctx: no actor`. The tests pass an actor-bearing ctx, and invite callers already have one.
 - [T053 claude] A throwaway implementation that passes the whole authz package: guard `Require(ctx, tenantID)` → `RolesByID(dedupe(ids))` → return nil for owners → `owner`/`admin` slug gives `ErrSelfEscalation` → collect `RolePermissions` → `NewEscalation(a.authz).MayGrant`. `AssignRoles` must keep skipping roles the target already has before calling it.
+- [T054 claude] The tests put `failingStore` in place of `svc.st`. It embeds `*memstore.Store` and passes itself as the Tx, so the per-user Tx calls must go through the `raw any` Tx given by `Atomic`, not through `s.st` directly. The invitation insert must also come before `UpdateUserStatus`, because memstore has no rollback and the test expects the failed user to stay imported.
+- [T054 claude] Cross-tenant detection needs an any-tenant lookup (memstore `UserAnyTenant`). The Tx is tenant-scoped under RLS, so in the pgx store T058 has to do this lookup outside the tenant transaction or under system scope.
