@@ -228,8 +228,13 @@ services:
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
     # `ldap` is the isolated network of the optional openldap service (profile
-    # `ldap`); auth is its only other member.
-    networks: [default, ldap]
+    # `ldap`); auth is its only other member. `default` must stay auth's FIRST
+    # interface: the framework advertises the first interface's address to the
+    # gateway, and an address on `ldap` is unreachable from the gateway (every
+    # /api/v1 auth route then answers 503 temporarily_unavailable).
+    networks:
+      default: { priority: 1000 }
+      ldap: { priority: 10 }
     volumes: ["certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9190/readyz"], interval: 5s, timeout: 3s, retries: 40, start_period: 5s }
     depends_on:
