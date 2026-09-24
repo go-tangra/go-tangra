@@ -296,3 +296,10 @@ Without the profile the `ldap` network still exists but is empty. The console
 e2e `console/tests/e2e/directory.spec.ts` (go-tangra-auth) uses these defaults
 (Mailpit's UI is not published on the host here — point `E2E_MAILPIT_URL` at a
 reachable Mailpit).
+
+## Development encryption keys
+
+Service images never contain key material. The stack mounts each service's
+development key-encryption key from `deploy/stack/keys/<service>.kek` at the path
+its config names (`/app/deploy/kek.dev`, or `/app/deploy/dev-kek.b64` for auth).
+These keys are public development fixtures: never reuse them outside this stack.

@@ -146,7 +146,7 @@ services:
     image: ghcr.io/go-tangra/go-tangra-lcm:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["bootstrap","-config","deploy/container.yaml","-out","/certs","-services","gateway,auth,lcm,notification","-ttl","${CERT_TTL:-12h}"]
-    volumes: ["certs:/certs","./configs/lcm.yaml:/app/deploy/container.yaml:ro"]
+    volumes: ["./keys/lcm.kek:/app/deploy/kek.dev:ro","certs:/certs","./configs/lcm.yaml:/app/deploy/container.yaml:ro"]
     depends_on:
       certs-init: { condition: service_completed_successfully }
       timescaledb: { condition: service_healthy }
@@ -163,7 +163,7 @@ services:
     user: "0:0"
     entrypoint: ["sh","-c"]
     command: ["while true; do lcmsvc bootstrap -config deploy/container.yaml -out /certs -services gateway,auth,lcm,notification -ttl ${CERT_TTL:-12h} && echo renewed $$(date -u +%H:%M:%S); sleep ${RENEW_INTERVAL:-21600}; done"]
-    volumes: ["certs:/certs","./configs/lcm.yaml:/app/deploy/container.yaml:ro"]
+    volumes: ["./keys/lcm.kek:/app/deploy/kek.dev:ro","certs:/certs","./configs/lcm.yaml:/app/deploy/container.yaml:ro"]
     depends_on: { lcm-bootstrap: { condition: service_completed_successfully } }
 
   # Seed the gateway route allow-list (module SPIFFE id -> route prefixes; name)
@@ -196,7 +196,7 @@ services:
     image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["bootstrap","-config","deploy/container.yaml","-operator-email","${OPERATOR_EMAIL:-admin@example.org}"]
-    volumes: ["certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    volumes: ["./keys/auth.kek:/app/deploy/dev-kek.b64:ro","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
     restart: "no"
     depends_on:
       timescaledb: { condition: service_healthy }
@@ -215,6 +215,7 @@ services:
     environment:
       SSL_CERT_FILE: /pebble-ca/bundle.pem
     volumes:
+      - "./keys/lcm.kek:/app/deploy/kek.dev:ro"
       - "./configs/lcm.yaml:/app/deploy/container.yaml:ro"
       - "pebble-certs:/pebble-ca:ro"
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9591/readyz"], interval: 5s, timeout: 3s, retries: 40, start_period: 5s }
@@ -236,7 +237,7 @@ services:
     networks: [default, ldap]
     environment:
       FREYA_ADVERTISE_HOST: auth
-    volumes: ["certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    volumes: ["./keys/auth.kek:/app/deploy/dev-kek.b64:ro","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9190/readyz"], interval: 5s, timeout: 3s, retries: 40, start_period: 5s }
     depends_on:
       timescaledb: { condition: service_healthy }
@@ -297,7 +298,7 @@ services:
     image: ghcr.io/go-tangra/go-tangra-notification:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","notification-state:/state","./configs/notification.yaml:/app/deploy/container.yaml:ro"]
+    volumes: ["./keys/notification.kek:/app/deploy/kek.dev:ro","tokens:/tokens:ro","notification-state:/state","./configs/notification.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9590/readyz"], interval: 5s, timeout: 3s, retries: 40, start_period: 5s }
     depends_on:
       timescaledb: { condition: service_healthy }
@@ -355,7 +356,7 @@ services:
     image: ghcr.io/go-tangra/go-tangra-deployer:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","deployer-state:/state","./configs/deployer.yaml:/app/deploy/container.yaml:ro"]
+    volumes: ["./keys/deployer.kek:/app/deploy/kek.dev:ro","tokens:/tokens:ro","deployer-state:/state","./configs/deployer.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9690/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
       timescaledb: { condition: service_healthy }
@@ -386,7 +387,7 @@ services:
     image: ghcr.io/go-tangra/go-tangra-paperless:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","paperless-state:/state","./configs/paperless.yaml:/app/deploy/container.yaml:ro"]
+    volumes: ["./keys/paperless.kek:/app/deploy/kek.dev:ro","tokens:/tokens:ro","paperless-state:/state","./configs/paperless.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9790/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
       timescaledb: { condition: service_healthy }
@@ -421,7 +422,7 @@ services:
     image: ghcr.io/go-tangra/go-tangra-inventory:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","inventory-state:/state","./configs/inventory.yaml:/app/deploy/container.yaml:ro"]
+    volumes: ["./keys/inventory.kek:/app/deploy/kek.dev:ro","tokens:/tokens:ro","inventory-state:/state","./configs/inventory.yaml:/app/deploy/container.yaml:ro"]
     ports: ["9977:9977"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9810/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
@@ -454,7 +455,7 @@ services:
     user: "0:0"
     cap_add: ["NET_RAW"]
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","ipam-state:/state","./configs/ipam.yaml:/app/deploy/container.yaml:ro"]
+    volumes: ["./keys/ipam.kek:/app/deploy/kek.dev:ro","tokens:/tokens:ro","ipam-state:/state","./configs/ipam.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9820/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
       timescaledb: { condition: service_healthy }
@@ -486,7 +487,7 @@ services:
     image: ghcr.io/go-tangra/go-tangra-asset:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","asset-state:/state","./configs/asset.yaml:/app/deploy/container.yaml:ro"]
+    volumes: ["./keys/asset.kek:/app/deploy/kek.dev:ro","tokens:/tokens:ro","asset-state:/state","./configs/asset.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9830/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
       timescaledb: { condition: service_healthy }
@@ -537,7 +538,7 @@ services:
     image: ghcr.io/go-tangra/go-tangra-ticket:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","ticket-state:/state","ticket-secrets:/secrets:ro","edge-cert:/edge:ro","./configs/ticket.yaml:/app/deploy/container.yaml:ro"]
+    volumes: ["./keys/ticket.kek:/app/deploy/kek.dev:ro","tokens:/tokens:ro","ticket-state:/state","ticket-secrets:/secrets:ro","edge-cert:/edge:ro","./configs/ticket.yaml:/app/deploy/container.yaml:ro"]
     ports: ["9957:9957"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9840/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
@@ -679,7 +680,7 @@ services:
     user: "0:0"
     group_add: ["${DOCKER_GID:-999}"]
     command: ["-config","deploy/container.yaml"]
-    volumes: ["tokens:/tokens:ro","dns-state:/state","dns-secrets:/secrets:ro","pdns-auth-conf:/pdns-auth-conf","pdns-recursor-conf:/pdns-recursor-conf",
+    volumes: ["./keys/dns.kek:/app/deploy/kek.dev:ro","tokens:/tokens:ro","dns-state:/state","dns-secrets:/secrets:ro","pdns-auth-conf:/pdns-auth-conf","pdns-recursor-conf:/pdns-recursor-conf",
       "/var/run/docker.sock:/var/run/docker.sock","./configs/dns.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9850/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
     depends_on:
