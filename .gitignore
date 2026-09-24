@@ -37,11 +37,14 @@ services/notification/coverage.out
 # local tool state / stray builds
 .playwright-mcp/
 .spec-router/
-services/auth/authsvc
-services/inventory/inventory-agent
-services/lcm/lcm-devca
-services/lcm/lcmsvc
-services/paperless/paperlesssvc
+# service binaries built at a service root (files only; cmd/<x>svc source dirs stay tracked)
+/services/*/*svc
+!/services/*/*svc/
+/services/*/inventory-agent
+/services/*/inventory-agent.exe
+/services/*/lcm-devca
+services/*/bin/
+services/*/coverage.out
 # shared UI kit / npm workspace
 node_modules/
 ui/kit/dist/
