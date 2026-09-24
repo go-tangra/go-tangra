@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T031 claude] If the target policy refuses a URL (for example a literal IP or a bad port), the test returns a failed `connect` step with reason `target_refused`, not an error. A bad URL, CA, DN or TLS mode, or `insecure_transport`, is returned as an error before any dial.
-- [T031 claude] Tests don't check name, kind, filter or attributes; only the connection parameters are validated.
-- [T031 claude] `last_test_outcome` is `ok` or the reason. Any reason outside the data-model list is stored as `directory_error`. It is saved with a context that ignores the caller's cancellation (5 s timeout), so a timed-out test is still recorded.
-- [T034 claude] `RegisterDirectory` is always called, so declared routes = mounted routes. `Directories` is set only when the service exists, which avoids passing a typed-nil interface to httpapi.
-- [T034 claude] The BER cap stays in `ldapdir`'s `init()`. `app.buildDirectory` only checks that `ber.MaxPacketLengthBytes == ldapdir.MaxBERPacketBytes` and fails `Build` if not.
 - [T034 claude] Temporary store adapter `directoryStore` in `app.go` (each method is one `store.Tx` under `Scope{TenantID}`; `GetDirectoryConnectionAnyTenant` runs under `Scope{System: true}`). This deviates from T032's planned `directorydb`, which wasn't implemented.
 - [T032 claude] `Atomic(ctx, tenantID, fn func(pgx.Tx) error)` forces tenant scope and returns an error for an empty tenant id (an empty `app.tenant_id` would silently match nothing). Only `GetDirectoryConnectionAnyTenant` uses `Scope{System: true}`.
 - [T032 claude] Each connection method is its own transaction via `Atomic`; the value-struct parameters carry `//nolint:gocritic` because `directory.Store` fixes those signatures.
@@ -56,12 +51,14 @@
 - [T046 claude] E-mail: first value only, normalised as `invite.normEmail` does, but invalid UTF-8 and control characters are also refused (`invalid_email`). The UTF-8 check runs before `ToLower`.
 - [T046 claude] Names: first value through `user.ValidateName`. Over 100 bytes after trimming gives `value_too_long`. Invalid UTF-8 or a control character drops that name without refusing the entry. The display name falls back to `user.DeriveDisplayName(first, last, "", normalisedEmail)` with `DisplayNameExplicit=false`.
 - [T046 claude] Unknown kinds get the same preset as `"other"` (`Mapping{Email: "mail"}`).
+- [T047 claude] Order: lookup → scope/filter/base validation → `s.allow` rate limit → unseal → directory. Validation failures don't count against the rate limit (this differs from T031's Test).
+- [T047 claude] Audit `directory_searched`: subject = connection. Refused (`invalid_filter`/`invalid_base`/`rate_limited`) has no details. Failed/ok details = `filter` (canonical user filter, cut to 1024 bytes), `scope`, `count`, `truncated`, and `base` only when narrowed. A scope `ErrValidation` is not audited.
+- [T047 claude] Preview: the link of this connection decides first (user status `imported` → `imported`, anything else → `existing_user`). Then an e-mail match (case-insensitive) → `existing_user`, else `new`. Items that fail `Decode` get `invalid` plus `ldapdir.Reason`.
+- [T047 claude] Deadline = dial timeout + time limit + 2 s over the whole session. A `context.DeadlineExceeded` is mapped to `ldapdir.ErrTimeout`. Directory errors are returned as the ldapdir closed errors.
+- [T047 claude] Entries are capped client-side at `SizeLimit` again (marks truncated), even though the client already does this.
 
 ## Interfaces
 
-- [T035 kimi] `@/schemas/directory` exports `directoryConnectionSchema` (optional `bind_password`, blank→undefined = keep; `allow_tls12` defaults false; optional `size_limit` 1–1000 / `time_limit_seconds` 1–60 via `''`-preprocess) and `directoryCreateSchema` (refine: `bind_password` required, message `Enter the bind password.`). Pinned messages: `Enter an ldap:// or ldaps:// URL.`, `At most 80 characters.…
-- [T035 kimi] `data-test` contract: page `directories`; `directory-row`, `directory-name`, `directory-url`, `directory-tls`, `last-test` (chip `title` = raw ISO `at`); buttons `new-directory`, `edit`, `delete-directory`, `save-directory`, `test-connection`; drawer `directory-drawer`; fields `directory-name`, `directory-kind` (native `<select>` inside), `directory-url`, `directory-tls-mode`, `bind-dn`, `base-dn`…
-- [T035 kimi] Route pinned: `/admin/directories`, name `admin-directories`, roles owner/admin. Register reason wording T036 must add in `api/client.ts`: at least `tls_failed: 'The TLS handshake failed.'`.
 - [T028 claude] operationIds: `listDirectories`, `createDirectory`, `testDirectoryInput` (POST /directories/test), `getDirectory`, `updateDirectory`, `deleteDirectory` (POST /{id}/remove), `testDirectory` (POST /{id}/test).
 - [T028 claude] TS: `components["schemas"]["DirectoryConnection" | "DirectoryConnectionInput" | "DirectoryTestInput" | "TestResult" | "DirectoryAttributes"]`. `TestResult.step` is `"connect"|"tls"|"bind"|"search_base"|null`.
 - [T029 claude] `authmanifest.Version == "1.2.0"`; permission ref `directory:manage`; CASL ability `manage DirectoryConnection`; nav path `/console/admin/directories`.
@@ -109,12 +106,12 @@
 - [T046 claude] `func DefaultMapping(kind string) Mapping`, `func Decode(m Mapping, e RawEntry) (Person, error)`
 - [T046 claude] `const MaxUIDBytes = 256, MaxEmailBytes = 254, MaxDNBytes = 1024`
 - [T046 claude] `ErrNoEmail`, `ErrInvalidEmail`, `ErrValueTooLong`, `ErrMultiValuedUID`, `ErrInvalidUID`; `Reason()` maps them to their snake_case codes.
+- [T047 claude] `directory.Store` gained `UsersByEmails(ctx, tid, emails)`, `LinksByUIDs(ctx, tid, connID, uids)` and `User(ctx, tid, id) (store.User, error)`. `directorydb.DBStore` implements all three (User via `store.GetUser`).
+- [T047 claude] `SearchRequest{Filter, Base, Scope}`, `SearchResult{Items, Truncated, OutOfScope, EffectiveFilter}` and `SearchItem{UID, DN, Email, DisplayName, FirstName, LastName, Status, UserID, Reason}`, with `MarshalJSON`/`UnmarshalJSON` (null ↔ "").
+- [T047 claude] Constants `StatusNew`, `StatusExistingUser`, `StatusImported`, `StatusInvalid`. Helpers T048 can reuse: `mappingOf(c)`, `mappedAttributes(c)`, `s.runSearch`-style session code, `closedDirErr`, and `s.testPassword(&Input{}, &c, tid, connID)` to unseal the stored password.
 
 ## Gotchas
 
-- [T026 claude] The whole `internal/httpapi` test package fails to compile until T030 (types and sentinels), T033 (handlers) and T028 (routes in console.yaml) all land. `MustHandle` panics on undeclared routes.
-- [T026 claude] A missing CSRF header is refused by the OpenAPI validator (required header parameter → 400) before the handler runs, so T028 must declare `#/components/parameters/csrf` on every mutation.
-- [T026 claude] `directory.Connection` must not have any JSON field whose key contains "password" other than `bind_password_set`, and must ignore unknown keys when decoding. The fixture offers `bind_password`, `bind_password_enc` and similar keys on purpose.
 - [T026 claude] Never print a recorded `dirCall.Input` with `%+v`: it holds the password. Use `dirOps(calls)`, because the redaction scan runs with `-v`.
 - [T027 claude] `NavEntry.Order` is `int32`.
 - [T027 claude] `TestOpenAPIDocument` still passes once the routes are only declared, so T028 can add the yaml before the handlers exist.
@@ -162,3 +159,6 @@
 - [T046 claude] `ldapdir` now imports `internal/user`, so `user` must never import `ldapdir`.
 - [T046 claude] The `ldapdir` test binary won't compile until T044 (filter.go) and T045 (dn.go) land. To run the other tests, move `filter_test.go` and `dn_test.go` aside temporarily.
 - [T046 claude] `strings.ToLower` silently replaces invalid UTF-8 with U+FFFD, so validate before normalising.
+- [T047 claude] The `directory` package (and so `app`) won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter.String`) and T045 (`ScopeBase`, `WithinBase`) land. Its tests also need T048's `Import`, because of `import_test.go`.
+- [T047 claude] Verification used throwaway stand-ins for T044/T045 in `ldapdir`, since deleted. The T041 tests need `CompileUserFilter` to reject NUL, `:dn:` and anything over 4096 bytes, and `WithinBase` to reject "not a dn" and "".
+- [T047 claude] memstore `UsersByEmails` keys the map by the stored (original-case) e-mail, so lower-case the keys before matching.
