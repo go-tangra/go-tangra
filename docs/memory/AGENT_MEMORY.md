@@ -6,7 +6,6 @@
 
 ## Decisions
 
-- [T020 claude] `ParseCA` is strict: the number of `-----BEGIN` markers must equal the number of decoded certificates. This is because `pem.Decode` silently skips a malformed block and returns the next good one.
 - [T020 claude] Only an exactly empty CA string means system roots. A whitespace-only string gives `ErrInvalidCA`.
 - [T020 claude] An empty `Endpoint.Host` returns an error wrapping `ErrInvalidURL`. No new error variable was added.
 - [T020 claude] Error texts are fixed and never echo the PEM input.
@@ -56,10 +55,10 @@
 - [T028 claude] `POST /directories/test` uses its own closed schema `DirectoryTestInput`: the input fields plus `connection_id` (uuid). It is not an `allOf`, because the contract test needs a closed body.
 - [T028 claude] Attribute names use `DirectoryAttributeName` (maxLength 64, pattern `^([A-Za-z][A-Za-z0-9-]{0,63})?$`), which allows an empty string. `name` rejects control characters, as `GroupInput` does.
 - [T028 claude] `size_limit` must be 1–1000 and `time_limit_seconds` 1–60 in both input and output. `last_test`, `TestResult.step`, `reason` and `tls` are `nullable: true`.
+- [T029 claude] `directory:manage` goes before `tenants:operate` in the operator grant list, and the nav entry comes right after Users (order 800) so entries stay sorted by order.
 
 ## Interfaces
 
-- [T011 claude] `(m *Store) InsertDirectoryConnection(ctx, store.DirectoryConnection) error`; `GetDirectoryConnection(ctx, tid, id)`; `GetDirectoryConnectionAnyTenant(ctx, id)`; `ListDirectoryConnections(ctx, tid)`; `CountDirectoryConnections(ctx, tid) (int, error)`; `UpdateDirectoryConnection(ctx, c) error`; `SetDirectoryConnectionTest(ctx, tid, id, outcome string, at time.Time) error`; `DeleteDirectoryConnectio…
 - [T011 claude] `(m *Store) UsersByEmails(ctx, tid, []string) (map[string]store.User, error)`; `LinksByUIDs(ctx, tid, connID, []string) (map[string]store.DirectoryLink, error)`; `UpsertLink(ctx, store.DirectoryLink) error`; `UpdateImportedUser(ctx, tid, uid, store.ImportedProfile) error`; `DeleteImportedUser(ctx, tid, uid) error`.
 - [T011 claude] `(m *Store) FailNext(method string)` arms a one-shot error (unexported type `injectedErr`) for any of the directory methods above, by method name. It is not wired into older memstore methods.
 - [T015 claude] `user.ErrInvalidState` (exported sentinel in `internal/user/admin.go`, next to `ErrLastOwner`) is expected by the test.
@@ -109,10 +108,10 @@
 - [T035 kimi] Route pinned: `/admin/directories`, name `admin-directories`, roles owner/admin. Register reason wording T036 must add in `api/client.ts`: at least `tls_failed: 'The TLS handshake failed.'`.
 - [T028 claude] operationIds: `listDirectories`, `createDirectory`, `testDirectoryInput` (POST /directories/test), `getDirectory`, `updateDirectory`, `deleteDirectory` (POST /{id}/remove), `testDirectory` (POST /{id}/test).
 - [T028 claude] TS: `components["schemas"]["DirectoryConnection" | "DirectoryConnectionInput" | "DirectoryTestInput" | "TestResult" | "DirectoryAttributes"]`. `TestResult.step` is `"connect"|"tls"|"bind"|"search_base"|null`.
+- [T029 claude] `authmanifest.Version == "1.2.0"`; permission ref `directory:manage`; CASL ability `manage DirectoryConnection`; nav path `/console/admin/directories`.
 
 ## Gotchas
 
-- [T014 claude] Any new sign-in branch that reads `u` before checking `known` now gets a zero user for imported accounts. That is intended, so keep it that way.
 - [T015 claude] The `internal/user` package won't compile until T016 defines `ErrInvalidState`.
 - [T015 claude] The store test needs docker: `sg docker -c 'go test -tags integration -run TestGroupRepos ./internal/store/'`.
 - [T015 claude] The intended fix is small: `if u.Status == "imported" { return ErrInvalidState }` after `lookup` in both `Deactivate` and `Reactivate`, plus `AND u.status <> 'imported'` in the `INSERT … SELECT` of `AddGroupMembers`. With it, everything passes.
@@ -162,3 +161,4 @@
 - [T028 claude] kin-openapi does not enforce `format: uuid` on path ids, so a malformed id reaches the handler, which must answer 404 `not_found` itself.
 - [T028 claude] The request validator rejects an empty `bind_password` (minLength 1) with 400 `validation_failed` before the service runs. The console must leave the field out, not send `""`.
 - [T028 claude] Running `npm install` at the repo root changes the root `package-lock.json`. Revert it unless a task means to change it.
+- [T029 claude] `services/auth/tests/contract` and `services/auth/internal/app` do not build yet: `internal/httpapi/directory.go` refers to `directory.Connection`, `directory.Input`, `directory.TestResult` and `directory.ErrNotFound`, which later tasks still have to add. The manifest itself is fine.
