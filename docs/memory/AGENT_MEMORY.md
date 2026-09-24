@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T025 claude] Two methods, not one: `Test(ctx, actor tenantctx.Actor, tenantID string, in Input, connID string)` for unsaved settings (connID only supplies the stored password, never persists last_test) and `TestSaved(ctx, actor, tenantID, id string)` for `POST /{id}/test` (persists last_test). The contract lists only `Test`, so this is a deviation.
-- [T025 claude] A failing step is a `TestResult` with a nil error. Target refused (literal IP or port outside policy, found by `CheckURL`) is a result `{step: connect, reason: target_refused}` with no connection attempt, since the test route has no 422. Refused before connecting and returned as errors: malformed URL or scheme/TLS-mode mismatch (`ldapdir.ErrInvalidURL`), bad CA (`ldapdir.ErrInvalidCA`), unknown tl…
-- [T025 claude] Step mapping: `Open` error `ErrTLS` → tls, any other `Open` error → connect; an ldaps/starttls session whose `TLSState()` reports no completed handshake → tls/tls_failed with no bind; Bind → bind; BaseExists → search_base. Reason = `ldapdir.Reason(err)`. last_test outcome = "ok" or the reason.
-- [T025 claude] A typed `BindPassword` wins over the stored one; nil plus `connID` means reuse the stored password; `""` is always refused.
-- [T025 claude] Audit `directory_connection_tested`: outcome ok/failed/refused(rate_limited), `Reason` = reason, details `step` (on failure) and `connection_id` (saved tests). A cross-tenant id also emits `cross_tenant_refused`; the test accepts either tenant id on that row.
 - [T026 claude] The handlers depend on an interface, not on `*directory.Service`, so the tests use a fake and don't depend on T024/T025's constructor.
 - [T026 claude] Every service method takes `(ctx, actor tenantctx.Actor, tenantID string, …)` and the handler always passes `a.TenantID`; the fake fails the test otherwise.
 - [T026 claude] Saved-connection test calls `Test(ctx, a, a.TenantID, directory.Input{}, id)`. A zero `Input` means "use the stored settings and persist last_test", following the single `Test` in contracts §C. Unsaved test passes the decoded body plus `connection_id` (empty if absent).
@@ -56,13 +51,14 @@
 - [T038 claude] Every failure returns `("", ErrInvalidBase)`: an invalid connection base, an invalid requested base, or one outside the base. The error text must not echo the input.
 - [T038 claude] `WithinBase` returns true for the base entry itself and for any descendant. It returns false if either DN is invalid.
 - [T038 claude] A DN counts as invalid if it is blank, fails `ldap.ParseDN`, has no RDNs, has an empty type or value (e.g. `cn=,…`), or is over 1024 bytes. These are the same rules as `directory.validDN`.
+- [T039 claude] The uid is decoded as a GUID only when the uid attribute is `objectGUID` (any letter case). The value must be exactly 16 raw bytes. Output is lower-case `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` with the first three groups little-endian. Any other length, including the 36-byte text form, gives `ErrInvalidUID`.
+- [T039 claude] String uids (entryUUID, other) are used exactly as received (no trimming or case change) so the import re-fetch filter matches. They must be valid UTF-8, non-empty and ≤ 256 bytes.
+- [T039 claude] A uid with more than one value gives `ErrMultiValuedUID` and no value is picked. A missing or unmapped uid gives `ErrInvalidUID`.
+- [T039 claude] Mail, display name, first name and last name use the first value.
+- [T039 claude] Caps: DN ≤ 1024 bytes, uid ≤ 256, trimmed mail ≤ 254, each name ≤ 100 bytes after trimming (`user.NameMax`, counted in bytes, not runes). Anything over a cap gives `ErrValueTooLong`.
 
 ## Interfaces
 
-- [T021 claude] `type RawEntry struct{ DN string; Attrs map[string][][]byte }`. Attribute keys are lower-cased.
-- [T022 claude] `ldapdir.Directory{Open(ctx, ConnParams) (Session, error)}`; `ldapdir.Session{Bind(ctx, dn string, pw []byte) error; BaseExists(ctx, baseDN string) error; Search(ctx, Query) (Page, error); TLSState() (tls.ConnectionState, bool); Close() error}`.
-- [T022 claude] `type Page struct{ Entries []RawEntry; Truncated bool; Referrals int }`; `ConnParams`, `Query`, `RawEntry`, `Scope` (`ScopeSub`/`ScopeOne`) are as T021 defined them.
-- [T022 claude] `const TLSModeLDAPS = "ldaps"`, `TLSModeStartTLS = "starttls"`, `TLSModePlain = "plain"`; `DefaultDialTimeout = 5s`; `MaxBERPacketBytes = 8 MiB` (set in `init()`).
 - [T022 claude] Errors: `ErrUnreachable`, `ErrTimeout`, `ErrTLS`, `ErrInvalidCredentials`, `ErrBaseNotFound`, `ErrDirectory`, `ErrInvalidFilter`, `ErrInvalidBase` (in `errors.go`); `type DirectoryError struct{ Code int }` (matches `ErrDirectory`); `func Reason(err error) string` returns target_refused, unreachable, timeout, tls_failed, invalid_credentials, base_not_found, invalid_filter, invalid_base, invalid_url…
 - [T022 claude] `mapError(err) error` is unexported; T023's fake should return the exported sentinels or `*DirectoryError` directly.
 - [T023 claude] `ldapfake.New() *Directory` (implements `ldapdir.Directory`, safe for concurrent use); `type Entry struct{DN string; Attrs map[string][][]byte}`; `func Vals(...string) [][]byte`.
@@ -109,11 +105,13 @@
 - [T036 codex] Exports `directoryConnectionSchema`, `directoryCreateSchema`, `DirectoryInput`, `DirectoryConnection`, and `DirectoryTestResult`.
 - [T036 codex] `DirectoryDrawer` accepts `connection` and emits `close` and `saved`.
 - [T038 claude] `func ScopeBase(connBase, requested string) (string, error)` (errors: `ErrInvalidBase`); `func WithinBase(connBase, entryDN string) bool`.
+- [T039 claude] `type Mapping struct{ UID, Email, DisplayName, FirstName, LastName string }` (comparable)
+- [T039 claude] `type Person struct{ UID, DN, Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool }` (comparable, compared with `==`)
+- [T039 claude] `func DefaultMapping(kind string) Mapping`; `func Decode(m Mapping, e RawEntry) (Person, error)`. RawEntry attribute keys are lower-case, so `Decode` must look up `strings.ToLower(attr)`.
+- [T039 claude] Sentinels `ErrNoEmail`, `ErrInvalidEmail`, `ErrValueTooLong`, `ErrMultiValuedUID`, `ErrInvalidUID`. `Reason(err)` must return `no_email`, `invalid_email`, `value_too_long`, `multi_valued_uid`, `invalid_uid`, so add them to `closedErrors` and `reasons` in `errors.go`. Error text must not contain directory values.
 
 ## Gotchas
 
-- [T020 claude] To keep 100% coverage, the malformed-block-before-a-valid-certificate case is tested in `tlsconf_extra_test.go`.
-- [T020 claude] To pass golangci-lint, I changed `tlsconf_test.go`: `handshake` now takes `*testPKI`, deferred `Close` calls are wrapped, and one boolean expression was rewritten.
 - [T021 claude] go-ldap's `StartTLS` formats the handshake error with `%v`, so the x509 cause is lost. Classify by step: any StartTLS error means ErrTLS.
 - [T021 claude] When a server refuses TLS 1.3, the error is a `*net.OpError{Op:"remote error"}` wrapping an unexported alert type, not `tls.AlertError`. Without the Op check it maps to Unreachable.
 - [T021 claude] golangci-lint's gocritic flags `hugeParam` on `Search(ctx, q Query)` (80 bytes). The contract fixes it by value, so T022 needs a `//nolint:gocritic` on that function.
@@ -162,3 +160,5 @@
 - [T036 codex] npm requires a writable cache here: `--cache /tmp/t036-npm-cache`.
 - [T038 claude] go-ldap's `RelativeDN.EqualFold` already matches multi-valued RDN attributes in any order. `AncestorOfFold` plus `EqualFold` is enough; the suffix-trick and escaped-comma cases need no extra handling.
 - [T038 claude] `ldap.ParseDN("")` succeeds, so T045 must reject blank and empty-value DNs itself.
+- [T039 claude] A struct field with an elided composite type (`{DN: ...}` inside a struct literal) won't compile; spell out `RawEntry{...}`.
+- [T039 claude] The test helper is named `rawEntry` (and `testDN`, `adGUIDBytes`, `inviteNormEmail`, `openLDAPMapping`) to avoid clashing with the parallel T037/T038 test files.
