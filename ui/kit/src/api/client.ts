@@ -52,7 +52,10 @@ function reasonOf(data: unknown): { reason: string; detail?: Record<string, unkn
   if (typeof data === 'object' && data !== null && 'reason' in data) {
     const d = data as { reason: unknown; detail?: unknown }
     const detail = typeof d.detail === 'object' && d.detail !== null ? (d.detail as Record<string, unknown>) : undefined
-    return detail ? { reason: String(d.reason), detail } : { reason: String(d.reason) }
+    const flat = Object.fromEntries(Object.entries(data).filter(([key]) => key !== 'reason' && key !== 'detail'))
+    const extra = Object.keys(flat).length ? flat : undefined
+    const resolved = detail ?? extra
+    return resolved ? { reason: String(d.reason), detail: resolved } : { reason: String(d.reason) }
   }
   return { reason: 'error' }
 }
