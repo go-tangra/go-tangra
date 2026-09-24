@@ -1,13 +1,23 @@
 {
-  "name": "@freya/ui",
-  "version": "1.0.0",
-  "private": true,
+  "name": "@go-tangra/ui",
+  "version": "4.0.0",
   "type": "module",
-  "description": "Freya shared UI kit: FlyonUI/Tailwind components, Zod form layer, API client and theme, consumed by the gateway shell, the auth console and every module remote.",
+  "description": "go-tangra shared UI kit: FlyonUI/Tailwind components, Zod form layer, API client and theme, consumed by the portal shell, the auth console and every module remote.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/go-tangra/go-tangra.git",
+    "directory": "ui/kit"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "files": [
     "dist",
+    "build",
+    "bin",
     "src/theme.css",
-    "build"
+    "sources.css",
+    "eslint.rules.js"
   ],
   "exports": {
     ".": {
@@ -23,8 +33,13 @@
       "import": "./dist/api.js"
     },
     "./theme.css": "./src/theme.css",
-    "./src/*": "./src/*",
+    "./sources.css": "./sources.css",
+    "./eslint": "./eslint.rules.js",
+    "./package.json": "./package.json",
     "./vite": "./build/breakpoint-specificity.mjs"
+  },
+  "bin": {
+    "go-tangra-ui-check-no-legacy": "bin/check-no-legacy.mjs"
   },
   "sideEffects": [
     "*.css"
@@ -38,9 +53,23 @@
     "catalogue:build": "vite build --config catalogue/vite.config.ts"
   },
   "peerDependencies": {
+    "@iconify/tailwind4": "^1.2.3",
+    "flyonui": "^2.4.1",
+    "tailwindcss": "^4.3.3",
     "vue": "^3.5.0",
     "vue-router": "^5.0.0",
     "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@iconify/tailwind4": {
+      "optional": true
+    },
+    "flyonui": {
+      "optional": true
+    },
+    "tailwindcss": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",

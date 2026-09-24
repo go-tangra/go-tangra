@@ -40,7 +40,7 @@ const grants = ref<Grant[]>([{ id: 'g1', subject_kind: 'group', subject_id: 'grp
 const subjects: SelectOption[] = [{ title: 'Grace (user)', value: 'user:u2' }, { title: 'Developers (group)', value: 'group:grp-dev' }]
 const levels: SelectOption[] = [{ title: 'View', value: 'view' }, { title: 'Edit', value: 'edit' }, { title: 'Admin', value: 'admin' }]
 const remoteState = ref<'ok' | 'loading' | 'error' | 'mismatch'>('ok')
-const remoteError = () => (remoteState.value === 'error' ? new Error('Remote threw during mount') : remoteState.value === 'mismatch' ? new Error('Unsatisfied version 0.9.0 from asset of shared singleton module @freya/ui (required ^1.0.0)') : undefined)
+const remoteError = () => (remoteState.value === 'error' ? new Error('Remote threw during mount') : remoteState.value === 'mismatch' ? new Error('Unsatisfied version 3.9.0 from asset of shared singleton module @go-tangra/ui (required ^4.0.0)') : undefined)
 </script>
 
 <template>

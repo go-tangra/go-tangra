@@ -3,7 +3,9 @@
 - `check-duplicates.mjs` — fails when a component basename exists both in the kit
   (`ui/kit/src/components`) and in any front-end, or in two or more front-ends. A
   component needed by a second front-end moves to the kit.
-- `check-no-legacy.mjs` — for front-ends marked `migrated` in `ui/MIGRATION.md`, fails on
+- `check-no-legacy` — ships in the kit (`ui/kit/bin/check-no-legacy.mjs`, bin
+  `go-tangra-ui-check-no-legacy`; each front-end's `npm run lint` checks its own
+  directory, `--root .` checks every front-end marked `migrated` in `ui/MIGRATION.md`); fails on
   imports of `vuetify`, `vite-plugin-vuetify`, `@mdi/font`, on `:rules=`/`v-form`
   bindings and on `style=`/`:style=` attributes (the edge CSP has no `unsafe-inline`).
 - `check-bundle-size.mjs` — measures gzipped JS+CSS of the shell and asset `dist/` and

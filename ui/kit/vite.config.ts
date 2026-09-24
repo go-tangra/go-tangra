@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import dts from 'vite-plugin-dts'
 
-// Library build of @freya/ui: three entries (components, forms, api), ESM only,
+// Library build of @go-tangra/ui: three entries (components, forms, api), ESM only,
 // peers externalised. Consumers compile the CSS themselves (Tailwind scans the
 // dist through @source), so no stylesheet is emitted here.
 export default defineConfig({

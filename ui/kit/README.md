@@ -1,4 +1,4 @@
-# `@freya/ui` — the Freya front-end kit
+# `@go-tangra/ui` — the Freya front-end kit
 
 One component library, one theme and one form/API recipe for every Freya
 front-end (the gateway shell, the auth console and the eight module remotes).
@@ -7,10 +7,14 @@ package (`ui/kit`) that every front-end consumes through Module Federation as a
 shared singleton.
 
 ```
-@freya/ui            components + composables (UiButton, UiDataTable, useToast …)
-@freya/ui/forms      useZodForm, zodToFields, messages, shared schema primitives
-@freya/ui/api        createApi (fetch transport: CSRF, request ids, ApiError)
-@freya/ui/theme.css  the two platform themes (freya-light / freya-dark)
+@go-tangra/ui            components + composables (UiButton, UiDataTable, useToast …)
+@go-tangra/ui/forms      useZodForm, zodToFields, messages, shared schema primitives
+@go-tangra/ui/api        createApi (fetch transport: CSRF, request ids, ApiError)
+@go-tangra/ui/theme.css  the two platform themes (freya-light / freya-dark)
+@go-tangra/ui/sources.css  `@source "./dist"` — makes Tailwind scan the kit's components
+@go-tangra/ui/eslint     shared lint rules (`import { freyaRules } from '@go-tangra/ui/eslint'`)
+@go-tangra/ui/vite       breakpointSpecificity() Vite plugin
+bin go-tangra-ui-check-no-legacy   legacy/CSP guard run by every front-end's `npm run lint`
 ```
 
 ## Using the kit
@@ -21,16 +25,33 @@ npm run kit                # builds ui/kit/dist (types included) — needed befo
 npm run -w ui/kit dev      # component catalogue on http://127.0.0.1:5199 (every component, both themes, synthetic data)
 ```
 
+Outside this monorepo the kit is installed from GitHub Packages
+(`@go-tangra:registry=https://npm.pkg.github.com` in `.npmrc`, plus
+`//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}` supplied by CI or the
+Docker build secret — never committed). A stylesheet that needs the kit's
+classes imports the theme and the source entry; the `@source` path resolves
+relative to the kit itself, so it works hoisted, symlinked or installed:
+
+```css
+@import "tailwindcss";
+@import "@go-tangra/ui/theme.css";
+@import "@go-tangra/ui/sources.css";
+```
+
+Publishing: `npm publish -w ui/kit` (registry from `publishConfig`); the tarball
+carries only `dist/`, `build/`, `bin/`, `src/theme.css`, `sources.css` and
+`eslint.rules.js`.
+
 A module remote imports the kit like any package; it never bundles it — the
-shell provides `@freya/ui`, `@freya/ui/forms`, `@freya/ui/api`, `zod`, `vue`,
+shell provides `@go-tangra/ui`, `@go-tangra/ui/forms`, `@go-tangra/ui/api`, `zod`, `vue`,
 `vue-router`, `pinia` and `@casl/*` as strict-version singletons
 (`module-federation.config.ts`, mirrored in the shell). Production remote builds
 set `import: false` for those, so a module bundle is only its own code.
 
 ```vue
 <script setup lang="ts">
-import { UiPage, UiCard, UiDataTable, UiRecordDialog, useToast, type Column } from '@freya/ui'
-import { zodToFields } from '@freya/ui/forms'
+import { UiPage, UiCard, UiDataTable, UiRecordDialog, useToast, type Column } from '@go-tangra/ui'
+import { zodToFields } from '@go-tangra/ui/forms'
 import { api } from '@/api/client'          // createApi({ base: '/api/<module>/v1' }) re-export
 import { supplierSchema } from '@/schemas'   // every write payload has a Zod schema under src/schemas/
 </script>

@@ -252,7 +252,7 @@ describe('UiAppShell / UiNavDrawer / UiUserMenu / UiRemoteBoundary', () => {
     expect(p.find('button[aria-label="Open navigation"]').exists()).toBe(false)
     p.unmount()
     // remote boundary
-    const Thrower = defineComponent({ setup() { throw new Error('shared module @freya/ui version mismatch') } })
+    const Thrower = defineComponent({ setup() { throw new Error('shared module @go-tangra/ui version mismatch') } })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const b = mountBody(UiRemoteBoundary, { props: { module: 'asset' }, slots: { default: () => h(Thrower) } })
     await nextTick()

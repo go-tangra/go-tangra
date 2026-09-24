@@ -1,6 +1,6 @@
 # Front-end migration status (feature 013 — FlyonUI + Zod)
 
-`ui/scripts/check-no-legacy.mjs` reads this table: a front-end marked `migrated` must not
+`go-tangra-ui-check-no-legacy --root .` (`ui/kit/bin/check-no-legacy.mjs`, run by the root `npm run check`) reads this table: a front-end marked `migrated` must not
 import Vuetify/`@mdi/font`, bind `:rules`, or use `style=` attributes.
 
 | Front-end | Path | Status |

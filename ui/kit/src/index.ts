@@ -1,5 +1,5 @@
-// @freya/ui — components + composables. Forms live in @freya/ui/forms, the API
-// client in @freya/ui/api, the theme in @freya/ui/theme.css.
+// @go-tangra/ui — components + composables. Forms live in @go-tangra/ui/forms, the API
+// client in @go-tangra/ui/api, the theme in @go-tangra/ui/theme.css.
 export { default as UiIcon } from './components/UiIcon.vue'
 export { default as UiPage } from './components/UiPage.vue'
 export { default as UiToolbar } from './components/UiToolbar.vue'

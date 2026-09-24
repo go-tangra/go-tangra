@@ -1,5 +1,6 @@
 // T065: the three static checks refuse what they must and accept what they must.
 // Fixtures are synthetic trees under a temp dir; run with `node --test ui/scripts/tests`.
+// check-no-legacy ships in the kit (ui/kit/bin, bin name go-tangra-ui-check-no-legacy).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -9,7 +10,8 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const scripts = join(dirname(fileURLToPath(import.meta.url)), '..')
-const run = (script, args) => spawnSync(process.execPath, [join(scripts, script), ...args], { encoding: 'utf8' })
+const kitBin = join(scripts, '..', 'kit', 'bin')
+const run = (script, args) => spawnSync(process.execPath, [join(script === 'check-no-legacy.mjs' ? kitBin : scripts, script), ...args], { encoding: 'utf8' })
 
 function tree(files) {
   const root = mkdtempSync(join(tmpdir(), 'freya-checks-'))
@@ -74,6 +76,19 @@ test('check-no-legacy: vuetify / @mdi/font / :rules= / style= fail in a migrated
   const clean = tree({ 'ui/MIGRATION.md': migration([['services/m/ui', 'migrated']]), 'services/m/ui/package.json': pkg(), 'services/m/ui/src/views/A.vue': '<template><UiButton /></template>' })
   assert.equal(run('check-no-legacy.mjs', ['--root', clean]).status, 0)
   for (const d of [root, host, clean]) rmSync(d, { recursive: true, force: true })
+})
+
+test('check-no-legacy --dir: checks one front-end without ui/MIGRATION.md (standalone repo)', () => {
+  const bad = tree({ 'package.json': pkg({ vuetify: '^3' }), 'src/views/A.vue': `<template><v-btn style="x" /></template>` })
+  const r = run('check-no-legacy.mjs', ['--dir', bad])
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /^src\/views\/A\.vue:1: Vuetify component/m)
+  assert.match(r.stderr, /^package\.json: legacy dependency vuetify/m)
+  const ok = tree({ 'package.json': pkg(), 'src/views/A.vue': '<template><UiButton /></template>' })
+  assert.equal(run('check-no-legacy.mjs', ['--dir', ok]).status, 0)
+  const cwd = spawnSync(process.execPath, [join(kitBin, 'check-no-legacy.mjs')], { cwd: ok, encoding: 'utf8' })
+  assert.equal(cwd.status, 0, cwd.stderr)
+  for (const d of [bad, ok]) rmSync(d, { recursive: true, force: true })
 })
 
 test('check-bundle-size: fails above 75% of the recorded baseline, passes below', () => {

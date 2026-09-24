@@ -26,7 +26,7 @@ let failed = 0
 for (const [, paths] of owners) {
   if (paths.length > 1) {
     failed++
-    console.error(`duplicate component: ${paths.join('  <->  ')}\n  keep the kit copy (ui/kit/src/components) and import it from @freya/ui`)
+    console.error(`duplicate component: ${paths.join('  <->  ')}\n  keep the kit copy (ui/kit/src/components) and import it from @go-tangra/ui`)
   }
 }
 if (failed) {

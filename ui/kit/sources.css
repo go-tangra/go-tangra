@@ -1,0 +1,9 @@
+/* Tells Tailwind to scan the kit's compiled components for class names.
+ * `@source` paths resolve relative to this file, so the import works the same
+ * in the monorepo workspace and when @go-tangra/ui is installed from a registry:
+ *
+ *   @import "tailwindcss";
+ *   @import "@go-tangra/ui/theme.css";
+ *   @import "@go-tangra/ui/sources.css";
+ */
+@source "./dist";

@@ -8,5 +8,5 @@ export const freyaRules = {
   'vue/singleline-html-element-content-newline': 'off',
   'vue/no-restricted-static-attribute': ['error', { key: 'style', message: 'Inline styles are blocked by the CSP; use classes or a kit component.' }],
   'vue/no-restricted-v-bind': ['error', { argument: 'style', message: 'Inline styles are blocked by the CSP; use classes or a kit component.' }, { argument: 'rules', message: 'Validate through a Zod schema with useZodForm, not :rules.' }],
-  'no-restricted-imports': ['error', { patterns: [{ group: ['vuetify', 'vuetify/*', '@mdi/font', '@mdi/font/*', 'vite-plugin-vuetify'], message: 'The platform UI is FlyonUI via @freya/ui.' }] }],
+  'no-restricted-imports': ['error', { patterns: [{ group: ['vuetify', 'vuetify/*', '@mdi/font', '@mdi/font/*', 'vite-plugin-vuetify'], message: 'The platform UI is FlyonUI via @go-tangra/ui.' }] }],
 }

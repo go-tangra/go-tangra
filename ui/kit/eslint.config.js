@@ -14,5 +14,6 @@ export default [
   ...vue.configs['flat/recommended'],
   { languageOptions: { globals: { ...globals.browser } } },
   { files: ['**/*.vue'], languageOptions: { parser: vueParser, parserOptions: { parser: ts.parser } } },
+  { files: ['bin/**', 'build/**'], languageOptions: { globals: { ...globals.node } } },
   { rules: { ...freyaRules, 'vue/require-default-prop': 'off' } },
 ]
