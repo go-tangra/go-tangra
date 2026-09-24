@@ -6,8 +6,6 @@
 
 ## Decisions
 
-- [T044 claude] Attribute descriptions must be a descriptor or a numeric OID (no leading zeros), optionally followed by `;option`s. Matching rules must be a descriptor or an OID. `:dn:` is refused in every spelling, including a rule that equals "dn" in any case. A NUL is refused raw or escaped in any assertion value.
-- [T045 claude] `ScopeBase` returns the caller's string unchanged (the requested base, or `connBase` when the request is blank), not `DN.String()`. A re-serialised DN could change bytes or exceed the 1024-byte cap and then fail `WithinBase`.
 - [T045 claude] A DN is valid only if it is non-blank, at most `MaxDNBytes` (1024), parses with `ldap.ParseDN`, has at least one RDN, and has no attribute with an empty type or value. These are the same rules as `directory.validDN`.
 - [T045 claude] Every failure returns `("", ErrInvalidBase)`, and the error text never includes the input.
 - [T052 codex] Selection permits only new/imported entries, capped at 500.
@@ -56,6 +54,8 @@
 - [T065 kimi] Refused targets are asserted via the `TestResult` body (`ok:false, step:connect, reason:target_refused|unreachable`), never via transport errors: the endpoint turns `ErrTargetRefused` into a failed connect step, so 200 + coarse reason is the contract.
 - [T065 kimi] `ldap://` URLs use `tls_mode:"plain"` with `directory.allow_plaintext: true` set in the test config hook (harness env is "test"); only `[::1]` uses `ldaps://` per the quickstart. Without this, checkTarget's insecure_transport check fires before the dial for allowed ldap:// targets.
 - [T065 kimi] deny_cidrs test set = `10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fd00::/8` (all docker default pools); allow_cidrs = the pg container IP /32 (or /128), so the deny case uses `pgIP.Next()` — refused pre-dial, deterministic regardless of what holds that address.
+- [T068 claude] Documented values come from the code (`config.Default`/`validate`, `ldapdir` constants, `httpapi/directory.go` status mapping), not the spec. If a limit changes, update both docs.
+- [T068 claude] operations.md's sample `deny_cidrs` is the private ranges (10/8, 172.16/12, 192.168/16, fd00::/8), the same set T065's SSRF test uses.
 
 ## Interfaces
 
@@ -112,8 +112,6 @@
 
 ## Gotchas
 
-- [T040 kimi] Go fuzzing writes only failing inputs into `testdata`; passing runs never mutate the corpus.
-- [T046 claude] `ldapdir` now imports `internal/user`, so `user` must never import `ldapdir`.
 - [T046 claude] The `ldapdir` test binary won't compile until T044 (filter.go) and T045 (dn.go) land. To run the other tests, move `filter_test.go` and `dn_test.go` aside temporarily.
 - [T046 claude] `strings.ToLower` silently replaces invalid UTF-8 with U+FFFD, so validate before normalising.
 - [T047 claude] The `directory` package (and so `app`) won't compile until T044 (`CompileUserFilter`, `Combine`, `Filter.String`) and T045 (`ScopeBase`, `WithinBase`) land. Its tests also need T048's `Import`, because of `import_test.go`.
@@ -162,3 +160,5 @@
 - [T065 kimi] Run integration tests with `sg docker -c '...'` (stale docker group membership); images were already cached here, a cold run pulls 4 images first.
 - [T065 kimi] The allow-override dial relies on the host routing to the container bridge network (RST in ms). On rootless/remote-docker setups it would fall back to a 5 s dial timeout → `timeout` instead of `unreachable`.
 - [T065 kimi] `AuditCount` sleeps 1.2 s (500 ms writer batch); call it once at the end, not per assertion.
+- [T068 claude] A KEK rotation makes sealed bind passwords unreadable (`errUnseal`, which surfaces as an internal error). The ops doc says tenants must re-enter them.
+- [T068 claude] There is no markdown linter in the repo, so nothing checked the docs automatically.
