@@ -6,8 +6,6 @@
 
 ## Decisions
 
-- [T054 claude] Whole-request refusals return `(nil, err)`. `ErrBadEmail` (validation_failed) covers 0 / duplicate / more than `ActivateMax` ids, more than `GroupsMax` groups, and unknown roles or groups. `authz.ErrSelfEscalation` is returned after exactly one `MayAssign` call, made before any invitation or outbox write.
-- [T054 claude] Per-user results come back in request order, as `ActivateItem{UserID, Outcome, InvitationID, Reason string}` with empty strings where there is no value. Failed items have an empty `InvitationID`. Reasons are `invalid_state` (not imported), `not_found` (missing or other-tenant) and `internal` (store error).
 - [T054 claude] Activation audit: `invite_created`, Outcome `ok`, Reason `activation`, SubjectKind `user`, SubjectID = user id, Details `{"invitation_id": id}`, with no e-mail or names. A CreateWith conversion emits the same row. Other-tenant id: `cross_tenant_refused` with SubjectID = the id and no foreign e-mail in the details.
 - [T054 claude] CreateWith on an imported e-mail returns a non-empty invitation id and nil error, the same shape as any new invitation, and moves the user to `invited`. Escalation runs for every CreateWith call, before any write.
 - [T056 claude] Gate for both routes = `RequireAdmin` (owner/admin role). A custom role holding only `directory:manage` gets 403 `forbidden`.
@@ -56,10 +54,11 @@
 - [T064 kimi] The service dials the container's **docker-network IP** (loopback is always refused by the target policy); the `Start` hook denies the private ranges and allows exactly that host /32 (mirrors T065's hook and the stack config).
 - [T064 kimi] Fixture gotcha: eng6/eng7 have **no individual e-mail** — both share `eng-twins@example.test`; the match-all preview also returns the base OU and the alias as `invalid/no_email` items and the referral as a reference (not an entry). Look entries up by DN where e-mail is absent/shared.
 - [T064 kimi] Preview `uid` values are **entryUUIDs** (openldap mapping), generated per image build — tests must discover them from search results, never hardcode.
+- [T069 claude] The remaining `make lint` failures are revive (250 missing doc comments) and gocritic (hugeParam/rangeValCopy on by-value `tenantctx.Actor` and store structs). They existed before this feature and match how the whole service is written, so they were left alone. staticcheck and gosec are clean.
+- [T069 claude] `consoleHandler` now accepts a gateway-relayed nonce only if it is 128 characters or fewer, using only `[A-Za-z0-9+/=_-]`; anything else becomes an empty nonce.
 
 ## Interfaces
 
-- [T051 kimi] `data-test` contract: `connection` (picker, lists `GET /api/v1/admin/directories`), `filter`/`base`/`scope`/`search-directory` (form hidden until a connection is chosen), `search-error` (server `message` verbatim for invalid_filter, else `reasonMessage(reason)`), `effective-filter`, `truncation`, `preview-row`/`preview-name`/`preview-email`/`preview-status`/`preview-reason`, row checkbox `input[ty…
 - [T051 kimi] Skip/fail reason wording T052 must register in `api/client.ts` registerReasons: `no_email`=`The directory entry has no email address.`, `email_in_use`=`That email address already belongs to a user.` (plus `invalid_email`, `duplicate_email`, `already_active`, `not_found_in_directory`, `value_too_long`, `multi_valued_uid`, `invalid_uid`, `internal`); `timeout`/`directory_error` already registered.
 - [T051 kimi] `userStatuses` in `api/vocab.ts` becomes `['invited','active','deactivated','imported']` (status select options pinned: `['','invited','active','deactivated','imported']`).
 - [T044 claude] `type Filter struct{ canon string }` (comparable; the zero value is refused by `Combine`), `func (Filter) String() string`
@@ -109,11 +108,10 @@
 - [T063 kimi] Capture files: `$FREYA_CAPTURE_DIR/directory-TestRedaction*.txt` (views/results as `%+v` + JSON bodies, errors, full audit rows).
 - [T064 kimi] `startLDAP(t) (host string, caPEM []byte)` helper in the test file starts the container and returns the dial address + CA PEM; reusable by later integration tasks (e.g. T071 live smoke analogues).
 - [T064 kimi] Import/skip contract confirmed live: 4 created `{eng1,eng2,eng5,eng6}`, skipped `{eng4:no_email, eng7:duplicate_email}` when uids are passed in request order; re-import is all `updated`.
+- [T069 claude] `httpapi.relayedNonce(v string) string` (unexported).
 
 ## Gotchas
 
-- [T050 claude] The service still doesn't compile until T044/T045 land. I checked this task with a temporary `ldapdir` stub (`zz_t050_stub.go`) and deleted it afterwards. With the stub, `internal/httpapi`, `internal/user/...` and `tests/contract` all pass.
-- [T051 kimi] The kit client drops flat error-body fields: T049's `SearchError` is `{reason, message}` but kit `reasonOf` only keeps `reason` + a nested object `detail`. To show the parse message, extend kit `reasonOf` (ui/kit/src/api/client.ts) to collect remaining flat fields as `detail` while excluding a non-object `detail` key — validated against the kit's own suite (10/10, `client.spec.ts:102` still pins…
 - [T051 kimi] jsdom runs at 1280px (`setup.ts` `__vw`), so `UiDataTable` renders the table layout, not stacked cards; kit field wrappers (`UiInput`/`UiSelect`) put the native control inside `[data-test] ... input`/`select`.
 - [T051 kimi] A failing test that skips `w.unmount()` leaves stale DOM attached and `q()` (document-wide) matches it first — cascade failures after the first real one; the root failure was the kit `:checked` pitfall above.
 - [T051 kimi] Environment setup for a fresh worktree: `npm install` at repo root (writable cache: `--cache /tmp/...`), then `npm run kit`; npm may churn `package-lock.json` `dev` flags — restore it with `git checkout` if untouched deps.
@@ -162,3 +160,5 @@
 - [T064 kimi] `byEmail`-style maps key on `email` only — entries without mail or with shared mail are invisible there; use `itemByDN`.
 - [T064 kimi] `code, out := e.JSON(...)` inside `if` scopes shadows the outer pair — reassigning `out` later can silently mix responses; the lint `ineffassign` catches unread `code`.
 - [T064 kimi] Avoid `defer resp.Body.Close()` (errcheck); the harness style is `defer func() { _ = resp.Body.Close() }()`.
+- [T069 claude] In a worktree with no `node_modules`, vitest and vue-tsc silently pick up an older install from a parent directory, which causes a "qrcode not found" error and stale `@freya/ui` failures. Run `npm ci` at the worktree root, then `npm run kit` (builds ui/kit), before `npm run lint` or vitest in the console.
+- [T069 claude] `golangci-lint` stops at 50 issues per linter by default. Use `--max-issues-per-linter=0 --max-same-issues=0` for real counts, or `--new-from-rev=f67251a5` to see only feature-016 findings.
