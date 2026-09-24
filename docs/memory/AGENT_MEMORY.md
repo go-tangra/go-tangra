@@ -6,11 +6,6 @@
 
 ## Decisions
 
-- [T030 claude] Only policy refusals are audited as refused (`insecure_transport`, `target_refused`, `limit_reached`) on created/updated. Plain input errors are not audited.
-- [T030 claude] Update audit details are `{"fields": [...]}` with field names only; a password change shows as `bind_credential`.
-- [T030 claude] DN and filter validation is local to `directory` (`validDN`, `canonicalFilter`) because ldapdir's filter/DN helpers don't exist yet (T044/T045).
-- [T031 claude] `Test(ctx, actor, tid, Input{}, connID)` with a zero Input hands off to `TestSaved`, which saves `last_test`. A non-zero Input with a `connID` uses the stored connection's settings for any field left out, and its stored password when `bind_password` is left out. Nothing is saved in that case.
-- [T031 claude] The rate limit counts before any lookup or validation. The key is `cache.RateKey("directory", tenantID)` over a 1-minute window, limit `Config.RatePerMinute`. If the cache errors, the test is refused (fail closed). If `Cache` is nil or the limit is ≤0, there is no limit.
 - [T031 claude] If the target policy refuses a URL (for example a literal IP or a bad port), the test returns a failed `connect` step with reason `target_refused`, not an error. A bad URL, CA, DN or TLS mode, or `insecure_transport`, is returned as an error before any dial.
 - [T031 claude] Tests don't check name, kind, filter or attributes; only the connection parameters are validated.
 - [T031 claude] `last_test_outcome` is `ok` or the reason. Any reason outside the data-model list is stored as `directory_error`. It is saved with a context that ignores the caller's cancellation (5 s timeout), so a timed-out test is still recorded.
@@ -56,13 +51,14 @@
 - [T040 kimi] Refusal paths assert the closed vocabulary (`ErrInvalidFilter`/`ErrInvalidBase`/`ErrInvalidURL`/`ErrTargetRefused`) since the sentinels already exist in errors.go.
 - [T040 kimi] No length cap asserted on `Combine` output (T037 pins Combine-at-caps succeeds, so the combined filter may exceed 4 KiB); name cap asserted only when `Person.DisplayNameExplicit` (the derived "First Last" fallback can legitimately reach 201 bytes).
 - [T040 kimi] The file intentionally does not compile until T044–T046 land (tests-first, same as T037/T039's suites).
+- [T046 claude] Error precedence in `Decode`: uid error first, then any over-long value (DN, names, e-mail), then no/invalid e-mail. On error the returned `Person` still has every field that decoded (for the preview row); the failing field is empty.
+- [T046 claude] A uid from any attribute other than objectGUID is used exactly as returned. It is refused as `invalid_uid` if blank or whitespace-only, invalid UTF-8, or containing a control character. Refusing these keeps the import re-fetch filter from ever carrying `\00`. objectGUID must be exactly 16 bytes; the attribute name is matched case-insensitively.
+- [T046 claude] E-mail: first value only, normalised as `invite.normEmail` does, but invalid UTF-8 and control characters are also refused (`invalid_email`). The UTF-8 check runs before `ToLower`.
+- [T046 claude] Names: first value through `user.ValidateName`. Over 100 bytes after trimming gives `value_too_long`. Invalid UTF-8 or a control character drops that name without refusing the entry. The display name falls back to `user.DeriveDisplayName(first, last, "", normalisedEmail)` with `DisplayNameExplicit=false`.
+- [T046 claude] Unknown kinds get the same preset as `"other"` (`Mapping{Email: "mail"}`).
 
 ## Interfaces
 
-- [T027 claude] Manifest: the Permission, Ability and Nav entry must match contract B exactly, word for word (the description too).
-- [T033 claude] `httpapi.PermDirectoryManage = "directory:manage"`.
-- [T033 claude] `RequirePermission(r *http.Request, az PermissionChecker, perm string) (tenantctx.Actor, error)`.
-- [T033 claude] The handlers write `directory.Connection` / `directory.TestResult` directly with `WriteJSON`, so their JSON tags define the wire format. List returns `{"items": [...]}` and never `null`.
 - [T035 kimi] `@/schemas/directory` exports `directoryConnectionSchema` (optional `bind_password`, blank→undefined = keep; `allow_tls12` defaults false; optional `size_limit` 1–1000 / `time_limit_seconds` 1–60 via `''`-preprocess) and `directoryCreateSchema` (refine: `bind_password` required, message `Enter the bind password.`). Pinned messages: `Enter an ldap:// or ldaps:// URL.`, `At most 80 characters.…
 - [T035 kimi] `data-test` contract: page `directories`; `directory-row`, `directory-name`, `directory-url`, `directory-tls`, `last-test` (chip `title` = raw ISO `at`); buttons `new-directory`, `edit`, `delete-directory`, `save-directory`, `test-connection`; drawer `directory-drawer`; fields `directory-name`, `directory-kind` (native `<select>` inside), `directory-url`, `directory-tls-mode`, `bind-dn`, `base-dn`…
 - [T035 kimi] Route pinned: `/admin/directories`, name `admin-directories`, roles owner/admin. Register reason wording T036 must add in `api/client.ts`: at least `tls_failed: 'The TLS handshake failed.'`.
@@ -109,12 +105,13 @@
 - [T043 claude] Schemas:
 - [T040 kimi] Consumes exactly the contracts §C / T037-pinned surface: `type Filter struct{...}` with `String() string` (comparable, zero = ""), `const MaxFilterBytes = 4096`, `CompileUserFilter(string) (Filter, error)`, `Combine(base, user Filter) (Filter, error)`; `ScopeBase(connBase, requested string) (string, error)`, `WithinBase(connBase, entryDN string) bool`; `Mapping{UID,Email,DisplayName,FirstName,Las…
 - [T040 kimi] Corpus is read at `testdata/ldap/{filters,dns,urls,objectguid}` relative to the fuzz package (files have no trailing newline; `.bin` fixtures are non-UTF-8 bytes in strings).
+- [T046 claude] `type Mapping struct{ UID, Email, DisplayName, FirstName, LastName string }`, `type Person struct{ UID, DN, Email, DisplayName, FirstName, LastName string; DisplayNameExplicit bool }`
+- [T046 claude] `func DefaultMapping(kind string) Mapping`, `func Decode(m Mapping, e RawEntry) (Person, error)`
+- [T046 claude] `const MaxUIDBytes = 256, MaxEmailBytes = 254, MaxDNBytes = 1024`
+- [T046 claude] `ErrNoEmail`, `ErrInvalidEmail`, `ErrValueTooLong`, `ErrMultiValuedUID`, `ErrInvalidUID`; `Reason()` maps them to their snake_case codes.
 
 ## Gotchas
 
-- [T025 claude] `TestTestStoreFailure` uses `ms.FailNext("SetDirectoryConnectionTest")`, so the memstore adapter must end up calling that memstore method.
-- [T025 claude] Plaintext must be refused when `Production` is true even if `AllowPlaintext` is set.
-- [T025 claude] The service must itself check the scheme against `TLSMode` and parse the CA before `Open`, because ldapfake's `Open` validates nothing.
 - [T026 claude] The whole `internal/httpapi` test package fails to compile until T030 (types and sentinels), T033 (handlers) and T028 (routes in console.yaml) all land. `MustHandle` panics on undeclared routes.
 - [T026 claude] A missing CSRF header is refused by the OpenAPI validator (required header parameter → 400) before the handler runs, so T028 must declare `#/components/parameters/csrf` on every mutation.
 - [T026 claude] `directory.Connection` must not have any JSON field whose key contains "password" other than `bind_password_set`, and must ignore unknown keys when decoding. The fixture offers `bind_password`, `bind_password_enc` and similar keys on purpose.
@@ -162,3 +159,6 @@
 - [T040 kimi] `ldap.ParseDN` trims insignificant spaces, so `sameDNFold` comparisons accept spaced DN spellings; `EqualFold` handles multi-valued RDN order.
 - [T040 kimi] The ScopeBase no-echo fuzz guard is gated on `len(requested) >= 24` — short inputs like "a" appear in fixed error words and would false-positive.
 - [T040 kimi] Go fuzzing writes only failing inputs into `testdata`; passing runs never mutate the corpus.
+- [T046 claude] `ldapdir` now imports `internal/user`, so `user` must never import `ldapdir`.
+- [T046 claude] The `ldapdir` test binary won't compile until T044 (filter.go) and T045 (dn.go) land. To run the other tests, move `filter_test.go` and `dn_test.go` aside temporarily.
+- [T046 claude] `strings.ToLower` silently replaces invalid UTF-8 with U+FFFD, so validate before normalising.
