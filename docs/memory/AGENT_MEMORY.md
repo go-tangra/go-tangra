@@ -6,10 +6,6 @@
 
 ## Decisions
 
-- [T016 claude] The memstore `AddGroupMembers` also filters `Status == "imported"` (→ `ErrNotFound`), to match SQL for service-level tests.
-- [T016 claude] Adding an imported user to a group gives 404 `not_found`, not 409; the store-level fallback was kept, per T015's decision.
-- [T017 claude] `NewTargetPolicy` must return an error for a bad CIDR, a bare IP used as a CIDR, an empty `AllowedPorts`, or a port outside 1..65535. It repeats the config validation as a defence.
-- [T017 claude] `CheckURL` returns `ErrInvalidURL` for syntax problems: wrong or missing scheme, opaque form, no host, userinfo, any path including `/`, query, fragment, empty/0/65536/named port, `host:389:636`, `ldap://::1`, unterminated bracket, zoned IPv6, control characters, leading space.
 - [T017 claude] `CheckURL` returns `ErrTargetRefused` (can be wrapped) when the port is not allowed, including the scheme's default port, or when an IP-literal host is refused by the policy. Hostnames are not resolved.
 - [T017 claude] `Control` fails closed with `ErrTargetRefused` for any network other than tcp/tcp4/tcp6, an address that isn't `IP:numeric-port`, a zoned address, a disallowed port or a disallowed IP. IPv4-mapped addresses are unmapped before the always-deny and CIDR checks.
 - [T017 claude] Errors must never contain URL userinfo or a password.
@@ -56,11 +52,13 @@
 - [T026 claude] Saved-connection test calls `Test(ctx, a, a.TenantID, directory.Input{}, id)`. A zero `Input` means "use the stored settings and persist last_test", following the single `Test` in contracts §C. Unsaved test passes the decoded body plus `connection_id` (empty if absent).
 - [T026 claude] Owner/admin pass without an authz call. Any other role needs `Allowed(...)==true`. An authz error means refused (fail closed).
 - [T026 claude] `Enabled:false` → every directory route answers 404 `{"reason":"not_found"}` before authentication or authz. T034 must register with `Enabled: cfg.Directory.Enabled` and not skip registration: a declared but unregistered route answers 501.
+- [T027 claude] The contract test expects create (POST) and update (PUT) request bodies to be `$ref: '#/components/schemas/DirectoryConnectionInput'`; POST 201, GET `/{id}` 200 and PUT 200 to be `$ref …/DirectoryConnection`; list 200 to be `{items: array of $ref DirectoryConnection}`; both test routes 200 to be `$ref …/TestResult`, all under `application/json`.
+- [T027 claude] `DirectoryConnection` may hold only the contract fields plus an optional `ca_pem`. `ca_pem` goes into the same schema, not a separate one.
+- [T027 claude] `POST /api/v1/admin/directories/test` needs its own flat, closed body schema with `connection_id` and a writeOnly `bind_password` (not `allOf`), because a closed schema can't be combined with `allOf`.
+- [T027 claude] Every object inside a request body, including `attributes`, needs `additionalProperties: false`.
 
 ## Interfaces
 
-- [T009 claude] `user_directory_links_source_uid` (unique) → a repeat import of the same source uid gives 23505.
-- [T009 claude] `users_status_check`, `users_imported_idx`.
 - [T009 claude] DB CHECKs, all giving 23514:
 - [T010 claude] `InsertDirectoryConnection(ctx, tx, DirectoryConnection) error` (duplicate name → ErrConflict); `GetDirectoryConnection(ctx, tx, tenantID, id)`; `GetDirectoryConnectionAnyTenant(ctx, tx, id)` (system scope); `ListDirectoryConnections(ctx, tx, tenantID)` (ordered by lower(name)); `CountDirectoryConnections(ctx, tx, tenantID) (int, error)`; `UpdateDirectoryConnection(ctx, tx, DirectoryConnection) …
 - [T010 claude] `UsersByEmails(ctx, tx, tenantID, []string) (map[string]User, error)`: matching is case-insensitive (citext) and the map is keyed by the stored e-mail. `LinksByUIDs(ctx, tx, tenantID, connID, []string) (map[string]DirectoryLink, error)` is keyed by directory uid.
@@ -109,12 +107,11 @@
 - [T026 claude] `httpapi.DirectoryDeps{Enabled bool; Directories DirectoryService; Authz PermissionChecker}`; `(*Server).RegisterDirectory(DirectoryDeps)`.
 - [T026 claude] `directory.Input`, `directory.Connection` and `directory.TestResult` must JSON-encode/decode exactly the contracts §A wire names. The tests build values through `json.Unmarshal` and read `Input` back through `json.Marshal`, so for example `name`, `url`, `base_dn`, `allow_tls12` must round-trip. The handler decodes the body strictly into `directory.Input`, plus `connection_id` for `/directories/te…
 - [T026 claude] Sentinels the tests use: `directory.ErrValidation` (400 validation_failed), `ErrInsecureTransport` (400), `ErrDuplicate` (409 duplicate), `ErrLimitReached` (409 limit_reached), `ErrRateLimited` (429).
+- [T027 claude] `console.yaml`: `info.version: 1.2.0`; `DirectoryConnectionInput.bind_password` is `{type: string, minLength: 1, maxLength: 1024, writeOnly: true}`; maxLength is name 80, url 512, ca_pem 65536, bind_dn/base_dn 1024, base_filter 4096; `{id}` path params are `format: uuid`; `TestResult.step` enum is exactly `[connect, tls, bind, search_base]` (a `null` entry is ignored).
+- [T027 claude] Manifest: the Permission, Ability and Nav entry must match contract B exactly, word for word (the description too).
 
 ## Gotchas
 
-- [T007 claude] golangci-lint still reports `hugeParam` on the existing `Config.Validate` and `Config.Warnings` value receivers. That's not from this task, so I left it.
-- [T008 claude] Run with `sg docker -c 'go test -tags integration -run TestMigration0008LDAPImport ./internal/store/'` (the docker group isn't active in the stale login session).
-- [T008 claude] FK checks ignore RLS, so a cross-tenant link insert is refused only by the policy's WITH CHECK on `tenant_id`, which is how the test checks it.
 - [T009 claude] The URL CHECK refuses anything with userinfo, a path, a query or a fragment, including a trailing `/`. The service should normalise the URL (e.g. strip a trailing slash) before inserting.
 - [T009 claude] Run the integration tests with `sg docker -c 'go test -tags integration ./internal/store/'`.
 - [T010 claude] citext comparisons with a Go `[]string` need `$n::text[]::citext[]`. A plain `text[]` compares case-sensitively.
@@ -162,3 +159,6 @@
 - [T026 claude] A missing CSRF header is refused by the OpenAPI validator (required header parameter → 400) before the handler runs, so T028 must declare `#/components/parameters/csrf` on every mutation.
 - [T026 claude] `directory.Connection` must not have any JSON field whose key contains "password" other than `bind_password_set`, and must ignore unknown keys when decoding. The fixture offers `bind_password`, `bind_password_enc` and similar keys on purpose.
 - [T026 claude] Never print a recorded `dirCall.Input` with `%+v`: it holds the password. Use `dirOps(calls)`, because the redaction scan runs with `-v`.
+- [T027 claude] `NavEntry.Order` is `int32`.
+- [T027 claude] `TestOpenAPIDocument` still passes once the routes are only declared, so T028 can add the yaml before the handlers exist.
+- [T027 claude] No other test pins version `1.1.0`.
