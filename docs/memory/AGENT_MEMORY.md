@@ -6,8 +6,6 @@
 
 ## Decisions
 
-- [T056 claude] Self-escalation is checked once for the whole request before any write: 403 `{"reason":"self_escalation"}` (exactly 1 key), no invitation, outbox row or status change. Owners may grant `owner`.
-- [T056 claude] `ActivateResult` is exactly `{items}`. There is one item per requested id (tests match by `user_id`, not order), and each item has exactly the keys `user_id, outcome, invitation_id, reason`, with null where there is no value. Failure reasons: `invalid_state` (active or already invited), `not_found` (unknown or other tenant).
 - [T056 claude] Plain `POST /admin/invitations` for an imported e-mail (case-insensitive) → the same 202 bytes as for a new or active address. It converts that row to `invited` with no second user row, and one invitation. An admin inviting with `r-owner` → 403 `self_escalation`.
 - [T061 kimi] `activateSchema` uses plain `z.string().min(1)` arrays (no uuid format check), mirroring `inviteSchema`; the server enforces uuid.
 - [T061 kimi] Activate POST body mirrors InviteDialog: `role_ids` always sent (possibly `[]`), `group_ids` only when non-empty; empty pickers → `{ user_ids: [...], role_ids: [] }`.
@@ -56,6 +54,8 @@
 - [T070 claude] Import calls `s.allow` once per request and shares the per-tenant `directory.rate_per_minute` bucket with test and search.
 - [T070 claude] Search and import call `s.usable(&c)` right after lookup, refusing `plain` connections when in production or when `allow_plaintext` is off, before the password is unsealed.
 - [T070 claude] Base filters are validated at save with `ldapdir.CompileUserFilter` (the full policy); an empty filter is still stored as "".
+- [T071 claude] Created `specs/016-auth-ldap-import/` by copying `.spec-router-spec/` (without constitution.md), because the task's target file didn't exist in the repo; checkboxes left untouched for the orchestrator.
+- [T071 claude] Used a passwordless `imported` users row (removed afterwards) as the live fixture, since imported rows can only be created through an admin session.
 
 ## Interfaces
 
@@ -112,10 +112,6 @@
 
 ## Gotchas
 
-- [T051 kimi] Environment setup for a fresh worktree: `npm install` at repo root (writable cache: `--cache /tmp/...`), then `npm run kit`; npm may churn `package-lock.json` `dev` flags — restore it with `git checkout` if untouched deps.
-- [T044 claude] `filter_test.go` already declares a `parserDetail` test helper, so the production function is named `filterParseDetail`.
-- [T044 claude] `ldapdir` tests, the `directory` package, `app` and `tests/fuzz` still won't compile until T045 (`ScopeBase`, `WithinBase`) lands. Until then, move `dn_test.go` aside or use a throwaway stub.
-- [T045 claude] `ldap.ParseDN` never returns an RDN with zero attributes, so there is no check for that case. Adding one would be dead code and break 100% coverage.
 - [T052 codex] Build the UI kit before running console tests.
 - [T055 claude] memstore's `DeleteImportedUser` already removes the link, sessions, bindings and group memberships. T059 only needs the `userdb` side, which wraps `store.DeleteImportedUser(ctx, tx, tid, uid)` in a tenant transaction.
 - [T055 claude] The test uses `lookup`'s existing cross-tenant audit. Use `a.lookup` instead of the store directly, or the `cross_tenant_refused` assertion fails.
@@ -162,3 +158,7 @@
 - [T069 claude] `golangci-lint` stops at 50 issues per linter by default. Use `--max-issues-per-linter=0 --max-same-issues=0` for real counts, or `--new-from-rev=f67251a5` to see only feature-016 findings.
 - [T070 claude] Any new test that edits `url`, `tls_mode` or `ca_pem` on a saved connection, or unsaved-tests them with `connection_id`, must include `bind_password`.
 - [T070 claude] Import now uses up a rate-limit token, so tests with a small `rate` should budget for imports too.
+- [T071 claude] `services/auth/deploy/dev-kek.b64` is gitignored and missing in worktrees, so `auth` crashes on startup when rebuilt from one. Copy it from a stack container (`docker cp freya-stack-dns-token-1:/app/deploy/dev-kek.b64 services/auth/deploy/`) so it matches the key already sealing the stack DB.
+- [T071 claude] Unauthenticated POSTs return `400 validation_failed` (gateway CSRF guard) rather than 401, platform-wide.
+- [T071 claude] A production-env config can't be loaded against the stack config: it fails on the DB `sslmode` check before the directory plaintext check.
+- [T071 claude] freya-stack has only `admin@example.org` (credentials unknown); `E2E_OPERATOR_PASSWORD` is unset, so `console/tests/e2e/directory.spec.ts` skips.
