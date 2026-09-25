@@ -1,5 +1,25 @@
 # Changelog
 
+## 4.1.0 — verified first enrollment
+
+### Added
+
+- `config.EnrollTLS` (`enroll.insecure`, `enroll.ca_file`,
+  `enroll.server_spiffe_id`) with `Validate(trustDomain, production)`,
+  `ServerID` and `Warnings`: one rule for every service's first-enrollment TLS.
+- `tlsconf.EnrollClientConfig` / `tlsconf.LoadEnrollClientConfig`: verify the
+  enroll server against the mesh trust bundle and an expected SPIFFE ID (no
+  host name check), for enrolling directly at lcm's keyless listener; public
+  mode (system roots + host name) otherwise. See `docs/configuration.md`.
+
+### Changed
+
+- Production refuses `enroll.insecure` for every service that adopts
+  `config.EnrollTLS`, the gateway included: it now enrolls at lcm with
+  `enroll.ca_file` instead.
+- `tlsconf` shares one SPIFFE verifier between the mesh and the enroll client
+  (no behaviour change for mesh connections).
+
 ## 4.0.0 — go-tangra v4: platform extracted from go-freya
 
 The platform moves out of the go-freya monorepo into `go-tangra/go-tangra`, with
