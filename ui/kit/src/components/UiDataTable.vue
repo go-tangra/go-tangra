@@ -36,6 +36,8 @@ const props = withDefaults(defineProps<{
   caption?: string | undefined
   selectable?: boolean | undefined
   selected?: string[] | undefined
+  /** With `selectable`: rows it rejects get a disabled checkbox and are left out of "select all". */
+  rowSelectable?: ((row: T) => boolean) | undefined
   /** Extra attributes per row (e.g. data-test ids for end-to-end tests). */
   rowAttrs?: ((row: T) => Record<string, string>) | undefined
 }>(), { rowKey: 'id', responsive: 'stack', virtualAt: 200, emptyTitle: 'No records' })
@@ -73,15 +75,22 @@ function sortBy(col: Column<T>) {
 const stacked = computed(() => props.responsive === 'stack' && !md.value)
 const widths = { sm: 'w-24', md: 'w-40', lg: 'w-64' }
 
+const canSelect = (row: T) => props.rowSelectable?.(row) ?? true
+const isSelected = (row: T) => (props.selected ?? []).includes(key(row))
+const selectableRows = computed(() => visible.value.filter(canSelect))
+const allSelected = computed(() => selectableRows.value.length > 0 && selectableRows.value.every(isSelected))
+
 function toggle(row: T) {
+  if (!canSelect(row)) return
   const k = key(row)
   const cur = props.selected ?? []
   emit('update:selected', cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k])
 }
+// "Select all" toggles the selectable visible rows only; locked rows keep their state.
 function toggleAll() {
-  const all = visible.value.map(key)
-  const cur = props.selected ?? []
-  emit('update:selected', all.every((k) => cur.includes(k)) ? [] : all)
+  const locked = new Set(visible.value.filter((r) => !canSelect(r)).map(key))
+  const keep = (props.selected ?? []).filter((k) => locked.has(k))
+  emit('update:selected', allSelected.value ? keep : [...keep, ...selectableRows.value.map(key)])
 }
 </script>
 
@@ -94,7 +103,7 @@ function toggleAll() {
     <ul v-else-if="stacked" class="flex flex-col gap-2" :aria-busy="loading || undefined">
       <li v-for="row in visible" :key="key(row)" class="card card-border bg-base-100 p-4 text-sm" :class="{ 'cursor-pointer active:bg-base-200': clickable }" v-bind="rowAttrs?.(row)" @click="clickable && emit('row-click', row)">
         <div class="flex items-start gap-2">
-          <input v-if="selectable" type="checkbox" class="checkbox checkbox-sm mt-0.5" :checked="(selected ?? []).includes(key(row))" :aria-label="'Select ' + key(row)" @click.stop="toggle(row)">
+          <input v-if="selectable" type="checkbox" class="checkbox checkbox-sm mt-0.5" :checked="isSelected(row)" :disabled="!canSelect(row)" :aria-label="'Select ' + key(row)" @click.stop="toggle(row)">
           <dl class="grid min-w-0 grow grid-cols-[minmax(0,40%)_1fr] gap-x-2 gap-y-1">
             <template v-for="col in columns.filter((c) => !c.hideOnStack)" :key="col.key">
               <dt class="text-base-content/70 truncate text-sm">{{ col.label }}</dt>
@@ -112,7 +121,7 @@ function toggleAll() {
         <caption v-if="caption" class="sr-only">{{ caption }}</caption>
         <thead>
           <tr>
-            <th v-if="selectable" class="w-8"><input type="checkbox" class="checkbox checkbox-sm" aria-label="Select all" :checked="visible.length > 0 && visible.every((r) => (selected ?? []).includes(key(r)))" @change="toggleAll"></th>
+            <th v-if="selectable" class="w-8"><input type="checkbox" class="checkbox checkbox-sm" aria-label="Select all" :checked="allSelected" :disabled="selectableRows.length === 0" @change="toggleAll"></th>
             <th v-for="col in columns" :key="col.key" :class="[col.align === 'end' ? 'text-end' : '', col.width ? widths[col.width] : '']" :aria-sort="sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined">
               <button v-if="col.sortable" type="button" class="inline-flex items-center gap-1 font-semibold" @click="sortBy(col)">
                 {{ col.label }}<UiIcon v-if="sortKey === col.key" :name="sortDir === 'asc' ? 'mdi-chevron-up' : 'mdi-chevron-down'" size="xs" />
@@ -123,8 +132,8 @@ function toggleAll() {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in visible" :key="key(row)" :class="{ 'cursor-pointer hover:bg-base-200': clickable, 'bg-base-200': (selected ?? []).includes(key(row)) }" v-bind="rowAttrs?.(row)" @click="clickable && emit('row-click', row)">
-            <td v-if="selectable"><input type="checkbox" class="checkbox checkbox-sm" :checked="(selected ?? []).includes(key(row))" :aria-label="'Select ' + key(row)" @click.stop="toggle(row)"></td>
+          <tr v-for="row in visible" :key="key(row)" :class="{ 'cursor-pointer hover:bg-base-200': clickable, 'bg-base-200': isSelected(row) }" v-bind="rowAttrs?.(row)" @click="clickable && emit('row-click', row)">
+            <td v-if="selectable"><input type="checkbox" class="checkbox checkbox-sm" :checked="isSelected(row)" :disabled="!canSelect(row)" :aria-label="'Select ' + key(row)" @click.stop="toggle(row)"></td>
             <td v-for="col in columns" :key="col.key" :class="col.align === 'end' ? 'text-end' : ''"><slot :name="'cell-' + col.key" :row="row" :value="row[col.key]">{{ text(col, row) || '—' }}</slot></td>
             <td v-if="$slots.actions" class="text-end whitespace-nowrap" @click.stop><slot name="actions" :row="row" /></td>
           </tr>
