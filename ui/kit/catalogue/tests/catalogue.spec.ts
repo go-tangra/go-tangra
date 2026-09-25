@@ -31,3 +31,15 @@ test('dialog opens full-screen below md and traps focus', async ({ page }) => {
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 })
+
+test('checkbox and switch text sits on the same line as the control', async ({ page }) => {
+  await page.goto('/#/fields')
+  for (const id of ['f-check', 'f-sw']) {
+    const box = (await page.locator('#' + id).boundingBox())!
+    const text = (await page.locator(`label[for=${id}] .label-text`).boundingBox())!
+    expect(text.x, `${id}: text right of the control`).toBeGreaterThan(box.x + box.width - 1)
+    expect(Math.abs(text.y + text.height / 2 - (box.y + box.height / 2)), `${id}: vertically centred`).toBeLessThanOrEqual(2)
+  }
+  await page.locator('label[for=f-check] .label-text').click()
+  await expect(page.locator('#f-check')).toBeChecked()
+})
