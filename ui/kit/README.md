@@ -1,6 +1,6 @@
-# `@go-tangra/ui` — the Freya front-end kit
+# `@go-tangra/ui` — the Tangra front-end kit
 
-One component library, one theme and one form/API recipe for every Freya
+One component library, one theme and one form/API recipe for every Tangra
 front-end (the gateway shell, the auth console and the eight module remotes).
 Built on **FlyonUI 2** (Tailwind 4), **Zod 4** and Vue 3.5; ships as a workspace
 package (`ui/kit`) that every front-end consumes through Module Federation as a

@@ -74,7 +74,7 @@ export function describeReason(r: string): string {
   const extra = extraReasons.get(r)
   if (extra) return extra
   if (knownReasons.has(r)) return reason[r as ApiReason]
-  if (typeof console !== 'undefined') console.warn('[freya/ui] unknown api reason', r)
+  if (typeof console !== 'undefined') console.warn('[go-tangra/ui] unknown api reason', r)
   return reason.generic
 }
 

@@ -207,7 +207,7 @@ describe('UiAppShell / UiNavDrawer / UiUserMenu / UiRemoteBoundary', () => {
     setViewport(360)
     const w = mountBody({
       components: { UiAppShell, UiNavDrawer, UiUserMenu },
-      template: `<UiAppShell title="Freya"><template #nav="{ close }"><UiNavDrawer :groups="[{ title: 'Assets', items: [{ title: 'Assets', path: '/asset', icon: 'mdi-laptop' }] }]" @navigate="close" /></template><template #app-bar><UiUserMenu name="Ann" tenant="Platform" @select="sel = $event" /></template><p>content</p></UiAppShell><span id="sel">{{ sel }}</span>`,
+      template: `<UiAppShell title="Tangra"><template #nav="{ close }"><UiNavDrawer :groups="[{ title: 'Assets', items: [{ title: 'Assets', path: '/asset', icon: 'mdi-laptop' }] }]" @navigate="close" /></template><template #app-bar><UiUserMenu name="Ann" tenant="Platform" @select="sel = $event" /></template><p>content</p></UiAppShell><span id="sel">{{ sel }}</span>`,
       data: () => ({ sel: '' }),
     }, { global: { plugins: [router] } })
     await router.isReady()

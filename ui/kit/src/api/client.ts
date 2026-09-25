@@ -1,4 +1,4 @@
-// The one fetch client every Freya front-end uses (previously copied into each
+// The one fetch client every Tangra front-end uses (previously copied into each
 // module). Same-origin calls through the gateway with the double-submit CSRF
 // header on mutations, a closed reason vocabulary on refusals, multipart
 // uploads and binary-route URL building.
