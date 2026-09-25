@@ -1,5 +1,28 @@
 # Changelog
 
+## UI kit 4.1.1 (`@go-tangra/ui`)
+
+### Fixed
+
+- Light theme on a dark OS: the `freya-dark` OS-preference rule now targets
+  `:root:not([data-theme])`, so a chosen `data-theme` (the toggle) always wins
+  over `prefers-color-scheme` (a light choice used to render dark).
+- `UiCheckbox` / `UiSwitch`: the control and its text sit on one centred row
+  (FlyonUI 2 has no row layout for `label.label`; the text dropped below the
+  box). Consumers can drop local workarounds such as auth's `kit-fixes.css`.
+
+### Added
+
+- `UiDataTable` `rowSelectable?: (row) => boolean`: with `selectable`, rejected
+  rows get a disabled checkbox and "select all" toggles only selectable rows
+  (locked rows keep their state). Optional; existing tables are unchanged.
+
+### Changed
+
+- User-visible product name is Tangra (catalogue title, README, console
+  warning prefix `[go-tangra/ui]`); theme ids `freya-light` / `freya-dark` and
+  the `freya.theme` storage key are unchanged.
+
 ## 4.1.0 — verified first enrollment
 
 ### Added

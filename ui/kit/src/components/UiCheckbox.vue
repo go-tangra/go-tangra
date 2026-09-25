@@ -1,11 +1,13 @@
 <script setup lang="ts">
+// FlyonUI 2 has no row layout for label.label (and .label-text is a block):
+// the kit lays the control and its text out on one centred line itself.
 defineProps<{ modelValue?: unknown | undefined; id: string; label: string; hint?: string | undefined; error?: string | undefined; disabled?: boolean | undefined }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void; (e: 'blur'): void }>()
 </script>
 
 <template>
   <div class="form-control">
-    <label class="label cursor-pointer justify-start gap-2" :for="id">
+    <label class="label flex cursor-pointer items-center justify-start gap-2" :for="id">
       <input :id="id" :data-field="id" type="checkbox" class="checkbox checkbox-primary checkbox-sm" :checked="!!modelValue" :disabled="disabled" :aria-invalid="!!error || undefined" @change="emit('update:modelValue', ($event.target as HTMLInputElement).checked)" @blur="emit('blur')">
       <span class="label-text text-sm">{{ label }}</span>
     </label>

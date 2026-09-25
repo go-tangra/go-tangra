@@ -183,7 +183,7 @@ const known: ReadonlySet<string> = new Set(ICONS)
 export function iconClass(name: string | undefined): string {
   if (!name) return 'icon-[mdi--circle-outline]'
   const n = name.startsWith('mdi-') ? name : 'mdi-' + name
-  if (!known.has(n) && import.meta.env?.DEV) console.warn('[freya/ui] icon not in safelist:', n)
+  if (!known.has(n) && import.meta.env?.DEV) console.warn('[go-tangra/ui] icon not in safelist:', n)
   return 'icon-[mdi--' + n.slice(4) + ']'
 }
 

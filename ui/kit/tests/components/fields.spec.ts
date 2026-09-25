@@ -51,6 +51,20 @@ describe('fields', () => {
     expect(sw.emitted('update:modelValue')?.[0]).toEqual([true])
     expect(sw.find('input').attributes('role')).toBe('switch')
   })
+  it('checkbox and switch keep box and text on one centred row; the text toggles the control', async () => {
+    for (const C of [UiCheckbox, UiSwitch]) {
+      const w = mountBody(C, { props: { id: 'row', label: 'Row' } })
+      const label = w.find('label')
+      // FlyonUI 2 has no row layout for label.label: the kit must lay it out itself.
+      expect(label.classes()).toEqual(expect.arrayContaining(['flex', 'items-center']))
+      expect(label.attributes('for')).toBe('row')
+      expect(label.find('input#row').exists()).toBe(true)
+      ;(label.find('span').element as HTMLElement).click()
+      await w.vm.$nextTick()
+      expect(w.emitted('update:modelValue')?.[0]).toEqual([true])
+      w.unmount()
+    }
+  })
   it('secret field: masked, autocomplete off, reveal toggle, nothing persisted', async () => {
     localStorage.clear()
     const w = mountBody(UiSecretField, { props: { id: 'pw', label: 'Password', modelValue: 'hunter2' } })

@@ -14,12 +14,12 @@ const emit = defineEmits<{ (e: 'retry'): void }>()
 const caught = ref<unknown>(null)
 onErrorCaptured((err) => {
   caught.value = err
-  console.warn('[freya/ui] module render failed', props.module, err instanceof Error ? err.message : String(err))
+  console.warn('[go-tangra/ui] module render failed', props.module, err instanceof Error ? err.message : String(err))
   return false
 })
 function text(e: unknown): string {
   const m = e instanceof Error ? e.message : String(e ?? '')
-  if (/shared|singleton|version|requiredVersion|@freya\/ui/i.test(m)) return `The ${props.module} module was built for a different platform version. Reload after the deployment completes.`
+  if (/shared|singleton|version|requiredVersion|@(go-tangra|freya)\/ui/i.test(m)) return `The ${props.module} module was built for a different platform version. Reload after the deployment completes.`
   return `The ${props.module} module could not be loaded.`
 }
 function retry() {

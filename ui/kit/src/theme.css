@@ -1,5 +1,5 @@
 /*
- * Freya platform theme. Imported by every front-end's main.css AFTER
+ * Tangra platform theme. Imported by every front-end's main.css AFTER
  * `@import "tailwindcss"`. Two daisyUI/FlyonUI themes, selected with
  * data-theme on <html> (set by useTheme in the shell / console).
  * Everything here is static CSS served from 'self' — CSP safe.
@@ -48,6 +48,11 @@
   name: "freya-dark";
   default: false;
   prefersdark: true;
+  /* The OS preference only decides while no theme is chosen: without this the
+   * plugin emits `@media (prefers-color-scheme: dark) { :root { … } }`, which
+   * outranks `[data-theme="freya-light"]` (same specificity, later in the
+   * sheet) and pins a dark-OS browser to dark whatever the user picks. */
+  root: ":root:not([data-theme])";
   color-scheme: dark;
   --color-base-100: oklch(22% 0.02 264);
   --color-base-200: oklch(19% 0.02 264);
@@ -84,6 +89,7 @@
  * (dark) so every soft variant reaches 4.5:1; the tint background stays as is. */
 :root, [data-theme="freya-light"] { --soft-ink-with: black; --soft-ink-keep: 45%; }
 [data-theme="freya-dark"] { --soft-ink-with: white; --soft-ink-keep: 55%; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) { --soft-ink-with: white; --soft-ink-keep: 55%; } }
 .badge.badge-soft { --badge-fg: color-mix(in oklab, var(--badge-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
 .alert.alert-soft { color: color-mix(in oklab, var(--alert-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
 

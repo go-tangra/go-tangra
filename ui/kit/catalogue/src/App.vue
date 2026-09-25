@@ -8,7 +8,7 @@ const groups: NavGroup[] = [{ title: 'Catalogue', items: pages.map((p) => ({ tit
 </script>
 
 <template>
-  <UiAppShell title="Freya UI kit">
+  <UiAppShell title="Tangra UI kit">
     <template #app-bar>
       <UiButton variant="text" size="sm" :icon="theme.theme.value === 'freya-dark' ? 'mdi-weather-sunny' : 'mdi-weather-night'" icon-only label="Toggle theme" data-testid="theme-toggle" @click="theme.toggle()" />
     </template>
