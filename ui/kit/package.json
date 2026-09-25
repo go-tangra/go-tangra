@@ -1,6 +1,6 @@
 {
   "name": "@go-tangra/ui",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "type": "module",
   "description": "go-tangra shared UI kit: FlyonUI/Tailwind components, Zod form layer, API client and theme, consumed by the portal shell, the auth console and every module remote.",
   "repository": {
