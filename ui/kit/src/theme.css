@@ -86,12 +86,15 @@
 
 /* Soft badges/alerts: FlyonUI inks them with the raw colour on a 10 % tint, which
  * fails WCAG AA for the warm colours. Mix the ink towards black (light) or white
- * (dark) so every soft variant reaches 4.5:1; the tint background stays as is. */
+ * (dark) so every soft variant reaches 4.5:1; the tint background stays as is.
+ * `:not(._)` adds one class of specificity: every module remote re-emits
+ * FlyonUI's `.badge.badge-soft`/`.alert.alert-soft` after the shell's sheet,
+ * which would otherwise put the raw (in dark: near-invisible) neutral ink back. */
 :root, [data-theme="freya-light"] { --soft-ink-with: black; --soft-ink-keep: 45%; }
 [data-theme="freya-dark"] { --soft-ink-with: white; --soft-ink-keep: 55%; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme]) { --soft-ink-with: white; --soft-ink-keep: 55%; } }
-.badge.badge-soft { --badge-fg: color-mix(in oklab, var(--badge-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
-.alert.alert-soft { color: color-mix(in oklab, var(--alert-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
+.badge.badge-soft:not(._) { --badge-fg: color-mix(in oklab, var(--badge-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
+.alert.alert-soft:not(._) { color: color-mix(in oklab, var(--alert-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
 
 /* Collapsible menu groups (UiNavDrawer) follow FlyonUI's accordion-in-menu
  * pattern: the toggle is a plain button row, the group list is block flow. */

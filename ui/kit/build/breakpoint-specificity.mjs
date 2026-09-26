@@ -11,6 +11,14 @@
 // breakpoint (sm +1 … 2xl +5), so larger breakpoints beat smaller ones and every
 // breakpoint beats the plain utility, whatever file declared them.
 //
+// The same ordering problem hits FlyonUI component colour modifiers: a later
+// remote's `.switch:checked { --input-color: var(--color-neutral) }` has the
+// specificity of the shell's `.switch-primary:checked`, so a checked primary
+// switch rendered neutral (near-invisible in the dark theme). Rules whose
+// selector names a component colour modifier (`switch-primary`, `badge-error`,
+// …) get one extra class, so a modifier beats its component's base rules in
+// every stylesheet. The plugin must run in the shell as well as in remotes.
+//
 // `:not(._)` matches every element (nothing uses the class "_") and adds one
 // class of specificity; it is inserted before any pseudo-element.
 import postcss from 'postcss'
@@ -35,6 +43,16 @@ export function boost(selector, rank) {
   return i === -1 ? selector + extra : selector.slice(0, i) + extra + selector.slice(i)
 }
 
+// FlyonUI components that take a colour modifier, and the theme colours.
+const COMPONENTS = ['alert', 'badge', 'btn', 'checkbox', 'chip', 'collapse', 'divider', 'indicator', 'input', 'kbd', 'link', 'loading', 'menu', 'progress', 'radial-progress', 'radio', 'range', 'select', 'skeleton', 'status', 'stat', 'switch', 'tab', 'tabs', 'textarea', 'toggle', 'tooltip']
+const COLORS = ['primary', 'secondary', 'accent', 'neutral', 'info', 'success', 'warning', 'error']
+const MODIFIER = new RegExp(`\\.(?:[\\w-]*\\\\:)*(?:${COMPONENTS.join('|')})-(?:${COLORS.join('|')})(?![\\w-])`)
+
+/** Whether a selector names a component colour modifier (e.g. `.switch-primary:checked`). */
+export function isModifier(selector) {
+  return MODIFIER.test(selector)
+}
+
 /** Rewrites a stylesheet's min-width rules; other rules are left untouched. */
 export function boostBreakpoints(css) {
   const root = postcss.parse(css)
@@ -45,7 +63,7 @@ export function boostBreakpoints(css) {
     for (let p = rule.parent; p; p = p.parent) {
       if (p.type === 'atrule' && p.name === 'media') rank = Math.max(rank, rankOf(p.params))
     }
-    if (rank > 0) rule.selectors = rule.selectors.map((s) => boost(s, rank))
+    if (rank > 0 || rule.selectors.some(isModifier)) rule.selectors = rule.selectors.map((s) => boost(s, rank + (isModifier(s) ? 1 : 0)))
   })
   return root.toString()
 }
