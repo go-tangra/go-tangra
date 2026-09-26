@@ -49,7 +49,15 @@ type Config struct {
 	// protect ambient cookies, and a bearer header cannot be sent cross-site
 	// without a CORS preflight the browser refuses.
 	CSRFExempt func(r *http.Request) bool
+	// StreamTimeout bounds a request that accepts text/event-stream (a
+	// server-sent event stream) in place of limits.request_timeout, which
+	// would otherwise end every stream (default 10m). The handler may end
+	// the stream earlier; the browser reconnects.
+	StreamTimeout time.Duration
 }
+
+// DefaultStreamTimeout is Config.StreamTimeout when unset.
+const DefaultStreamTimeout = 10 * time.Minute
 
 // ServerOption tunes the server. No option can alter TLS.
 type ServerOption func(*serverOptions)
@@ -118,13 +126,16 @@ func NewServer(rt transport.Runtime, cfg Config, opts ...ServerOption) (*Server,
 		khttp.Address(cfg.Addr),
 		khttp.Listener(thttp.NewTLSListener(raw, tlsCfg, lim.HandshakeTimeout, rt)),
 		khttp.Endpoint(&url.URL{Scheme: "https", Host: transport.ResolveEndpoint(cfg.Addr, raw)}),
-		khttp.Timeout(lim.RequestTimeout),
+		// The request deadline is set by timeoutFilter (event streams get
+		// StreamTimeout); kratos' own per-request timeout is off.
+		khttp.Timeout(0),
 		khttp.NotFoundHandler(http.NotFoundHandler()),
 		khttp.MethodNotAllowedHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "405 method not allowed", http.StatusMethodNotAllowed)
 		})),
 		khttp.ErrorEncoder(thttp.ErrorEncoder),
 		khttp.Filter(
+			timeoutFilter(lim.RequestTimeout, streamTimeout(cfg.StreamTimeout)),
 			s.rateLimitFilter(proxies),
 			s.headersFilter(),
 			s.csrfFilter(),
@@ -282,3 +293,38 @@ func (t *edgeTransport) RequestHeader() ktransport.Header { return headerCarrier
 func (t *edgeTransport) ReplyHeader() ktransport.Header   { return headerCarrier(t.reply) }
 func (t *edgeTransport) Request() *http.Request           { return t.r }
 func (t *edgeTransport) PathTemplate() string             { return t.r.URL.Path }
+
+func streamTimeout(d time.Duration) time.Duration {
+	if d <= 0 {
+		return DefaultStreamTimeout
+	}
+	return d
+}
+
+// timeoutFilter bounds every request by requestTimeout, and event streams by
+// streamTimeout.
+func timeoutFilter(requestTimeout, streamTimeout time.Duration) khttp.FilterFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			d := requestTimeout
+			if isEventStream(r) {
+				d = streamTimeout
+			}
+			ctx, cancel := context.WithTimeout(r.Context(), d)
+			defer cancel()
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// isEventStream reports whether the request accepts text/event-stream (what
+// EventSource sends).
+func isEventStream(r *http.Request) bool {
+	for _, part := range strings.Split(r.Header.Get("Accept"), ",") {
+		mt, _, _ := strings.Cut(part, ";")
+		if strings.EqualFold(strings.TrimSpace(mt), "text/event-stream") {
+			return true
+		}
+	}
+	return false
+}
