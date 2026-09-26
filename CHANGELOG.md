@@ -1,5 +1,22 @@
 # Changelog
 
+## UI kit 4.2.1 (`@go-tangra/ui`)
+
+### Fixed
+
+- Dark theme: checked switches/checkboxes and colourless soft badges were
+  near-invisible in module pages. Every module remote re-emits FlyonUI's base
+  component rules after the shell's stylesheet, so they beat the shell's colour
+  modifiers (`switch-primary`) and the kit's soft-ink contrast fix.
+  - `theme.css`: the soft badge/alert ink rules carry one extra class of
+    specificity.
+  - `@go-tangra/ui/vite` (`breakpointSpecificity()`): rules naming a component
+    colour modifier (`switch-primary`, `badge-error`, …) get one extra class.
+    Use the plugin in the shell as well as in remotes.
+  - Remotes must import the utilities into the shell's layer:
+    `@import "tailwindcss/utilities.css" layer(utilities);` — unlayered remote
+    rules otherwise beat every layered rule of the shell.
+
 ## UI kit 4.1.1 (`@go-tangra/ui`)
 
 ### Fixed
