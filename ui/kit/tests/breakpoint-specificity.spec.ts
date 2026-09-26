@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error plain ESM build helper without type declarations
-import { boost, boostBreakpoints, rankOf } from '../build/breakpoint-specificity.mjs'
+import { boost, boostBreakpoints, isModifier, rankOf } from '../build/breakpoint-specificity.mjs'
 
 describe('breakpoint specificity (remote stylesheets)', () => {
   it('ranks min-width queries by breakpoint and ignores others', () => {
@@ -24,5 +24,22 @@ describe('breakpoint specificity (remote stylesheets)', () => {
     expect(out).toContain('.md\\:hover\\:x:hover:not(._):not(._){a:d}')
     expect(out).toContain('.hover\\:y:hover{a:e}')
     expect(out).toContain('to{a:f}')
+  })
+  it('recognises component colour modifiers only', () => {
+    expect(isModifier('.switch-primary:checked')).toBe(true)
+    expect(isModifier('.badge.badge-error')).toBe(true)
+    expect(isModifier('.md\\:btn-accent')).toBe(true)
+    expect(isModifier('.switch:checked')).toBe(false)
+    expect(isModifier('.bg-primary')).toBe(false)
+    expect(isModifier('.text-error')).toBe(false)
+    expect(isModifier('.btn-primary-content')).toBe(false)
+    expect(isModifier('.myswitch-primary')).toBe(false)
+  })
+  it('gives modifiers one class over their base rules, stacking with breakpoints', () => {
+    const out = boostBreakpoints('.switch:checked{c:n}.switch-primary:checked,.switch-primary[aria-checked="true"]{c:p}@media (width>=48rem){.md\\:btn-primary{c:q}}.bg-primary{c:r}')
+    expect(out).toContain('.switch:checked{c:n}')
+    expect(out).toContain('.switch-primary:checked:not(._),.switch-primary[aria-checked="true"]:not(._){c:p}')
+    expect(out).toContain('.md\\:btn-primary:not(._):not(._):not(._){c:q}')
+    expect(out).toContain('.bg-primary{c:r}')
   })
 })
