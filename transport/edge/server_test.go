@@ -310,3 +310,61 @@ func TestOptionsAndLimits(t *testing.T) {
 	}
 	_ = os.Getenv
 }
+
+// Event streams are long-lived: they get StreamTimeout instead of the
+// request timeout, which bounds every other request.
+func TestStreamTimeout(t *testing.T) {
+	srv, client, base := devServer(t, Config{StreamTimeout: 7 * time.Minute})
+	srv.HandleFunc("/gateway/v1/stream", func(w http.ResponseWriter, r *http.Request) {
+		dl, ok := r.Context().Deadline()
+		if !ok {
+			http.Error(w, "no deadline", http.StatusInternalServerError)
+			return
+		}
+		_, _ = io.WriteString(w, time.Until(dl).Round(time.Minute).String())
+	})
+	get := func(accept string) string {
+		t.Helper()
+		req, _ := http.NewRequest("GET", base+"/gateway/v1/stream", nil)
+		if accept != "" {
+			req.Header.Set("Accept", accept)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return string(b)
+	}
+	if got := get(""); got != "0s" && got != "1m0s" {
+		// the default request timeout (30s) rounds to 0s or 1m
+		t.Fatalf("plain request deadline = %q", got)
+	}
+	if got := get("text/event-stream"); got != "7m0s" {
+		t.Fatalf("event stream deadline = %q", got)
+	}
+	if got := get("application/json, text/event-stream;q=0.5"); got != "7m0s" {
+		t.Fatalf("event stream (list) deadline = %q", got)
+	}
+}
+
+func TestIsEventStream(t *testing.T) {
+	for accept, want := range map[string]bool{
+		"":                              false,
+		"application/json":              false,
+		"text/event-stream":             true,
+		"TEXT/EVENT-STREAM":             true,
+		"text/html, text/event-stream":  true,
+		"text/event-streamx":            false,
+		"application/text/event-stream": false,
+	} {
+		r, _ := http.NewRequest("GET", "/", nil)
+		if accept != "" {
+			r.Header.Set("Accept", accept)
+		}
+		if got := isEventStream(r); got != want {
+			t.Errorf("isEventStream(%q) = %v", accept, got)
+		}
+	}
+}
