@@ -15,28 +15,28 @@ func v421CSP(nonce string) string {
 	return "default-src 'self'; script-src 'self' 'nonce-" + nonce + "'; style-src 'self' 'nonce-" + nonce + "'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"
 }
 
-func cspOf(t *testing.T, cfg Config) (http.Header, string) {
+func cspOf(t *testing.T, cfg *Config) (http.Header, string) {
 	t.Helper()
-	srv, client, base := devServer(t, cfg)
+	srv, client, base := devServer(t, *cfg)
 	var nonce string
 	srv.HandleFunc("/x", func(w http.ResponseWriter, r *http.Request) { nonce = Nonce(r.Context()) })
 	resp, err := client.Get(base + "/x")
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	return resp.Header, nonce
 }
 
 func TestFrameSourcesDefaultUnchanged(t *testing.T) {
-	h, nonce := cspOf(t, Config{})
+	h, nonce := cspOf(t, &Config{})
 	if got := h.Get("Content-Security-Policy"); got != v421CSP(nonce) {
 		t.Fatalf("default CSP changed:\n got %q\nwant %q", got, v421CSP(nonce))
 	}
 }
 
 func TestFrameSourcesEmitted(t *testing.T) {
-	h, nonce := cspOf(t, Config{FrameSources: []string{"https://h.example:8444", "https://kvm.example.com/"}, CSPExtra: "style-src-attr 'none'"})
+	h, nonce := cspOf(t, &Config{FrameSources: []string{"https://h.example:8444", "https://kvm.example.com/"}, CSPExtra: "style-src-attr 'none'"})
 	csp := h.Get("Content-Security-Policy")
 	want := "connect-src 'self'; frame-src 'self' https://h.example:8444 https://kvm.example.com; frame-ancestors 'none'"
 	if !strings.Contains(csp, want) {
