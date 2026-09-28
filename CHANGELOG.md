@@ -1,5 +1,20 @@
 # Changelog
 
+## 4.2.3 — UI kit: scheduler icons, visible unchecked switches
+
+### Fixed
+
+- `@go-tangra/ui` icon safelist gains the scheduler's icons (`mdi-calendar-clock`,
+  `mdi-chart-timeline-variant`, `mdi-play`, `mdi-stop`, `mdi-run`,
+  `mdi-play-circle-outline`, `mdi-stop-circle-outline`, `mdi-puzzle-remove-outline`,
+  `mdi-code-json`, `mdi-form-select`); the shell emits no CSS for unlisted names,
+  so its menu entry and the bulk Start/Stop buttons rendered without icons.
+- `theme.css`: an unchecked `UiSwitch` was near-invisible in the dark theme
+  (FlyonUI's off track is neutral at 22 % with a base-100 knob and no border).
+  Track, border and knob now derive from base-content in both themes.
+
+The Go module is unchanged apart from the version.
+
 ## 4.2.2 — frame sources
 
 ### Added

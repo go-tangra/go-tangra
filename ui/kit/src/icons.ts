@@ -25,6 +25,7 @@ export const ICONS = [
   'mdi-bell-outline', // icon-[mdi--bell-outline]
   'mdi-broadcast', // icon-[mdi--broadcast]
   'mdi-calendar-alert', // icon-[mdi--calendar-alert]
+  'mdi-calendar-clock', // icon-[mdi--calendar-clock]
   'mdi-call-split', // icon-[mdi--call-split]
   'mdi-camera', // icon-[mdi--camera]
   'mdi-camera-outline', // icon-[mdi--camera-outline]
@@ -32,6 +33,7 @@ export const ICONS = [
   'mdi-cash', // icon-[mdi--cash]
   'mdi-certificate-outline', // icon-[mdi--certificate-outline]
   'mdi-chart-line', // icon-[mdi--chart-line]
+  'mdi-chart-timeline-variant', // icon-[mdi--chart-timeline-variant]
   'mdi-check', // icon-[mdi--check]
   'mdi-check-circle-outline', // icon-[mdi--check-circle-outline]
   'mdi-check-decagram', // icon-[mdi--check-decagram]
@@ -49,6 +51,7 @@ export const ICONS = [
   'mdi-clock-outline', // icon-[mdi--clock-outline]
   'mdi-close', // icon-[mdi--close]
   'mdi-cloud-off-outline', // icon-[mdi--cloud-off-outline]
+  'mdi-code-json', // icon-[mdi--code-json]
   'mdi-cog-outline', // icon-[mdi--cog-outline]
   'mdi-console', // icon-[mdi--console]
   'mdi-content-copy', // icon-[mdi--content-copy]
@@ -87,6 +90,7 @@ export const ICONS = [
   'mdi-folder-open-outline', // icon-[mdi--folder-open-outline]
   'mdi-folder-outline', // icon-[mdi--folder-outline]
   'mdi-folder-plus-outline', // icon-[mdi--folder-plus-outline]
+  'mdi-form-select', // icon-[mdi--form-select]
   'mdi-group', // icon-[mdi--group]
   'mdi-harddisk', // icon-[mdi--harddisk]
   'mdi-history', // icon-[mdi--history]
@@ -128,6 +132,8 @@ export const ICONS = [
   'mdi-paperclip', // icon-[mdi--paperclip]
   'mdi-pencil', // icon-[mdi--pencil]
   'mdi-pencil-outline', // icon-[mdi--pencil-outline]
+  'mdi-play', // icon-[mdi--play]
+  'mdi-play-circle-outline', // icon-[mdi--play-circle-outline]
   'mdi-plus', // icon-[mdi--plus]
   'mdi-plus-box-multiple', // icon-[mdi--plus-box-multiple]
   'mdi-plus-box-outline', // icon-[mdi--plus-box-outline]
@@ -135,12 +141,14 @@ export const ICONS = [
   'mdi-power-off', // icon-[mdi--power-off]
   'mdi-progress-clock', // icon-[mdi--progress-clock]
   'mdi-pulse', // icon-[mdi--pulse]
+  'mdi-puzzle-remove-outline', // icon-[mdi--puzzle-remove-outline]
   'mdi-radar', // icon-[mdi--radar]
   'mdi-radio-tower', // icon-[mdi--radio-tower]
   'mdi-refresh', // icon-[mdi--refresh]
   'mdi-reload', // icon-[mdi--reload]
   'mdi-restart', // icon-[mdi--restart]
   'mdi-restart-alert', // icon-[mdi--restart-alert]
+  'mdi-run', // icon-[mdi--run]
   'mdi-send-check-outline', // icon-[mdi--send-check-outline]
   'mdi-send-outline', // icon-[mdi--send-outline]
   'mdi-server', // icon-[mdi--server]
@@ -157,6 +165,8 @@ export const ICONS = [
   'mdi-sort', // icon-[mdi--sort]
   'mdi-source-branch', // icon-[mdi--source-branch]
   'mdi-star', // icon-[mdi--star]
+  'mdi-stop', // icon-[mdi--stop]
+  'mdi-stop-circle-outline', // icon-[mdi--stop-circle-outline]
   'mdi-subdirectory-arrow-right', // icon-[mdi--subdirectory-arrow-right]
   'mdi-sync', // icon-[mdi--sync]
   'mdi-tag-multiple-outline', // icon-[mdi--tag-multiple-outline]
@@ -356,4 +366,14 @@ export const ICON_CLASS_SAFELIST = [
   'icon-[mdi--plus-box-outline]',
   'icon-[mdi--tray]',
   'icon-[mdi--tray-remove]',
+  'icon-[mdi--calendar-clock]',
+  'icon-[mdi--chart-timeline-variant]',
+  'icon-[mdi--code-json]',
+  'icon-[mdi--form-select]',
+  'icon-[mdi--play]',
+  'icon-[mdi--play-circle-outline]',
+  'icon-[mdi--puzzle-remove-outline]',
+  'icon-[mdi--run]',
+  'icon-[mdi--stop]',
+  'icon-[mdi--stop-circle-outline]',
 ] as const

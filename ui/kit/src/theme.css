@@ -96,6 +96,17 @@
 .badge.badge-soft:not(._) { --badge-fg: color-mix(in oklab, var(--badge-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
 .alert.alert-soft:not(._) { color: color-mix(in oklab, var(--alert-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
 
+/* Unchecked switches: FlyonUI draws the off track as neutral at 22 % with a
+ * base-100 knob and no border, which vanishes on the dark base (freya-dark
+ * neutral is 30 % lightness). Tint track, border and knob from base-content so
+ * the off state reads in both themes. `:not(._)` for the same reason as the
+ * soft inks: every remote re-emits FlyonUI's `.switch` after this sheet. */
+.switch:not(:checked):not([aria-checked="true"]):not(:indeterminate):not(._) {
+  --input-color: color-mix(in oklab, var(--color-base-content) 22%, #0000);
+  border-color: color-mix(in oklab, var(--color-base-content) 40%, #0000);
+  color: color-mix(in oklab, var(--color-base-content) 75%, #0000);
+}
+
 /* Collapsible menu groups (UiNavDrawer) follow FlyonUI's accordion-in-menu
  * pattern: the toggle is a plain button row, the group list is block flow. */
 .menu li.accordion-item { display: block; }

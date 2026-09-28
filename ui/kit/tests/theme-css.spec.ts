@@ -45,4 +45,12 @@ describe('theme.css', () => {
     expect(css).toMatch(/\[data-theme="?freya-light"?\]\s*[,{]/)
     expect(css).toMatch(/\[data-theme="?freya-dark"?\]\s*\{[^}]*color-scheme:\s*dark/)
   })
+  it('keeps an unchecked switch visible on the dark base (track, border and knob from base-content)', () => {
+    const at = css.search(/\.switch:not\(:checked\)[^{]*:not\(\._\)\s*\{/)
+    expect(at, 'unchecked switch rule').toBeGreaterThanOrEqual(0)
+    const [body] = mediaBlocks(css.slice(at), /\.switch:not\(:checked\)/)
+    expect(body).toMatch(/--input-color:[^;]*--color-base-content/)
+    expect(body).toMatch(/border-color:[^;]*--color-base-content/)
+    expect(body).toMatch(/(^|[\s;{])color:[^;]*--color-base-content/)
+  })
 })
