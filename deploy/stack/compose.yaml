@@ -263,7 +263,8 @@ services:
   gateway:
     image: ghcr.io/go-tangra/go-tangra-portal:${TANGRA_VERSION:-4.0.0}
     user: "0:0"
-    ports: ["8443:8443"]
+    # 8444: the KVM console listener (portal feature 025, configs/gateway.yaml console:).
+    ports: ["8443:8443", "8444:8444"]
     command: ["-config","deploy/container.yaml"]
     volumes: ["tokens:/tokens:ro","gateway-state:/state","edge-cert:/edge:ro","./configs/gateway.yaml:/app/deploy/container.yaml:ro"]
     healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9290/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
