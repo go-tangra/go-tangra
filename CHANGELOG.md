@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.2.2 — frame sources
+
+### Added
+
+- `edge.Config.FrameSources` (`edge.frame_sources`): extra https origins a page
+  may embed in an iframe (`frame-src`), e.g. the gateway's KVM console origin
+  on port 8444. Empty keeps the CSP byte-for-byte unchanged.
+
+`@go-tangra/ui` 4.2.2 is a version-only release (unchanged kit).
+
 ## 4.2.2 — edge frame sources
 
 ### Added
