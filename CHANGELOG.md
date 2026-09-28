@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.2.2 — edge frame sources
+
+### Added
+
+- `edge.Config.FrameSources`: extra https origins the edge's pages may frame,
+  emitted as `frame-src 'self' <origins>` in the Content-Security-Policy.
+  `NewServer` refuses entries that are not exactly an https origin. Empty
+  (the default) leaves the policy byte-for-byte unchanged; every other
+  header, including `frame-ancestors 'none'` and `X-Frame-Options: DENY`, is
+  unchanged. Used by the gateway's KVM console origin (portal feature 025).
+
 ## UI kit 4.2.1 (`@go-tangra/ui`)
 
 ### Fixed

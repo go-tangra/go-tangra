@@ -60,6 +60,28 @@ Which mode:
   presents its own SVID, which has no DNS name and no public root, so the
   public mode can never verify it.
 
+## Edge frame sources (`edge.Config.FrameSources`)
+
+The edge's Content-Security-Policy frames nothing but its own origin
+(`default-src 'self'`). `FrameSources` lists extra origins the served pages
+may embed in an iframe, emitted as `frame-src 'self' <origins>`:
+
+```go
+edge.Config{ /* ... */ FrameSources: []string{"https://portal.example.com:8444"} }
+```
+
+- each entry must be exactly an https origin (`https://host[:port]`, no path,
+  query, fragment or user info, no quotes, `;`, `,` or whitespace);
+  `NewServer` refuses anything else;
+- empty (the default) keeps the policy unchanged;
+- nothing else changes: the edge's own pages still refuse to be framed
+  (`frame-ancestors 'none'`, `X-Frame-Options: DENY`).
+
+A framed origin runs its own scripts in the page; list only origins you
+operate and keep them out of `AllowedOrigins`, so they never pass the CSRF
+origin check. The gateway uses this for its KVM console listener
+(portal feature 025, `edge.frame_sources` and `console.public_origin`).
+
 ## Programmatic options
 
 | Option | Effect |

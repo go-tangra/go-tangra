@@ -43,6 +43,13 @@ type Config struct {
 	// CSPExtra is appended to the default Content-Security-Policy (e.g. style
 	// sources); the per-request nonce is always added for script-src.
 	CSPExtra string
+	// FrameSources are additional origins (https://host[:port]) the served
+	// pages may frame, emitted as frame-src 'self' <origins>. Empty (the
+	// default) leaves framing at default-src 'self'. Every entry is validated
+	// by NewServer. Security: a framed origin runs its own scripts inside the
+	// page; list only origins you operate, and never add them to
+	// AllowedOrigins (they must not pass the CSRF origin check).
+	FrameSources []string
 	// CSRFExempt, if set, is consulted for state-changing requests; returning
 	// true skips the double-submit check. Only exempt requests that carry no
 	// cookie credential (for example bearer-token API clients): CSRF exists to
@@ -91,6 +98,11 @@ func NewServer(rt transport.Runtime, cfg Config, opts ...ServerOption) (*Server,
 	if cfg.ReloadInterval <= 0 {
 		cfg.ReloadInterval = time.Minute
 	}
+	frames, err := frameSources(cfg.FrameSources)
+	if err != nil {
+		return nil, err
+	}
+	cfg.FrameSources = frames
 	var o serverOptions
 	for _, f := range opts {
 		f(&o)
@@ -219,6 +231,41 @@ func (b *auditedBody) Read(p []byte) (int, error) {
 		b.onExceed()
 	}
 	return n, err
+}
+
+// frameSources validates and normalises Config.FrameSources: each entry must
+// be exactly an https origin, so nothing but an origin can reach the policy.
+func frameSources(list []string) ([]string, error) {
+	out := make([]string, 0, len(list))
+	for _, v := range list {
+		o, err := httpsOrigin(v)
+		if err != nil {
+			return nil, fmt.Errorf("edge: frame source %q: %w", v, err)
+		}
+		out = append(out, o)
+	}
+	return out, nil
+}
+
+// httpsOrigin returns v as a canonical https origin (lower-case, no trailing
+// slash) or an error.
+func httpsOrigin(v string) (string, error) {
+	if strings.ContainsAny(v, " \t\r\n;,'\"") {
+		return "", errors.New("must not contain whitespace, quotes, ';' or ','")
+	}
+	u, err := url.Parse(v)
+	if err != nil {
+		return "", errors.New("not a URL")
+	}
+	switch {
+	case u.Scheme != "https":
+		return "", errors.New("must be an https origin")
+	case u.Host == "" || u.Hostname() == "" || strings.HasSuffix(u.Host, ":"):
+		return "", errors.New("host is required")
+	case u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery || u.Opaque != "":
+		return "", errors.New("must be an origin (no user, path, query or fragment)")
+	}
+	return "https://" + strings.ToLower(u.Host), nil
 }
 
 func parseCIDRs(list []string) ([]*net.IPNet, error) {

@@ -32,11 +32,15 @@ func newNonce() string {
 
 func (s *Server) headersFilter() khttp.FilterFunc {
 	extra := strings.TrimSpace(s.cfg.CSPExtra)
+	frames := ""
+	if len(s.cfg.FrameSources) > 0 {
+		frames = "frame-src 'self' " + strings.Join(s.cfg.FrameSources, " ") + "; "
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			nonce := newNonce()
 			h := w.Header()
-			csp := "default-src 'self'; script-src 'self' 'nonce-" + nonce + "'; style-src 'self' 'nonce-" + nonce + "'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"
+			csp := "default-src 'self'; script-src 'self' 'nonce-" + nonce + "'; style-src 'self' 'nonce-" + nonce + "'; img-src 'self' data:; font-src 'self'; connect-src 'self'; " + frames + "frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"
 			if extra != "" {
 				csp += "; " + extra
 			}
