@@ -1,5 +1,18 @@
 # Changelog
 
+## 4.2.4 — edge connect sources
+
+### Added
+
+- `edge.Config.ConnectSources`: extra https origins the served pages may
+  connect to (`connect-src`), e.g. a local signing application such as
+  B-Trust BISS on `https://localhost:53952`–`53955` (signing v4, feature
+  027). Entries are validated like frame sources; empty keeps the CSP
+  byte-for-byte unchanged. Only connections are allowed — no script, frame or
+  image sources are added.
+
+`@go-tangra/ui` 4.2.4 is a version-only release (unchanged kit).
+
 ## 4.2.3 — UI kit: scheduler icons, visible unchecked switches
 
 ### Fixed

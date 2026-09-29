@@ -50,6 +50,15 @@ type Config struct {
 	// page; list only origins you operate, and never add them to
 	// AllowedOrigins (they must not pass the CSRF origin check).
 	FrameSources []string
+	// ConnectSources are additional origins (https://host[:port]) scripts of
+	// the served pages may connect to (fetch, XHR, WebSocket), emitted as
+	// connect-src 'self' <origins>. Empty (the default) leaves the CSP
+	// byte-for-byte unchanged. Every entry is validated by NewServer. Use
+	// case: a local signing application such as B-Trust BISS on
+	// https://localhost:53952. Security: this only permits connections — no
+	// script, frame or image sources are added; never add these origins to
+	// AllowedOrigins.
+	ConnectSources []string
 	// CSRFExempt, if set, is consulted for state-changing requests; returning
 	// true skips the double-submit check. Only exempt requests that carry no
 	// cookie credential (for example bearer-token API clients): CSRF exists to
@@ -103,6 +112,11 @@ func NewServer(rt transport.Runtime, cfg Config, opts ...ServerOption) (*Server,
 		return nil, err
 	}
 	cfg.FrameSources = frames
+	connects, err := connectSources(cfg.ConnectSources)
+	if err != nil {
+		return nil, err
+	}
+	cfg.ConnectSources = connects
 	var o serverOptions
 	for _, f := range opts {
 		f(&o)
@@ -241,6 +255,18 @@ func frameSources(list []string) ([]string, error) {
 		o, err := httpsOrigin(v)
 		if err != nil {
 			return nil, fmt.Errorf("edge: frame source %q: %w", v, err)
+		}
+		out = append(out, o)
+	}
+	return out, nil
+}
+
+func connectSources(list []string) ([]string, error) {
+	out := make([]string, 0, len(list))
+	for _, v := range list {
+		o, err := httpsOrigin(v)
+		if err != nil {
+			return nil, fmt.Errorf("edge: connect source %q: %w", v, err)
 		}
 		out = append(out, o)
 	}
