@@ -20,7 +20,7 @@ services:
     healthcheck: { test: ["CMD","pg_isready","-U","postgres","-h","127.0.0.1","-p","5432"], interval: 3s, timeout: 3s, retries: 60, start_period: 5s }
   valkey:
     image: valkey/valkey:8
-    command: ["valkey-server", "--requirepass", "dev", "--user", "gateway", "on", ">dev", "~*", "&*", "+@all", "--user", "auth", "on", ">dev", "~*", "&*", "+@all", "--user", "lcm", "on", ">dev", "~*", "&*", "+@all", "--user", "notification", "on", ">dev", "~*", "&*", "+@all", "--user", "warden", "on", ">dev", "~*", "&*", "+@all", "--user", "deployer", "on", ">dev", "~*", "&*", "+@all", "--user", "paperless", "on", ">dev", "~*", "&*", "+@all", "--user", "inventory", "on", ">dev", "~*", "&*", "+@all", "--user", "ipam", "on", ">dev", "~*", "&*", "+@all", "--user", "asset", "on", ">dev", "~*", "&*", "+@all", "--user", "ticket", "on", ">dev", "~*", "&*", "+@all", "--user", "dns", "on", ">dev", "~*", "&*", "+@all", "--user", "signing", "on", ">dev", "~*", "&*", "+@all"]
+    command: ["valkey-server", "--requirepass", "dev", "--user", "gateway", "on", ">dev", "~*", "&*", "+@all", "--user", "auth", "on", ">dev", "~*", "&*", "+@all", "--user", "lcm", "on", ">dev", "~*", "&*", "+@all", "--user", "notification", "on", ">dev", "~*", "&*", "+@all", "--user", "warden", "on", ">dev", "~*", "&*", "+@all", "--user", "deployer", "on", ">dev", "~*", "&*", "+@all", "--user", "paperless", "on", ">dev", "~*", "&*", "+@all", "--user", "inventory", "on", ">dev", "~*", "&*", "+@all", "--user", "ipam", "on", ">dev", "~*", "&*", "+@all", "--user", "asset", "on", ">dev", "~*", "&*", "+@all", "--user", "ticket", "on", ">dev", "~*", "&*", "+@all", "--user", "dns", "on", ">dev", "~*", "&*", "+@all", "--user", "signing", "on", ">dev", "~*", "&*", "+@all", "--user", "hr", "on", ">dev", "~*", "&*", "+@all"]
     healthcheck: { test: ["CMD","valkey-cli","-a","dev","ping"], interval: 3s, timeout: 3s, retries: 40 }
   openfga-migrate:
     image: openfga/openfga:v1.20.0
@@ -183,7 +183,8 @@ services:
       "-allow","spiffe://example.org/svc/asset=/api/asset;asset",
       "-allow","spiffe://example.org/svc/ticket=/api/ticket;ticket",
       "-allow","spiffe://example.org/svc/dns=/api/dns;dns",
-      "-allow","spiffe://example.org/svc/signing=/api/signing;signing"]
+      "-allow","spiffe://example.org/svc/signing=/api/signing;signing",
+      "-allow","spiffe://example.org/svc/hr=/api/hr;hr"]
     volumes: ["certs:/certs:ro","./configs/gateway.yaml:/app/deploy/container.yaml:ro"]
     restart: "no"
     depends_on:
@@ -398,6 +399,38 @@ services:
       lcm-bootstrap: { condition: service_completed_successfully }
       signing-token: { condition: service_completed_successfully }
       rustfs: { condition: service_healthy }
+
+  # Mint hr's single-use join token (enrolls via the gateway edge).
+  hr-token:
+    image: ghcr.io/go-tangra/go-tangra-auth:${TANGRA_VERSION:-4.0.0}
+    user: "0:0"
+    command: ["mint-enrollment-token","-config","deploy/container.yaml","-spiffe","spiffe://example.org/svc/hr","-ttl","30m","-out","/tokens/hr.token"]
+    volumes: ["./keys/auth.kek:/app/deploy/dev-kek.b64:ro","tokens:/tokens","certs:/certs:ro","./configs/auth.yaml:/app/deploy/container.yaml:ro"]
+    restart: "no"
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      openfga: { condition: service_started }
+      auth-bootstrap: { condition: service_completed_successfully }
+
+  # hr (feature 028): absence types, allowances, departments and leave
+  # requests. Starts signing for signing-required absence types through the
+  # signing module API and follows the outcomes on the platform event stream;
+  # mails through notification.
+  hr:
+    image: ghcr.io/go-tangra/go-tangra-hr:${HR_VERSION:-4.0.0}
+    user: "0:0"
+    command: ["-config","deploy/container.yaml"]
+    volumes: ["tokens:/tokens:ro","hr-state:/state","./configs/hr.yaml:/app/deploy/container.yaml:ro"]
+    healthcheck: { test: ["CMD","wget","-qO-","http://127.0.0.1:9870/readyz"], interval: 5s, timeout: 3s, retries: 60, start_period: 10s }
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      gateway: { condition: service_healthy }
+      lcm: { condition: service_healthy }
+      lcm-bootstrap: { condition: service_completed_successfully }
+      hr-token: { condition: service_completed_successfully }
+      signing: { condition: service_healthy }
 
   # Mint paperless's single-use join token (enrolls via the gateway edge).
   paperless-token:
@@ -748,6 +781,7 @@ volumes:
   deployer-state:
   paperless-state:
   signing-state:
+  hr-state:
   inventory-state:
   ipam-state:
   asset-state:
