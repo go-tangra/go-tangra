@@ -49,7 +49,7 @@ TANGRA_VERSION=4.0.1 deploy/stack/up.sh
 | `auth` (+ `auth-bootstrap`, `*-token` init jobs) | `ghcr.io/go-tangra/go-tangra-auth` |
 | `gateway` (+ `gateway-bootstrap`) | `ghcr.io/go-tangra/go-tangra-portal` |
 | `lcm` (+ `lcm-bootstrap`, `renewer`) | `ghcr.io/go-tangra/go-tangra-lcm` |
-| `notification`, `warden`, `deployer`, `paperless`, `inventory`, `ipam`, `asset`, `ticket`, `dns` | `ghcr.io/go-tangra/go-tangra-<name>` |
+| `notification`, `warden`, `deployer`, `paperless`, `inventory`, `ipam`, `asset`, `ticket`, `dns`, `signing` | `ghcr.io/go-tangra/go-tangra-<name>` |
 
 Each image carries its own `deploy/` directory (policy files included) at
 `/app/deploy`; the stack only mounts its container config
