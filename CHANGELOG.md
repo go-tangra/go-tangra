@@ -11,7 +11,7 @@
   byte-for-byte unchanged. Only connections are allowed — no script, frame or
   image sources are added.
 
-`@go-tangra/ui` is unchanged.
+`@go-tangra/ui` 4.2.4 is a version-only release (unchanged kit).
 
 ## 4.2.3 — UI kit: scheduler icons, visible unchecked switches
 
