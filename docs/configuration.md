@@ -82,6 +82,25 @@ operate and keep them out of `AllowedOrigins`, so they never pass the CSRF
 origin check. The gateway uses this for its KVM console listener
 (portal feature 025, `edge.frame_sources` and `console.public_origin`).
 
+## Edge connect sources (`edge.Config.ConnectSources`)
+
+Scripts of the served pages may connect only to the edge's own origin
+(`connect-src 'self'`). `ConnectSources` lists extra origins they may reach
+with fetch, XHR or WebSocket, emitted as `connect-src 'self' <origins>`:
+
+```go
+edge.Config{ /* ... */ ConnectSources: []string{"https://localhost:53952"} }
+```
+
+- entries are validated exactly like frame sources (`https://host[:port]`);
+- empty (the default) keeps the policy byte-for-byte unchanged;
+- only connections are allowed: no script, frame or image source is added.
+
+The portal uses this for the local B-Trust BISS application of qualified
+signatures (signing feature 027, `edge.connect_sources`). The CSP is global,
+so the allowance applies to every page of the edge; list only the local
+application's origins and keep them out of `AllowedOrigins`.
+
 ## Programmatic options
 
 | Option | Effect |
