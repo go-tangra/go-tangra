@@ -127,3 +127,9 @@
     *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   }
 }
+
+/* Combobox popups: FlyonUI's `.menu` wraps its items (`flex-wrap: wrap`), so a
+ * list taller than its max height lays the options out in extra columns and
+ * scrolls sideways; the `flex-nowrap` utility loses to it because every remote
+ * re-emits `.menu` after this sheet. `:not(._)` as above. */
+.menu[role="listbox"]:not(._) { flex-wrap: nowrap; overflow-x: hidden; }
