@@ -1,5 +1,19 @@
 # Changelog
 
+## 4.2.5 — UI kit: dropdown lists and sidebar no longer scroll sideways
+
+### Fixed
+
+- `UiCombobox` popups (permission drawers, form selects): FlyonUI's `.menu`
+  wraps its items, so a list taller than its max height laid the options out in
+  extra columns and scrolled horizontally; the `flex-nowrap` utility lost to it.
+  `theme.css` now pins `.menu[role="listbox"]` to one column with no horizontal
+  overflow (`:not(._)` specificity, as for the soft inks). The list may grow
+  past a narrow input to fit its labels (up to 24rem); longer labels wrap.
+- `UiNavDrawer`: an expanded nav group was `w-full` on top of FlyonUI's nested
+  menu indent and overhung the sidebar by 4 px, giving it a horizontal
+  scrollbar.
+
 ## 4.2.4 — edge connect sources
 
 ### Added

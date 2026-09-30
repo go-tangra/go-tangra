@@ -39,7 +39,7 @@ const idOf = (g: NavGroup) => 'ui-nav-group-' + keyOf(g).replace(/[^\w-]/g, '-')
           <UiIcon name="mdi-chevron-right" size="sm" class="shrink-0 transition-transform duration-300" :class="isOpen(g) ? 'rotate-90' : ''" />
         </button>
         <!-- v-if, not v-show: a hidden element would carry an inline style, which the platform CSP forbids. -->
-        <ul v-if="isOpen(g)" :id="idOf(g)" class="mt-1 w-full">
+        <ul v-if="isOpen(g)" :id="idOf(g)" class="mt-1">
           <li v-for="it in g.items" :key="it.path">
             <RouterLink :to="it.path" class="flex items-center gap-2 px-2" :active-class="it.exact ? '' : 'menu-active'" exact-active-class="menu-active" :data-test="it.testId" @click="emit('navigate')">
               <UiIcon v-if="it.icon" :name="it.icon" size="sm" /><span class="truncate">{{ it.title }}</span>
