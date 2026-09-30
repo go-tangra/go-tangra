@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.2.6 — UI kit: dropdown stays open when its scrollbar is used
+
+### Fixed
+
+- `UiCombobox`: pressing the list itself (its scrollbar or padding) moved focus
+  off the input, which closed the popup; the list now cancels `mousedown` so
+  scrolling by dragging or clicking the scrollbar keeps it open.
+
 ## 4.2.5 — UI kit: dropdown lists and sidebar no longer scroll sideways
 
 ### Fixed
