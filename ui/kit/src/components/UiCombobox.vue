@@ -71,7 +71,7 @@ function onBlur() {
           @blur="onBlur"
         >
         <button v-if="modelValue && !disabled" type="button" class="btn btn-text btn-circle btn-xs absolute end-1 top-1/2 -translate-y-1/2" aria-label="Clear" @mousedown.prevent="clear">×</button>
-        <ul v-if="open" :id="listId" role="listbox" class="menu absolute z-40 mt-1 max-h-60 w-max min-w-full max-w-[min(24rem,calc(100vw-2rem))] flex-nowrap overflow-x-hidden overflow-y-auto rounded-box border border-base-300 bg-base-100 p-1 shadow-lg">
+        <ul v-if="open" :id="listId" role="listbox" @mousedown.prevent class="menu absolute z-40 mt-1 max-h-60 w-max min-w-full max-w-[min(24rem,calc(100vw-2rem))] flex-nowrap overflow-x-hidden overflow-y-auto rounded-box border border-base-300 bg-base-100 p-1 shadow-lg">
           <li v-if="filtered.length === 0" class="px-3 py-2 text-sm text-base-content/70" role="option" aria-selected="false">No matches</li>
           <li v-for="(o, i) in filtered" :id="listId + '-' + i" :key="o.value" role="option" :aria-selected="o.value === modelValue">
             <button type="button" class="whitespace-normal break-words text-start" :class="{ 'active': i === active }" tabindex="-1" @mousedown.prevent="choose(o)">{{ o.title }}</button>

@@ -84,6 +84,15 @@ describe('fields', () => {
     await expectA11y(w.element)
     w.unmount()
   })
+  it('combobox keeps focus when the list itself (e.g. its scrollbar) is pressed', async () => {
+    const w = mountBody(UiCombobox, { props: { id: 'cbs', label: 'Pick', options: [{ title: 'Alpha', value: 'a' }], modelValue: '' } })
+    await w.find('input[role=combobox]').trigger('focus')
+    const list = w.find('[role=listbox]').element
+    const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    list.dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(true) // no blur, so the popup stays open
+  })
+
   it('combobox filters, navigates with arrows, selects with Enter, clears', async () => {
     const w = mountBody(UiCombobox, { props: { id: 'cb', label: 'Pick', options: [{ title: 'Alpha', value: 'a' }, { title: 'Beta', value: 'b' }, { title: 'Gamma', value: 'g' }], modelValue: '' } })
     const input = w.find('input[role=combobox]')
