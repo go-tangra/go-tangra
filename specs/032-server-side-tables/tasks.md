@@ -83,20 +83,20 @@ waves of plan.md.
 
 ### Tests for kit 4.3.0 (write first, must fail)
 
-- [ ] T015 [P] `UiPager` tests: range text, elision windows (1, 2, 7, 25, 1000 pages), first/prev/next/last disabled states, page-size select emits, single page shows range only, total 0 renders nothing, axe in both themes in go-tangra/ui/kit/tests/components/pager.spec.ts
-- [ ] T016 [P] `UiDataTable` server-mode tests: no local sort, `update:sort` with column `defaultDir` then toggle, `aria-sort`, non-sortable columns inert, no window/load-more, rows kept while `loading` with `aria-busy`, pager wired, stacked layout sort select + direction toggle at phone width, client mode unchanged, in go-tangra/ui/kit/tests/components/data.spec.ts
-- [ ] T017 [P] `useListQuery` tests: read/write `?<key>.page/.size/.sort/.order`, invalid values → defaults, two keys independent, `resetPage`, size change keeps first visible record's page, `track` drops superseded responses, `clampTo`, works without a router, in go-tangra/ui/kit/tests/composables.spec.ts
-- [ ] T018 [P] `UiAuditTable` tests on the page contract (requests `page`/`page_size`, renders pager, filters reset page) in go-tangra/ui/kit/tests/components/audit.spec.ts
+- [x] T015 [P] `UiPager` tests: range text, elision windows (1, 2, 7, 25, 1000 pages), first/prev/next/last disabled states, page-size select emits, single page shows range only, total 0 renders nothing, axe in both themes in go-tangra/ui/kit/tests/components/pager.spec.ts
+- [x] T016 [P] `UiDataTable` server-mode tests: no local sort, `update:sort` with column `defaultDir` then toggle, `aria-sort`, non-sortable columns inert, no window/load-more, rows kept while `loading` with `aria-busy`, pager wired, stacked layout sort select + direction toggle at phone width, client mode unchanged, in go-tangra/ui/kit/tests/components/data.spec.ts
+- [x] T017 [P] `useListQuery` tests: read/write `?<key>.page/.size/.sort/.order`, invalid values → defaults, two keys independent, `resetPage`, size change keeps first visible record's page, `track` drops superseded responses, `clampTo`, works without a router, in go-tangra/ui/kit/tests/composables.spec.ts
+- [x] T018 [P] `UiAuditTable` tests on the page contract (requests `page`/`page_size`, renders pager, filters reset page) in go-tangra/ui/kit/tests/components/audit.spec.ts
 
 ### Implementation for kit 4.3.0
 
-- [ ] T019 Implement `UiPager` in go-tangra/ui/kit/src/components/UiPager.vue
-- [ ] T020 Add server mode (props `total`, `page`, `pageSize`, `pageSizes`, `sort`; emits `update:page`, `update:pageSize`, `update:sort`; `Column.defaultDir`; stacked sort select) to go-tangra/ui/kit/src/components/UiDataTable.vue
-- [ ] T021 Implement `useListQuery` in go-tangra/ui/kit/src/composables/useListQuery.ts
-- [ ] T022 Switch `UiAuditTable` to the page contract and server mode in go-tangra/ui/kit/src/components/UiAuditTable.vue
-- [ ] T023 Export `UiPager`, `useListQuery`, their types in go-tangra/ui/kit/src/index.ts and add any new icons to go-tangra/ui/kit/src/icons.ts (ICONS + ICON_CLASS_SAFELIST)
-- [ ] T024 [P] Add server-mode table + pager demo with a fake 1,234-row source to go-tangra/ui/kit/catalogue/src/pages/Data.vue and refresh catalogue screenshots in go-tangra/ui/kit/catalogue/tests
-- [ ] T025 Run kit `vitest`, lint, build and catalogue Playwright (phone-320, tablet-768) in go-tangra/ui/kit
+- [x] T019 Implement `UiPager` in go-tangra/ui/kit/src/components/UiPager.vue
+- [x] T020 Add server mode (props `total`, `page`, `pageSize`, `pageSizes`, `sort`; emits `update:page`, `update:pageSize`, `update:sort`; `Column.defaultDir`; stacked sort select) to go-tangra/ui/kit/src/components/UiDataTable.vue
+- [x] T021 Implement `useListQuery` in go-tangra/ui/kit/src/composables/useListQuery.ts
+- [x] T022 Switch `UiAuditTable` to the page contract and server mode in go-tangra/ui/kit/src/components/UiAuditTable.vue
+- [x] T023 Export `UiPager`, `useListQuery`, their types in go-tangra/ui/kit/src/index.ts and add any new icons to go-tangra/ui/kit/src/icons.ts (ICONS + ICON_CLASS_SAFELIST)
+- [x] T024 [P] Add server-mode table + pager demo with a fake 1,234-row source to go-tangra/ui/kit/catalogue/src/pages/Data.vue and refresh catalogue screenshots in go-tangra/ui/kit/catalogue/tests
+- [x] T025 Run kit `vitest`, lint, build and catalogue Playwright (phone-320, tablet-768) in go-tangra/ui/kit
 
 ### Release go-tangra v4.3.0
 

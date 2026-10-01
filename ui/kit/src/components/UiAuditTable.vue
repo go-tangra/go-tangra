@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // Tenant audit trail viewer used by warden/notification/lcm/auth: filters
-// (actor, event type, from/to), cursor paging, JSON detail expander.
+// (actor, event type, from/to), JSON detail expander. Paging is the list
+// contract (`paging="page"`: page/page_size + total, newest first) or the
+// older cursor "load more" (default, kept for one release).
 import { onMounted, ref } from 'vue'
 import type { Api } from '@/api/client'
 import { describe } from '@/api/client'
@@ -11,7 +13,7 @@ import UiAlert from './UiAlert.vue'
 import UiStatusChip from './UiStatusChip.vue'
 
 export interface AuditRow extends Record<string, unknown> { id: string; at: string; actor_id?: string; actor_kind?: string; action?: string; event_type?: string; subject_kind?: string; subject_id?: string; outcome?: string; reason?: string; detail?: unknown }
-const props = withDefaults(defineProps<{ api: Api; path?: string | undefined; pageSize?: number | undefined }>(), { path: 'audit', pageSize: 50 })
+const props = withDefaults(defineProps<{ api: Api; path?: string | undefined; pageSize?: number | undefined; paging?: 'cursor' | 'page' | undefined }>(), { path: 'audit', pageSize: 50, paging: 'cursor' })
 const items = ref<AuditRow[]>([])
 const error = ref('')
 const loading = ref(false)
@@ -22,8 +24,12 @@ const type = ref('')
 const from = ref('')
 const to = ref('')
 const open = ref<string | null>(null)
+const page = ref(1)
+const size = ref(props.pageSize)
+const total = ref<number | undefined>(undefined)
 
 async function load(reset = true) {
+  if (props.paging === 'page') return loadPage(reset ? 1 : page.value)
   loading.value = true
   error.value = ''
   try {
@@ -38,9 +44,27 @@ async function load(reset = true) {
     loading.value = false
   }
 }
+async function loadPage(p: number) {
+  loading.value = true
+  error.value = ''
+  try {
+    const res = await props.api<{ items: AuditRow[]; total: number; page: number; page_size: number }>('GET', props.path, undefined, { query: { actor: actor.value || undefined, event_type: type.value || undefined, from: from.value || undefined, to: to.value || undefined, page: p, page_size: size.value } })
+    items.value = res.items ?? []
+    total.value = res.total ?? 0
+    page.value = res.page ?? p
+  } catch (e) {
+    error.value = describe(e)
+  } finally {
+    loading.value = false
+  }
+}
+function onSize(s: number) {
+  size.value = s
+  void loadPage(1)
+}
 onMounted(() => load())
 const columns: Column<AuditRow>[] = [
-  { key: 'at', label: 'When', format: (r) => new Date(r.at).toLocaleString(), sortable: true },
+  { key: 'at', label: 'When', format: (r) => new Date(r.at).toLocaleString(), sortable: props.paging !== 'page' },
   { key: 'action', label: 'Event', format: (r) => String(r.action ?? r.event_type ?? '') },
   { key: 'actor_id', label: 'Actor', format: (r) => [r.actor_kind, r.actor_id].filter(Boolean).join(' ') , hideOnStack: true },
   { key: 'subject_id', label: 'Subject', format: (r) => [r.subject_kind, r.subject_id].filter(Boolean).join(' ') },
@@ -58,7 +82,7 @@ const columns: Column<AuditRow>[] = [
       <UiButton size="sm" variant="soft" icon="mdi-filter-outline" @click="load()">Filter</UiButton>
     </div>
     <UiAlert v-if="error" kind="error">{{ error }}</UiAlert>
-    <UiDataTable :items="items" :columns="columns" :loading="loading" :has-more="hasMore" clickable empty-title="No audit events" @row-click="open = open === $event.id ? null : $event.id" @load-more="load(false)">
+    <UiDataTable :items="items" :columns="columns" :loading="loading" :has-more="hasMore" :total="total" :page="page" :page-size="size" clickable empty-title="No audit events" @row-click="open = open === $event.id ? null : $event.id" @load-more="load(false)" @update:page="loadPage" @update:page-size="onSize">
       <template #cell-outcome="{ row }"><UiStatusChip :status="String(row.outcome ?? '')" :colors="{ ok: 'success', refused: 'warning', error: 'error' }" /></template>
     </UiDataTable>
     <pre v-if="open" class="max-h-64 overflow-auto rounded-box bg-base-200 p-3 text-xs">{{ JSON.stringify(items.find((r) => r.id === open)?.detail ?? {}, null, 2) }}</pre>

@@ -32,7 +32,9 @@ Emits: `update:page`, `update:pageSize`.
 Renders "Showing a–b of N", first/previous, numbered pages with elision
 (1 … 4 5 [6] 7 8 … 25), next/last, and a page-size select; with one page only
 the range text and size select; with `total = 0` nothing.
-Keyboard and screen-reader accessible (axe clean, both themes).
+Keyboard and screen-reader accessible (axe clean, both themes). Below `lg` only
+the current page number is shown between the arrows; the button row wraps in
+narrow containers.
 
 ## `useListQuery(key, options)` (new composable)
 
@@ -45,7 +47,7 @@ const lq = useListQuery('hosts', {
 lq.page; lq.pageSize; lq.sort          // refs bound to ?hosts.page / .size / .sort / .order
 lq.query                               // { page, page_size, sort, order } for the API call
 lq.resetPage()                         // call on filter change
-lq.track(promise)                      // resolves only for the latest request (stale responses dropped)
+lq.track(promise)                      // value of the latest request; superseded requests resolve with null
 lq.clampTo(responsePage)               // adopt the server's clamped page
 ```
 
@@ -55,8 +57,10 @@ memory.
 
 ## `UiAuditTable`
 
-Switches from cursor/`load-more` to the HTTP list contract (`page`,
-`page_size`, newest first) and server mode.
+New `paging="page"` prop switches it to the HTTP list contract (`page`,
+`page_size`, newest first) and server mode; `paging="cursor"` (default) keeps
+the old load-more behaviour for one release, so a module opts in when its audit
+endpoint is migrated.
 
 ## Compatibility
 
