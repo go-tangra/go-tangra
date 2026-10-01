@@ -8,6 +8,8 @@ var hostSpec = Spec{
 		"hostname":  {Expr: "h.hostname", Text: true},
 		"last_seen": {Expr: "h.last_seen", DefaultDir: Desc},
 		"size":      {Expr: "h.size", DefaultDir: Asc},
+		"created":   {Expr: "h.created_at", DefaultDir: Desc, NotNull: true},
+		"name":      {Expr: "h.name", Text: true, NotNull: true},
 	},
 	Default:  "hostname",
 	TieBreak: "h.id",
