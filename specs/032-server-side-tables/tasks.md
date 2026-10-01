@@ -56,7 +56,7 @@ waves of plan.md.
 
 - [x] T001 Confirm branch `032-server-side-tables` in go-tangra is rebased on `main` (v4.2.6) and create `listquery/doc.go` with the package comment in go-tangra/listquery/doc.go
 - [x] T002 [P] Add the 4.3.0 section skeleton ("Server-side pagination and sorting") to go-tangra/CHANGELOG.md
-- [ ] T003 [P] Create module feature branches `032-server-side-tables` in each repo: go-tangra-portal-v4, go-tangra-{asset,deployer,dns,inventory,ipam,lcm,notification,paperless,scheduler,signing,ticket,warden}-v4, hr-service-v4, go-tangra-auth (record base commit of each in go-tangra/specs/032-server-side-tables/rollout.md)
+- [x] T003 [P] Create module feature branches `032-server-side-tables` in each repo: go-tangra-portal-v4, go-tangra-{asset,deployer,dns,inventory,ipam,lcm,notification,paperless,scheduler,signing,ticket,warden}-v4, hr-service-v4, go-tangra-auth (record base commit of each in go-tangra/specs/032-server-side-tables/rollout.md)
 
 ---
 
@@ -316,11 +316,11 @@ Each module group is independent once Phase 6 is done; groups marked [P] can run
 
 ### Wave D — auth console
 
-- [ ] T124 [P] [US5] Tests: users beyond 200 all reachable with total; audit with equal timestamps never skipped (tie-breaker id) and default window; groups, members, roles, clients, operator tenants, sessions, directories paged in go-tangra-auth/tests/integration/lists_test.go
-- [ ] T125 [P] [US5] Tests: 422 negatives, legacy audit cursor path in go-tangra-auth/internal/httpapi/lists_test.go; console unit tests in go-tangra-auth/console/tests/unit/lists.spec.ts
-- [ ] T126 [US5] Create branch from the auth v4 line, go.mod/kit bump; Specs in go-tangra-auth/internal/store/lists.go; index `(tenant_id, lower(email), id)` on users in go-tangra-auth/internal/store/migrations/0012_list_indexes.sql
-- [ ] T127 [US5] Repo paged/counted lists (go-tangra-auth/internal/store/repos.go, groups.go; remove the 200 cap in go-tangra-auth/internal/user/admin.go), memstore, handlers (admin.go, groups.go, roles.go, operator.go, signin.go, directory.go), OpenAPI go-tangra-auth/api/openapi/console.yaml
-- [ ] T128 [US5] Console server mode in go-tangra-auth/console/src/views/admin/{Users,Audit,Groups,Roles,Clients,Sessions,Directories}.vue and operator tenant view; release auth minor
+- [x] T124 [P] [US5] Tests: users beyond 200 all reachable with total; audit with equal timestamps never skipped (tie-breaker id) and default window; groups, members, roles, clients, operator tenants, sessions, directories paged in go-tangra-auth/tests/integration/lists_test.go
+- [x] T125 [P] [US5] Tests: 422 negatives, legacy audit cursor path in go-tangra-auth/internal/httpapi/lists_test.go; console unit tests in go-tangra-auth/console/tests/unit/lists.spec.ts
+- [x] T126 [US5] Create branch from the auth v4 line, go.mod/kit bump; Specs in go-tangra-auth/internal/store/lists.go; index `(tenant_id, lower(email), id)` on users in go-tangra-auth/internal/store/migrations/0012_list_indexes.sql
+- [x] T127 [US5] Repo paged/counted lists (go-tangra-auth/internal/store/repos.go, groups.go; remove the 200 cap in go-tangra-auth/internal/user/admin.go), memstore, handlers (admin.go, groups.go, roles.go, operator.go, signin.go, directory.go), OpenAPI go-tangra-auth/api/openapi/console.yaml
+- [x] T128 [US5] Console server mode in go-tangra-auth/console/src/views/admin/{Users,Audit,Groups,Roles,Clients,Sessions,Directories}.vue and operator tenant view; release auth minor
 
 **Checkpoint**: every table in contracts/sortable-fields.md migrated; SC-001 checklist complete.
 
