@@ -55,7 +55,7 @@ waves of plan.md.
 ## Phase 1: Setup
 
 - [x] T001 Confirm branch `032-server-side-tables` in go-tangra is rebased on `main` (v4.2.6) and create `listquery/doc.go` with the package comment in go-tangra/listquery/doc.go
-- [ ] T002 [P] Add the 4.3.0 section skeleton ("Server-side pagination and sorting") to go-tangra/CHANGELOG.md
+- [x] T002 [P] Add the 4.3.0 section skeleton ("Server-side pagination and sorting") to go-tangra/CHANGELOG.md
 - [ ] T003 [P] Create module feature branches `032-server-side-tables` in each repo: go-tangra-portal-v4, go-tangra-{asset,deployer,dns,inventory,ipam,lcm,notification,paperless,scheduler,signing,ticket,warden}-v4, hr-service-v4, go-tangra-auth (record base commit of each in go-tangra/specs/032-server-side-tables/rollout.md)
 
 ---
@@ -100,8 +100,8 @@ waves of plan.md.
 
 ### Release go-tangra v4.3.0
 
-- [ ] T026 Bump go-tangra/ui/kit/package.json and go-tangra/package-lock.json (`ui/kit`) to 4.3.0 and complete go-tangra/CHANGELOG.md
-- [ ] T027 Document the list contract (link to contracts/http-list.md, `listquery` usage, kit server mode) in go-tangra/README.md
+- [x] T026 Bump go-tangra/ui/kit/package.json and go-tangra/package-lock.json (`ui/kit`) to 4.3.0 and complete go-tangra/CHANGELOG.md
+- [x] T027 Document the list contract (link to contracts/http-list.md, `listquery` usage, kit server mode) in go-tangra/README.md
 - [ ] T028 Open PR from `032-server-side-tables` to `main` in go-tangra, CI green (rerun the known `contrib/audit-timescale` timing flake if it fails), merge
 - [ ] T029 Tag `v4.3.0` in go-tangra, confirm the Go module tag and the `@go-tangra/ui@4.3.0` publish job succeeded
 - [ ] T030 Record the release in go-tangra/specs/032-server-side-tables/rollout.md

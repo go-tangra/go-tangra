@@ -114,6 +114,32 @@ Options that weaken security (`WithInsecureLocalDev`, `WithAllowAllPolicy`) are
 named, log a warning, emit an `insecure_mode_enabled` audit event, and are
 refused when `env: production`.
 
+### Lists: server-side paging and sorting
+
+Every list endpoint behind a data table follows one contract
+(`specs/032-server-side-tables/contracts/http-list.md`): `page`, `page_size`
+(default 25, max 200), `sort` (an allow-listed field) and `order`, answered with
+`{items, total, page, page_size, sort, order}`; invalid values are a 422 naming
+the parameter. `listquery` implements it — the sort field reaches SQL only
+through the list's `Spec`:
+
+```go
+var hostList = listquery.Spec{
+    Fields:   map[string]listquery.Field{"hostname": {Expr: "h.hostname", Text: true}, "last_seen": {Expr: "h.last_seen", DefaultDir: listquery.Desc}},
+    Default:  "hostname",
+    TieBreak: "h.id",
+}
+req, err := listquery.Parse(r.URL.Query(), hostList) // *listquery.Error → 422 {"param": …}
+// count(*) … → total; req = req.Clamp(total)
+// SELECT … ORDER BY req.OrderBy(hostList) LIMIT req.Limit() OFFSET req.Offset()
+writeJSON(w, listquery.NewPage(items, total, req))
+```
+
+In the UI, `UiDataTable` with a `total` prop is server-driven (it emits
+`update:page`, `update:pageSize`, `update:sort` and shows `UiPager`), and
+`useListQuery('<table>', {sortable, defaultSort})` keeps the table's page, size
+and sort in the URL.
+
 ## Repository layout
 
 ```
@@ -126,6 +152,7 @@ authz/              Policy model, loader, matcher, cache, middleware; file/ sour
 audit/              Event schema, redacting log handler, emitter
 observe/            Correlation IDs, tracing, metrics, request log, admin listener
 discovery/          Static name → endpoint map (any Kratos registry works too)
+listquery/          List contract: validated paging, allow-listed sorting, Page[T]
 freyatest/          Public test helpers for services (test CA, SVIDs, fixtures)
 cmd/freya-devca     Throw-away dev CA + SVIDs for the examples (`make testca`)
 contrib/            Optional modules: audit-timescale, policy-valkey (own go.mod each)
@@ -135,7 +162,7 @@ ui/kit              @go-tangra/ui: components, Zod forms, API client, theme, cat
 ui/scripts          front-end static checks and their self-tests
 deploy/stack        containerized dev stack running every service from ghcr.io images
 docs/               security model, configuration, dependencies, front-end architecture
-specs/              design history of the platform features (001, 013)
+specs/              design history of the platform features (001, 013, 032)
 ```
 
 ## Development

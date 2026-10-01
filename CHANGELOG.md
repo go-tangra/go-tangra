@@ -1,5 +1,31 @@
 # Changelog
 
+## 4.3.0 — Server-side pagination and sorting (feature 032)
+
+### Added
+
+- `listquery` package: the platform list contract. A per-list `Spec` maps
+  public sort names to constant SQL expressions with a unique tie-breaker;
+  `Parse` validates `page`, `page_size` (1–200, default 25), `sort` and
+  `order` and returns an `*Error` naming only the parameter; `OrderBy` builds
+  `ORDER BY` from the Spec's constants and a closed direction enum (`NULLS
+  LAST`, case-insensitive text); `Clamp` turns a page past the end into the
+  last page; `Page[T]` is the response shape; `SortSlice`/`Window` give
+  in-memory lists the same semantics; `Legacy` detects old cursor/limit
+  requests during the migration. 100% covered and fuzzed.
+- `@go-tangra/ui`: `UiDataTable` server mode (`total`, `page`, `pageSize`,
+  `pageSizes`, `sort` props; `update:sort`, `update:page`, `update:pageSize`
+  events; no local sort or row window; rows kept while loading; stacked
+  layout sort select), `Column.defaultDir`, new `UiPager` (range and total,
+  numbered pages with elision, page-size choice) and `useListQuery` (per-table
+  page/size/sort in the route query, safe fallbacks, superseded responses
+  dropped). `UiAuditTable` can opt into the page contract with
+  `paging="page"`.
+
+### Fixed
+
+- `UiCombobox` attribute order (lint).
+
 ## 4.2.6 — UI kit: dropdown stays open when its scrollbar is used
 
 ### Fixed
