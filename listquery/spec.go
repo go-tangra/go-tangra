@@ -30,6 +30,14 @@ type Field struct {
 	// DefaultDir is the direction used when a request names the field without
 	// an order; empty means ascending.
 	DefaultDir Dir
+	// NotNull declares that Expr never yields NULL (a NOT NULL column, or an
+	// expression over NOT NULL columns). OrderBy then omits "NULLS LAST", so a
+	// plain btree index on the column serves both directions: a backward index
+	// scan yields DESC NULLS FIRST, which the planner cannot match to
+	// DESC NULLS LAST even when the column has no NULLs. Set it only when the
+	// schema guarantees it; a NULL in a NotNull field would sort first in
+	// descending order instead of last. The zero value keeps NULLS LAST.
+	NotNull bool
 }
 
 // Spec is one list's definition: its sortable fields, default sort and unique

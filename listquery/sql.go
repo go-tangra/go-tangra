@@ -2,7 +2,9 @@ package listquery
 
 // OrderBy returns the ORDER BY clause body for r, built only from s's constant
 // expressions and the direction enum: the sort expression (lower() for text
-// fields) with NULLS LAST, then the tie-breaker in the same direction. A
+// fields) with NULLS LAST, then the tie-breaker in the same direction. Fields
+// marked NotNull and the tie-breaker (a unique, hence NOT NULL, column) carry
+// no NULLS clause, so an ordinary btree index matches either direction. A
 // hand-built Request naming an unknown field falls back to the default field.
 func (r Request) OrderBy(s Spec) string {
 	f, ok := s.Fields[r.Sort]
@@ -17,7 +19,11 @@ func (r Request) OrderBy(s Spec) string {
 	if r.Order == Desc {
 		dir = "DESC"
 	}
-	return expr + " " + dir + " NULLS LAST, " + s.TieBreak + " " + dir
+	nulls := " NULLS LAST"
+	if f.NotNull {
+		nulls = ""
+	}
+	return expr + " " + dir + nulls + ", " + s.TieBreak + " " + dir
 }
 
 // Limit is the page size, for LIMIT.

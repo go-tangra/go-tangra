@@ -11,6 +11,12 @@ func TestOrderBy(t *testing.T) {
 		{Request{1, 25, "hostname", Desc}, "lower(h.hostname) DESC NULLS LAST, h.id DESC"},
 		{Request{1, 25, "last_seen", Desc}, "h.last_seen DESC NULLS LAST, h.id DESC"},
 		{Request{1, 25, "size", Asc}, "h.size ASC NULLS LAST, h.id ASC"},
+		// NotNull fields omit the NULLS clause so a plain btree index serves
+		// both directions (a backward scan yields DESC NULLS FIRST).
+		{Request{1, 25, "created", Desc}, "h.created_at DESC, h.id DESC"},
+		{Request{1, 25, "created", Asc}, "h.created_at ASC, h.id ASC"},
+		{Request{1, 25, "name", Desc}, "lower(h.name) DESC, h.id DESC"},
+		{Request{1, 25, "name", Asc}, "lower(h.name) ASC, h.id ASC"},
 		// A hand-built request with an unknown field or direction falls back
 		// to the default field and ascending order — never to request text.
 		{Request{1, 25, "x; drop", "sideways"}, "lower(h.hostname) ASC NULLS LAST, h.id ASC"},
