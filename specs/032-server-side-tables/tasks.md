@@ -291,28 +291,28 @@ Each module group is independent once Phase 6 is done; groups marked [P] can run
 
 ### Wave C — lcm (visibility into SQL)
 
-- [ ] T108 [P] [US5] Tests: certificates, issuers, requests, jobs, secrets, webhooks, audit — exact totals and pages for a user with partial grants equal the admin view filtered by grants; hidden records never counted; `SVIDServer.Verify` unchanged; certificate pages no longer repeat page 1 in go-tangra-lcm-v4/tests/integration/lists_test.go
-- [ ] T109 [P] [US5] Tests: 422 negatives, audit default window, legacy path in go-tangra-lcm-v4/internal/httpapi/lists_test.go; UI tests (SSE → reload) in go-tangra-lcm-v4/ui/tests/unit/certificates.spec.ts
-- [ ] T110 [US5] go.mod/kit bump; Specs in go-tangra-lcm-v4/internal/store/lists.go; indexes on issued_certificates `(tenant_id, created_at DESC, id)`, `(tenant_id, not_after, id)` and certificate_jobs `(tenant_id, created_at DESC, id)` in go-tangra-lcm-v4/internal/store/migrations/0009_list_indexes.sql
-- [ ] T111 [US5] Readable-ID set from `ListAccessibleIDs` (admins: unrestricted) passed as `id = ANY($n)` to count and page in go-tangra-lcm-v4/internal/issue/certificates.go, issue/issuers.go, enroll/requests.go, enroll/jobs.go and go-tangra-lcm-v4/internal/store/repos.go; memstore
-- [ ] T112 [US5] Handlers (certificates.go, issuers.go, enroll.go, secrets.go, ops.go audit window) and OpenAPI go-tangra-lcm-v4/api/openapi/lcm.yaml
-- [ ] T113 [US5] UI server mode in go-tangra-lcm-v4/ui/src/views/{certificates,issuers,requests,secrets,permissions,audit}/index.vue and stores; certificates SSE → debounced reload in go-tangra-lcm-v4/ui/src/stores/live.ts; release lcm minor
+- [x] T108 [P] [US5] Tests: certificates, issuers, requests, jobs, secrets, webhooks, audit — exact totals and pages for a user with partial grants equal the admin view filtered by grants; hidden records never counted; `SVIDServer.Verify` unchanged; certificate pages no longer repeat page 1 in go-tangra-lcm-v4/tests/integration/lists_test.go
+- [x] T109 [P] [US5] Tests: 422 negatives, audit default window, legacy path in go-tangra-lcm-v4/internal/httpapi/lists_test.go; UI tests (SSE → reload) in go-tangra-lcm-v4/ui/tests/unit/certificates.spec.ts
+- [x] T110 [US5] go.mod/kit bump; Specs in go-tangra-lcm-v4/internal/store/lists.go; indexes on issued_certificates `(tenant_id, created_at DESC, id)`, `(tenant_id, not_after, id)` and certificate_jobs `(tenant_id, created_at DESC, id)` in go-tangra-lcm-v4/internal/store/migrations/0009_list_indexes.sql
+- [x] T111 [US5] Readable-ID set from `ListAccessibleIDs` (admins: unrestricted) passed as `id = ANY($n)` to count and page in go-tangra-lcm-v4/internal/issue/certificates.go, issue/issuers.go, enroll/requests.go, enroll/jobs.go and go-tangra-lcm-v4/internal/store/repos.go; memstore
+- [x] T112 [US5] Handlers (certificates.go, issuers.go, enroll.go, secrets.go, ops.go audit window) and OpenAPI go-tangra-lcm-v4/api/openapi/lcm.yaml
+- [x] T113 [US5] UI server mode in go-tangra-lcm-v4/ui/src/views/{certificates,issuers,requests,secrets,permissions,audit}/index.vue and stores; certificates SSE → debounced reload in go-tangra-lcm-v4/ui/src/stores/live.ts; release lcm minor
 
 ### Wave C — notification
 
-- [ ] T114 [P] [US5] Tests: channels/templates totals with partial grants (readable IDs in SQL), messages (sender scope), log within default window, categories, audit exactly-once in go-tangra-notification-v4/tests/integration/lists_test.go
-- [ ] T115 [P] [US5] Tests: 422 negatives in go-tangra-notification-v4/internal/httpapi/lists_test.go; UI tests in go-tangra-notification-v4/ui/tests/unit/lists.spec.ts
-- [ ] T116 [US5] go.mod/kit bump; Specs in go-tangra-notification-v4/internal/store/lists.go; indexes only where missing in go-tangra-notification-v4/internal/store/migrations/0006_list_indexes.sql
-- [ ] T117 [US5] Readable-ID set into SQL for channels/templates (go-tangra-notification-v4/internal/notify/channels.go, templates.go), paged/counted repo (go-tangra-notification-v4/internal/store/repos.go) incl. `LogPage` window; memstore; handlers (channels.go, templates.go, messages.go, notifications.go, ops.go) and OpenAPI go-tangra-notification-v4/api/openapi/notification.yaml
-- [ ] T118 [US5] UI server mode in go-tangra-notification-v4/ui/src/views/{channels,templates,messages,log,categories,permissions}/index.vue and stores; release notification minor
+- [x] T114 [P] [US5] Tests: channels/templates totals with partial grants (readable IDs in SQL), messages (sender scope), log within default window, categories, audit exactly-once in go-tangra-notification-v4/tests/integration/lists_test.go
+- [x] T115 [P] [US5] Tests: 422 negatives in go-tangra-notification-v4/internal/httpapi/lists_test.go; UI tests in go-tangra-notification-v4/ui/tests/unit/lists.spec.ts
+- [x] T116 [US5] go.mod/kit bump; Specs in go-tangra-notification-v4/internal/store/lists.go; indexes only where missing in go-tangra-notification-v4/internal/store/migrations/0006_list_indexes.sql
+- [x] T117 [US5] Readable-ID set into SQL for channels/templates (go-tangra-notification-v4/internal/notify/channels.go, templates.go), paged/counted repo (go-tangra-notification-v4/internal/store/repos.go) incl. `LogPage` window; memstore; handlers (channels.go, templates.go, messages.go, notifications.go, ops.go) and OpenAPI go-tangra-notification-v4/api/openapi/notification.yaml
+- [x] T118 [US5] UI server mode in go-tangra-notification-v4/ui/src/views/{channels,templates,messages,log,categories,permissions}/index.vue and stores; release notification minor
 
 ### Wave C — warden
 
-- [ ] T119 [P] [US5] Tests: folder secrets list with folder-inherited and direct grants (readable IDs in SQL) exact totals; search paged by relevance/name; shares; audit window in go-tangra-warden-v4/tests/integration/lists_test.go
-- [ ] T120 [P] [US5] Tests: 422 negatives (sort on secret value fields impossible) in go-tangra-warden-v4/internal/httpapi/lists_test.go; UI tests (folders first, then paged secrets) in go-tangra-warden-v4/ui/tests/unit/secrets.spec.ts
-- [ ] T121 [US5] go.mod/kit bump; Specs in go-tangra-warden-v4/internal/store/lists.go; indexes `(tenant_id, folder_id, lower(name), id) WHERE deleted_at IS NULL`, `(tenant_id, created_at)` in go-tangra-warden-v4/internal/store/migrations/0005_list_indexes.sql
-- [ ] T122 [US5] Visibility into SQL for root folder listing and paged/counted `SecretsInFolder`/search in go-tangra-warden-v4/internal/secrets/secrets.go and go-tangra-warden-v4/internal/store/repos.go; memstore; handlers (secrets.go, share.go, ops.go) and OpenAPI go-tangra-warden-v4/api/openapi/warden.yaml
-- [ ] T123 [US5] UI server mode in go-tangra-warden-v4/ui/src/views/secrets/index.vue, permissions/index.vue, components/SecretDetails.vue (shares) and stores; release warden minor
+- [x] T119 [P] [US5] Tests: folder secrets list with folder-inherited and direct grants (readable IDs in SQL) exact totals; search paged by relevance/name; shares; audit window in go-tangra-warden-v4/tests/integration/lists_test.go
+- [x] T120 [P] [US5] Tests: 422 negatives (sort on secret value fields impossible) in go-tangra-warden-v4/internal/httpapi/lists_test.go; UI tests (folders first, then paged secrets) in go-tangra-warden-v4/ui/tests/unit/secrets.spec.ts
+- [x] T121 [US5] go.mod/kit bump; Specs in go-tangra-warden-v4/internal/store/lists.go; indexes `(tenant_id, folder_id, lower(name), id) WHERE deleted_at IS NULL`, `(tenant_id, created_at)` in go-tangra-warden-v4/internal/store/migrations/0005_list_indexes.sql
+- [x] T122 [US5] Visibility into SQL for root folder listing and paged/counted `SecretsInFolder`/search in go-tangra-warden-v4/internal/secrets/secrets.go and go-tangra-warden-v4/internal/store/repos.go; memstore; handlers (secrets.go, share.go, ops.go) and OpenAPI go-tangra-warden-v4/api/openapi/warden.yaml
+- [x] T123 [US5] UI server mode in go-tangra-warden-v4/ui/src/views/secrets/index.vue, permissions/index.vue, components/SecretDetails.vue (shares) and stores; release warden minor
 
 ### Wave D — auth console
 
