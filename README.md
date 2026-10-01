@@ -125,7 +125,7 @@ through the list's `Spec`:
 
 ```go
 var hostList = listquery.Spec{
-    Fields:   map[string]listquery.Field{"hostname": {Expr: "h.hostname", Text: true}, "last_seen": {Expr: "h.last_seen", DefaultDir: listquery.Desc}},
+    Fields:   map[string]listquery.Field{"hostname": {Expr: "h.hostname", Text: true}, "last_seen": {Expr: "h.last_seen", DefaultDir: listquery.Desc, NotNull: true}},
     Default:  "hostname",
     TieBreak: "h.id",
 }
@@ -139,6 +139,11 @@ In the UI, `UiDataTable` with a `total` prop is server-driven (it emits
 `update:page`, `update:pageSize`, `update:sort` and shows `UiPager`), and
 `useListQuery('<table>', {sortable, defaultSort})` keeps the table's page, size
 and sort in the URL.
+
+Mark a field `NotNull: true` when its column is `NOT NULL`: `OrderBy` then
+drops `NULLS LAST`, so a plain `(tenant_id, col, id)` index serves both
+directions (a backward scan yields `DESC NULLS FIRST`, which never matches
+`DESC NULLS LAST`).
 
 ## Repository layout
 

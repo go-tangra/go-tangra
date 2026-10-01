@@ -13,6 +13,8 @@ import (
 // float64, time.Time or nil; other types compare by their text form), strings
 // compare case-insensitively, nil values come last in both directions, and tie
 // (a unique value per item) breaks equal keys in the requested direction.
+// A NotNull field never yields nil, so its order matches OrderBy's (which then
+// has no NULLS clause) exactly.
 func SortSlice[T any](items []T, r Request, key func(T, string) any, tie func(T) string) {
 	desc := r.Order == Desc
 	slices.SortStableFunc(items, func(a, b T) int {

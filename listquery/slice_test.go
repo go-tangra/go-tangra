@@ -126,3 +126,28 @@ func ExampleWindow() {
 	fmt.Println(page, total, applied.Page)
 	// Output: [c d] 5 2
 }
+
+// A NotNull field's OrderBy has no NULLS clause; with no nil keys SortSlice
+// yields the plain ASC/DESC order (tie-breaker in the same direction) that
+// Postgres produces for that clause.
+func TestSortSliceNotNullMatchesOrderBy(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	rows := func() []*row {
+		return []*row{
+			{id: "b", when: t0},
+			{id: "a", when: t0},
+			{id: "c", when: t0.Add(time.Hour)},
+			{id: "d", when: t0.Add(-time.Hour)},
+		}
+	}
+	desc := rows()
+	SortSlice(desc, Request{Sort: "when", Order: Desc}, rowKey, rowTie)
+	if got := ids(desc); got != "cbad" {
+		t.Fatalf("desc: %s", got)
+	}
+	asc := rows()
+	SortSlice(asc, Request{Sort: "when", Order: Asc}, rowKey, rowTie)
+	if got := ids(asc); got != "dabc" {
+		t.Fatalf("asc: %s", got)
+	}
+}

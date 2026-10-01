@@ -1,5 +1,22 @@
 # Changelog
 
+## 4.3.1 — listquery: index-friendly ORDER BY for not-null fields
+
+### Changed
+
+- `listquery.Field.NotNull`: declares that the sort expression never yields
+  NULL. `OrderBy` then omits `NULLS LAST` (`h.created_at DESC, h.id DESC`), so
+  a plain btree index such as `(tenant_id, created_at, id)` serves both
+  directions through forward and backward scans. With `NULLS LAST` on every
+  field, no descending sort — including every "newest first" default — could
+  use an index and Postgres sorted the whole tenant per page (notification
+  default page 195 ms → 0.6 ms with its existing index). Fields without
+  `NotNull` keep `NULLS LAST`; the tie-breaker never had a NULLS clause.
+  `SortSlice` is unchanged: a NotNull field has no nil keys, so its order is
+  the same as the SQL one. Modules opt in per field after checking the column
+  is `NOT NULL`.
+- `@go-tangra/ui` 4.3.1: version bump only (released in lockstep), no changes.
+
 ## 4.3.0 — Server-side pagination and sorting (feature 032)
 
 ### Added
