@@ -54,7 +54,7 @@ waves of plan.md.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm branch `032-server-side-tables` in go-tangra is rebased on `main` (v4.2.6) and create `listquery/doc.go` with the package comment in go-tangra/listquery/doc.go
+- [x] T001 Confirm branch `032-server-side-tables` in go-tangra is rebased on `main` (v4.2.6) and create `listquery/doc.go` with the package comment in go-tangra/listquery/doc.go
 - [ ] T002 [P] Add the 4.3.0 section skeleton ("Server-side pagination and sorting") to go-tangra/CHANGELOG.md
 - [ ] T003 [P] Create module feature branches `032-server-side-tables` in each repo: go-tangra-portal-v4, go-tangra-{asset,deployer,dns,inventory,ipam,lcm,notification,paperless,scheduler,signing,ticket,warden}-v4, hr-service-v4, go-tangra-auth (record base commit of each in go-tangra/specs/032-server-side-tables/rollout.md)
 
@@ -66,20 +66,20 @@ waves of plan.md.
 
 ### Tests for `listquery` (write first, must fail)
 
-- [ ] T004 [P] Table tests for `Parse` defaults, valid values, every invalid case (`page=0`, `page=-1`, `page=abc`, `page_size=0/201/abc`, size above a Spec `MaxSize`, unknown `sort`, `order=up`, mixed `cursor`+`page` → `Param:"cursor"`) and `Legacy` in go-tangra/listquery/parse_test.go
-- [ ] T005 [P] Tests for `OrderBy` (text field → `lower(expr)`, `NULLS LAST`, tie-breaker in the same direction, DefaultDir), `Limit`, `Offset`, `Clamp` (beyond last page, total 0, exact multiple) in go-tangra/listquery/sql_test.go
-- [ ] T006 [P] Tests for `Spec.Validate` (default not in Fields, empty TieBreak, MaxSize > 200, empty Expr) and `NewPage` (nil items → `[]`, JSON field names) in go-tangra/listquery/spec_test.go
-- [ ] T007 [P] Tests for `SortSlice`/`Window` (string/int64/float64/time/nil keys, nil last both directions, case-insensitive strings, stable tie-breaker, clamp, exactly-once over all pages) in go-tangra/listquery/slice_test.go
-- [ ] T008 [P] Fuzz test `FuzzParse` asserting `OrderBy` output contains only Spec expressions, `lower(`, `ASC`/`DESC`, `NULLS LAST`, commas and spaces, and that errors only ever name page/page_size/sort/order/cursor in go-tangra/listquery/fuzz_test.go
+- [x] T004 [P] Table tests for `Parse` defaults, valid values, every invalid case (`page=0`, `page=-1`, `page=abc`, `page_size=0/201/abc`, size above a Spec `MaxSize`, unknown `sort`, `order=up`, mixed `cursor`+`page` → `Param:"cursor"`) and `Legacy` in go-tangra/listquery/parse_test.go
+- [x] T005 [P] Tests for `OrderBy` (text field → `lower(expr)`, `NULLS LAST`, tie-breaker in the same direction, DefaultDir), `Limit`, `Offset`, `Clamp` (beyond last page, total 0, exact multiple) in go-tangra/listquery/sql_test.go
+- [x] T006 [P] Tests for `Spec.Validate` (default not in Fields, empty TieBreak, MaxSize > 200, empty Expr) and `NewPage` (nil items → `[]`, JSON field names) in go-tangra/listquery/spec_test.go
+- [x] T007 [P] Tests for `SortSlice`/`Window` (string/int64/float64/time/nil keys, nil last both directions, case-insensitive strings, stable tie-breaker, clamp, exactly-once over all pages) in go-tangra/listquery/slice_test.go
+- [x] T008 [P] Fuzz test `FuzzParse` asserting `OrderBy` output contains only Spec expressions, `lower(`, `ASC`/`DESC`, `NULLS LAST`, commas and spaces, and that errors only ever name page/page_size/sort/order/cursor in go-tangra/listquery/fuzz_test.go
 
 ### Implementation for `listquery`
 
-- [ ] T009 Implement `Dir`, `Field`, `Spec`, `Validate`, constants per contracts/listquery-go.md in go-tangra/listquery/spec.go
-- [ ] T010 Implement `Request`, `Error`, `Parse`, `Legacy` in go-tangra/listquery/parse.go
-- [ ] T011 Implement `OrderBy`, `Limit`, `Offset`, `Clamp` in go-tangra/listquery/sql.go
-- [ ] T012 Implement `Page[T]`, `NewPage` in go-tangra/listquery/page.go
-- [ ] T013 Implement `SortSlice`, `Window` in go-tangra/listquery/slice.go
-- [ ] T014 Reach 100% statement coverage, run `go vet`, golangci-lint and `govulncheck` for go-tangra/listquery/
+- [x] T009 Implement `Dir`, `Field`, `Spec`, `Validate`, constants per contracts/listquery-go.md in go-tangra/listquery/spec.go
+- [x] T010 Implement `Request`, `Error`, `Parse`, `Legacy` in go-tangra/listquery/parse.go
+- [x] T011 Implement `OrderBy`, `Limit`, `Offset`, `Clamp` in go-tangra/listquery/sql.go
+- [x] T012 Implement `Page[T]`, `NewPage` in go-tangra/listquery/page.go
+- [x] T013 Implement `SortSlice`, `Window` in go-tangra/listquery/slice.go
+- [x] T014 Reach 100% statement coverage, run `go vet`, golangci-lint and `govulncheck` for go-tangra/listquery/
 
 ### Tests for kit 4.3.0 (write first, must fail)
 

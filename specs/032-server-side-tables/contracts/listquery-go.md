@@ -48,6 +48,10 @@ func (e *Error) Error() string
 // invalid values return *Error.
 func Parse(q url.Values, s Spec) (Request, error)
 
+// New builds a Request from typed values (gRPC/internal callers); zero values
+// take defaults, invalid ones return *Error.
+func New(page, pageSize int, sort string, order Dir, s Spec) (Request, error)
+
 // Legacy reports whether q uses the old cursor/limit style only; Parse returns
 // *Error{Param:"cursor"} when both styles are mixed.
 func Legacy(q url.Values) bool
