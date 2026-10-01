@@ -83,6 +83,9 @@ is called by another repo** — HTTP callers are only the module's own UI and te
   existing `WriteDetail`), and the OpenAPI declares `sort` as an enum and
   `page`/`page_size` with min/max so kin-openapi rejects most cases before the
   handler.
+- **Note**: the portal's own API maps `validation_failed` to **400**; it keeps
+  its status (same reason and `detail.param`). Each repo uses its existing
+  `validation_failed` status.
 - **Rationale**: every module already maps validation to 422 and the UI's
   `ApiError` handling expects it; the spec's "validation error" is satisfied.
   The request said "400"; consistency with the existing envelope wins and is

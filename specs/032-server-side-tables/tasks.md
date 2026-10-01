@@ -102,9 +102,9 @@ waves of plan.md.
 
 - [x] T026 Bump go-tangra/ui/kit/package.json and go-tangra/package-lock.json (`ui/kit`) to 4.3.0 and complete go-tangra/CHANGELOG.md
 - [x] T027 Document the list contract (link to contracts/http-list.md, `listquery` usage, kit server mode) in go-tangra/README.md
-- [ ] T028 Open PR from `032-server-side-tables` to `main` in go-tangra, CI green (rerun the known `contrib/audit-timescale` timing flake if it fails), merge
-- [ ] T029 Tag `v4.3.0` in go-tangra, confirm the Go module tag and the `@go-tangra/ui@4.3.0` publish job succeeded
-- [ ] T030 Record the release in go-tangra/specs/032-server-side-tables/rollout.md
+- [x] T028 Open PR from `032-server-side-tables` to `main` in go-tangra, CI green (rerun the known `contrib/audit-timescale` timing flake if it fails), merge
+- [x] T029 Tag `v4.3.0` in go-tangra, confirm the Go module tag and the `@go-tangra/ui@4.3.0` publish job succeeded
+- [x] T030 Record the release in go-tangra/specs/032-server-side-tables/rollout.md
 
 **Checkpoint**: `listquery` and kit 4.3.0 published — portal and modules can start.
 
@@ -118,19 +118,19 @@ waves of plan.md.
 
 ### Tests for User Story 1
 
-- [ ] T031 [P] [US1] Store integration tests: allow-list and audit count + LIMIT/OFFSET, clamp beyond last page, exactly-once across pages at sizes 10/25/200, tenant-less ops scope unchanged in go-tangra-portal-v4/internal/store/lists_integration_test.go
-- [ ] T032 [P] [US1] HTTP tests: `/gateway/v1/ops/allowlist`, `/ops/audit`, `/ops/registrations` return the Page shape; 422 for `page=0`, `page_size=201`; registrations windowed in memory in go-tangra-portal-v4/internal/httpapi/ops_list_test.go
-- [ ] T033 [P] [US1] Shell unit tests: ops views render `UiPager`, request `page`/`page_size`, show "Showing a–b of N" in go-tangra-portal-v4/shell/tests/unit/ops.spec.ts
+- [x] T031 [P] [US1] Store integration tests: allow-list and audit count + LIMIT/OFFSET, clamp beyond last page, exactly-once across pages at sizes 10/25/200, tenant-less ops scope unchanged in go-tangra-portal-v4/internal/store/lists_integration_test.go
+- [x] T032 [P] [US1] HTTP tests: `/gateway/v1/ops/allowlist`, `/ops/audit`, `/ops/registrations` return the Page shape; 422 for `page=0`, `page_size=201`; registrations windowed in memory in go-tangra-portal-v4/internal/httpapi/ops_list_test.go
+- [x] T033 [P] [US1] Shell unit tests: ops views render `UiPager`, request `page`/`page_size`, show "Showing a–b of N" in go-tangra-portal-v4/shell/tests/unit/ops.spec.ts
 
 ### Implementation for User Story 1
 
-- [ ] T034 [US1] Require `github.com/go-tangra/go-tangra/v4 v4.3.0` in go-tangra-portal-v4/go.mod and `@go-tangra/ui ^4.3.0` in go-tangra-portal-v4/shell/package.json (install with `NODE_AUTH_TOKEN=$(gh auth token)`)
-- [ ] T035 [US1] Add Specs `allowlistList`, `auditList`, `registrationList` in go-tangra-portal-v4/internal/store/lists.go
-- [ ] T036 [US1] Implement counted, paged `ListAllowlist` and `ListAudit` (audit: tie-breaker on event id) in go-tangra-portal-v4/internal/store/repos.go and the memstore equivalents in go-tangra-portal-v4/internal/memstore/memstore.go
-- [ ] T037 [US1] Page the in-memory registrations with `listquery.Window` and switch the three ops handlers to `Parse`/`NewPage` (audit `events` → `items`; legacy `cursor` path kept one release) in go-tangra-portal-v4/internal/httpapi/ops.go
-- [ ] T038 [US1] Declare page/page_size/order params and Page response schemas for the ops operations in go-tangra-portal-v4/api/openapi/gateway.yaml
-- [ ] T039 [US1] Migrate ops views to server mode with `UiPager` in go-tangra-portal-v4/shell/src/views/ops/Allowlist.vue, go-tangra-portal-v4/shell/src/views/ops/Registrations.vue, go-tangra-portal-v4/shell/src/views/ops/Audit.vue
-- [ ] T040 [US1] Update ops e2e helpers for the new response shape in go-tangra-portal-v4/tests/e2e/helpers.ts
+- [x] T034 [US1] Require `github.com/go-tangra/go-tangra/v4 v4.3.0` in go-tangra-portal-v4/go.mod and `@go-tangra/ui ^4.3.0` in go-tangra-portal-v4/shell/package.json (install with `NODE_AUTH_TOKEN=$(gh auth token)`)
+- [x] T035 [US1] Add Specs `allowlistList`, `auditList`, `registrationList` in go-tangra-portal-v4/internal/store/lists.go
+- [x] T036 [US1] Implement counted, paged `ListAllowlist` and `ListAudit` (audit: tie-breaker on event id) in go-tangra-portal-v4/internal/store/repos.go and the memstore equivalents in go-tangra-portal-v4/internal/memstore/memstore.go
+- [x] T037 [US1] Page the in-memory registrations with `listquery.Window` and switch the three ops handlers to `Parse`/`NewPage` (audit `events` → `items`; legacy `cursor` path kept one release) in go-tangra-portal-v4/internal/httpapi/ops.go
+- [x] T038 [US1] Declare page/page_size/order params and Page response schemas for the ops operations in go-tangra-portal-v4/api/openapi/gateway.yaml
+- [x] T039 [US1] Migrate ops views to server mode with `UiPager` in go-tangra-portal-v4/shell/src/views/ops/Allowlist.vue, go-tangra-portal-v4/shell/src/views/ops/Registrations.vue, go-tangra-portal-v4/shell/src/views/ops/Audit.vue
+- [x] T040 [US1] Update ops e2e helpers for the new response shape in go-tangra-portal-v4/tests/e2e/helpers.ts
 
 **Checkpoint**: paging works end to end on the portal.
 
@@ -144,15 +144,15 @@ waves of plan.md.
 
 ### Tests for User Story 2
 
-- [ ] T041 [P] [US2] Store tests: every sortable field in both directions returns each record exactly once with equal-value runs (tie-breaker), nulls last both directions, case-insensitive text in go-tangra-portal-v4/internal/store/lists_integration_test.go
-- [ ] T042 [P] [US2] Negative HTTP tests: unknown sort, `order=up`, `sort=spiffe_id;drop` → 422 `{param}` without echoing input; secret/internal columns not sortable in go-tangra-portal-v4/internal/httpapi/ops_list_test.go
-- [ ] T043 [P] [US2] Shell tests: clicking a sortable header requests `sort`/`order`, second click reverses, non-sortable header inert in go-tangra-portal-v4/shell/tests/unit/ops.spec.ts
+- [x] T041 [P] [US2] Store tests: every sortable field in both directions returns each record exactly once with equal-value runs (tie-breaker), nulls last both directions, case-insensitive text in go-tangra-portal-v4/internal/store/lists_integration_test.go
+- [x] T042 [P] [US2] Negative HTTP tests: unknown sort, `order=up`, `sort=spiffe_id;drop` → 422 `{param}` without echoing input; secret/internal columns not sortable in go-tangra-portal-v4/internal/httpapi/ops_list_test.go
+- [x] T043 [P] [US2] Shell tests: clicking a sortable header requests `sort`/`order`, second click reverses, non-sortable header inert in go-tangra-portal-v4/shell/tests/unit/ops.spec.ts
 
 ### Implementation for User Story 2
 
-- [ ] T044 [US2] Add sort enums per ops operation in go-tangra-portal-v4/api/openapi/gateway.yaml
-- [ ] T045 [US2] Mark Spec fields `sortable` (with `defaultDir`) on ops view columns and wire `update:sort` in go-tangra-portal-v4/shell/src/views/ops/Allowlist.vue, Registrations.vue, Audit.vue
-- [ ] T046 [US2] Add `(ts DESC, id)` and `(spiffe_id)` supporting indexes if missing in go-tangra-portal-v4/internal/store/migrations/0004_list_indexes.sql
+- [x] T044 [US2] Add sort enums per ops operation in go-tangra-portal-v4/api/openapi/gateway.yaml
+- [x] T045 [US2] Mark Spec fields `sortable` (with `defaultDir`) on ops view columns and wire `update:sort` in go-tangra-portal-v4/shell/src/views/ops/Allowlist.vue, Registrations.vue, Audit.vue
+- [x] T046 [US2] Add an `id bigserial` tie-breaker and `(ts DESC, id DESC)` index to the audit hypertable in go-tangra-portal-v4/internal/store/migrations/0004_audit_id.sql (allow-list/registrations are paged in memory; no index needed)
 
 **Checkpoint**: sorting is whole-list and validated.
 
@@ -166,13 +166,13 @@ waves of plan.md.
 
 ### Tests for User Story 3
 
-- [ ] T047 [P] [US3] Store tests: audit module/event_type/from/to filters change the total; default window applies when from/to absent; explicit from/to override it in go-tangra-portal-v4/internal/store/lists_integration_test.go
-- [ ] T048 [P] [US3] Shell tests: filter change resets `page` to 1 and keeps `sort`; empty result shows empty state in go-tangra-portal-v4/shell/tests/unit/ops.spec.ts
+- [x] T047 [P] [US3] Store tests: audit module/event_type/from/to filters change the total; default window applies when from/to absent; explicit from/to override it in go-tangra-portal-v4/internal/store/lists_integration_test.go
+- [x] T048 [P] [US3] Shell tests: filter change resets `page` to 1 and keeps `sort`; empty result shows empty state in go-tangra-portal-v4/shell/tests/unit/ops.spec.ts
 
 ### Implementation for User Story 3
 
-- [ ] T049 [US3] Apply the default 7-day window when from/to are absent and keep filters in count and page queries in go-tangra-portal-v4/internal/store/repos.go
-- [ ] T050 [US3] Call `lq.resetPage()` on filter changes and show the active window in the filter bar in go-tangra-portal-v4/shell/src/views/ops/Audit.vue
+- [x] T049 [US3] Apply the default 7-day window when from/to are absent and keep filters in count and page queries in go-tangra-portal-v4/internal/store/repos.go
+- [x] T050 [US3] Call `lq.resetPage()` on filter changes and show the active window in the filter bar in go-tangra-portal-v4/shell/src/views/ops/Audit.vue
 
 **Checkpoint**: filters + paging + sort combine correctly.
 
@@ -186,11 +186,11 @@ waves of plan.md.
 
 ### Tests for User Story 4
 
-- [ ] T051 [P] [US4] Shell tests: URL round-trip per ops table, two tables independent, beyond-last-page link adopts server-clamped page, invalid sort/size in URL fall back silently in go-tangra-portal-v4/shell/tests/unit/ops.spec.ts
+- [x] T051 [P] [US4] Shell tests: URL round-trip per ops table, two tables independent, beyond-last-page link adopts server-clamped page, invalid sort/size in URL fall back silently in go-tangra-portal-v4/shell/tests/unit/ops.spec.ts
 
 ### Implementation for User Story 4
 
-- [ ] T052 [US4] Bind ops views to `useListQuery('allow'|'reg'|'audit', …)` and `lq.clampTo(res.page)` in go-tangra-portal-v4/shell/src/views/ops/Allowlist.vue, Registrations.vue, Audit.vue
+- [x] T052 [US4] Bind ops views to `useListQuery('allow'|'reg'|'audit', …)` and `lq.clampTo(res.page)` in go-tangra-portal-v4/shell/src/views/ops/Allowlist.vue, Registrations.vue, Audit.vue
 - [ ] T053 [US4] Portal release: PR, CI, merge, tag next minor (v4.5.0), image built, record in go-tangra/specs/032-server-side-tables/rollout.md; prod deploy (gateway container, `.env` backup first) when the user approves
 - [ ] T054 [US4] Bump the portal pin (`GATEWAY_IMAGE`) in go-tangra-docker/.env.example via PR to `v4`
 
