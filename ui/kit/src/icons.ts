@@ -37,6 +37,8 @@ export const ICONS = [
   'mdi-check', // icon-[mdi--check]
   'mdi-check-circle-outline', // icon-[mdi--check-circle-outline]
   'mdi-check-decagram', // icon-[mdi--check-decagram]
+  'mdi-chevron-double-left', // icon-[mdi--chevron-double-left]
+  'mdi-chevron-double-right', // icon-[mdi--chevron-double-right]
   'mdi-chevron-down', // icon-[mdi--chevron-down]
   'mdi-chevron-left', // icon-[mdi--chevron-left]
   'mdi-chevron-right', // icon-[mdi--chevron-right]
@@ -226,6 +228,8 @@ export const ICON_CLASS_SAFELIST = [
   'icon-[mdi--check]',
   'icon-[mdi--check-circle-outline]',
   'icon-[mdi--check-decagram]',
+  'icon-[mdi--chevron-double-left]',
+  'icon-[mdi--chevron-double-right]',
   'icon-[mdi--chevron-down]',
   'icon-[mdi--chevron-left]',
   'icon-[mdi--chevron-right]',
