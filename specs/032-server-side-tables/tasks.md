@@ -191,8 +191,8 @@ waves of plan.md.
 ### Implementation for User Story 4
 
 - [x] T052 [US4] Bind ops views to `useListQuery('allow'|'reg'|'audit', …)` and `lq.clampTo(res.page)` in go-tangra-portal-v4/shell/src/views/ops/Allowlist.vue, Registrations.vue, Audit.vue
-- [ ] T053 [US4] Portal release: PR, CI, merge, tag next minor (v4.5.0), image built, record in go-tangra/specs/032-server-side-tables/rollout.md; prod deploy (gateway container, `.env` backup first) when the user approves
-- [ ] T054 [US4] Bump the portal pin (`GATEWAY_IMAGE`) in go-tangra-docker/.env.example via PR to `v4`
+- [x] T053 [US4] Portal release: PR, CI, merge, tag next minor (v4.5.0), image built, record in go-tangra/specs/032-server-side-tables/rollout.md; prod deploy (gateway container, `.env` backup first) when the user approves
+- [x] T054 [US4] Bump the portal pin (`GATEWAY_IMAGE`) in go-tangra-docker/.env.example via PR to `v4`
 
 **Checkpoint**: US1–US4 verified on the portal; shell provides kit 4.3.0 — module UIs may migrate.
 
@@ -208,86 +208,86 @@ Each module group is independent once Phase 6 is done; groups marked [P] can run
 
 ### Wave A — scheduler (already pages; add sort)
 
-- [ ] T055 [P] [US5] Tests: tasks/executions every sort field × direction exactly-once, totals per tenant, executions `counts` unchanged, `TaskIDs` keeps name order in go-tangra-scheduler-v4/internal/repo/repodb/lists_integration_test.go
-- [ ] T056 [P] [US5] Tests: 422 for bogus sort/order/page_size>200, Page shape incl. `counts` in go-tangra-scheduler-v4/internal/httpapi/lists_test.go; UI tests for header sort + URL state in go-tangra-scheduler-v4/ui/tests/unit/tasks.spec.ts
-- [ ] T057 [US5] go.mod v4.3.0, ui kit ^4.3.0; Specs `taskList`, `executionList` in go-tangra-scheduler-v4/internal/store/lists.go; index `(tenant_id, status, created_at DESC)` in go-tangra-scheduler-v4/internal/store/migrations/0004_list_indexes.sql
-- [ ] T058 [US5] Replace fixed ORDER BY with `req.OrderBy` in `ListTasks`/`ListExecutions` (go-tangra-scheduler-v4/internal/repo/repodb/db.go), memstore `SortSlice` (go-tangra-scheduler-v4/internal/memstore/memstore.go), handlers `Parse`/`NewPage` (go-tangra-scheduler-v4/internal/httpapi/tasks.go, executions.go), sort enums in go-tangra-scheduler-v4/api/openapi/scheduler.yaml
-- [ ] T059 [US5] UI: `useListQuery` + server-mode tables replacing `UiPagination` in go-tangra-scheduler-v4/ui/src/views/tasks/index.vue, history.vue and stores go-tangra-scheduler-v4/ui/src/stores/tasks.ts, executions.ts; release scheduler minor
+- [x] T055 [P] [US5] Tests: tasks/executions every sort field × direction exactly-once, totals per tenant, executions `counts` unchanged, `TaskIDs` keeps name order in go-tangra-scheduler-v4/internal/repo/repodb/lists_integration_test.go
+- [x] T056 [P] [US5] Tests: 422 for bogus sort/order/page_size>200, Page shape incl. `counts` in go-tangra-scheduler-v4/internal/httpapi/lists_test.go; UI tests for header sort + URL state in go-tangra-scheduler-v4/ui/tests/unit/tasks.spec.ts
+- [x] T057 [US5] go.mod v4.3.0, ui kit ^4.3.0; Specs `taskList`, `executionList` in go-tangra-scheduler-v4/internal/store/lists.go; index `(tenant_id, status, created_at DESC)` in go-tangra-scheduler-v4/internal/store/migrations/0004_list_indexes.sql
+- [x] T058 [US5] Replace fixed ORDER BY with `req.OrderBy` in `ListTasks`/`ListExecutions` (go-tangra-scheduler-v4/internal/repo/repodb/db.go), memstore `SortSlice` (go-tangra-scheduler-v4/internal/memstore/memstore.go), handlers `Parse`/`NewPage` (go-tangra-scheduler-v4/internal/httpapi/tasks.go, executions.go), sort enums in go-tangra-scheduler-v4/api/openapi/scheduler.yaml
+- [x] T059 [US5] UI: `useListQuery` + server-mode tables replacing `UiPagination` in go-tangra-scheduler-v4/ui/src/views/tasks/index.vue, history.vue and stores go-tangra-scheduler-v4/ui/src/stores/tasks.ts, executions.ts; release scheduler minor
 
 ### Wave A — signing
 
-- [ ] T060 [P] [US5] Tests: templates/submissions/certificates/inbox sort × direction exactly-once, inbox join stable, backup page walk pins `id` order in go-tangra-signing-v4/tests/integration/lists_test.go
-- [ ] T061 [P] [US5] Tests: 422 negatives + Page shape in go-tangra-signing-v4/internal/httpapi/lists_test.go; UI tests (inbox gains pager) in go-tangra-signing-v4/ui/tests/unit/lists.spec.ts
-- [ ] T062 [US5] go.mod/kit bump; Specs `templateList`, `submissionList`, `certificateList`, `inboxList` in go-tangra-signing-v4/internal/store/lists.go; indexes lower(name), lower(title) in go-tangra-signing-v4/internal/store/migrations/0005_list_indexes.sql
-- [ ] T063 [US5] Repo ORDER BY via Specs in go-tangra-signing-v4/internal/repo/repodb/db.go (backup in go-tangra-signing-v4/internal/backup/backup.go passes an explicit id-ordered request), memstore, handlers (templates.go, submissions.go, admin.go), OpenAPI sort enums in go-tangra-signing-v4/api/openapi/signing.yaml
-- [ ] T064 [US5] UI server mode + `useListQuery` in go-tangra-signing-v4/ui/src/views/{templates,submissions,admin,inbox}/index.vue and stores; dropdown loaders keep `page_size:100`; release signing minor
+- [x] T060 [P] [US5] Tests: templates/submissions/certificates/inbox sort × direction exactly-once, inbox join stable, backup page walk pins `id` order in go-tangra-signing-v4/tests/integration/lists_test.go
+- [x] T061 [P] [US5] Tests: 422 negatives + Page shape in go-tangra-signing-v4/internal/httpapi/lists_test.go; UI tests (inbox gains pager) in go-tangra-signing-v4/ui/tests/unit/lists.spec.ts
+- [x] T062 [US5] go.mod/kit bump; Specs `templateList`, `submissionList`, `certificateList`, `inboxList` in go-tangra-signing-v4/internal/store/lists.go; indexes lower(name), lower(title) in go-tangra-signing-v4/internal/store/migrations/0005_list_indexes.sql
+- [x] T063 [US5] Repo ORDER BY via Specs in go-tangra-signing-v4/internal/repo/repodb/db.go (backup in go-tangra-signing-v4/internal/backup/backup.go passes an explicit id-ordered request), memstore, handlers (templates.go, submissions.go, admin.go), OpenAPI sort enums in go-tangra-signing-v4/api/openapi/signing.yaml
+- [x] T064 [US5] UI server mode + `useListQuery` in go-tangra-signing-v4/ui/src/views/{templates,submissions,admin,inbox}/index.vue and stores; dropdown loaders keep `page_size:100`; release signing minor
 
 ### Wave A — ticket
 
-- [ ] T065 [P] [US5] Tests: tickets sort × direction exactly-once incl. priority and assignee, gRPC `List` default unchanged and optional sort honoured in go-tangra-ticket-v4/tests/integration/lists_test.go
-- [ ] T066 [P] [US5] Tests: 422 negatives; mailboxes/rules/tags paged in go-tangra-ticket-v4/internal/httpapi/lists_test.go; UI tests in go-tangra-ticket-v4/ui/tests/unit/tickets.spec.ts
-- [ ] T067 [US5] go.mod/kit bump; Specs in go-tangra-ticket-v4/internal/store/lists.go; index `(tenant_id, updated_at DESC)` in go-tangra-ticket-v4/internal/store/migrations/0004_list_indexes.sql; optional `sort`/`order` fields in go-tangra-ticket-v4/api/proto/ticket/v1/ticket.proto (regenerate)
-- [ ] T068 [US5] Repo/memstore/handlers (tickets.go + mailboxes/rules/tags lists) and OpenAPI in go-tangra-ticket-v4/api/openapi/ticket.yaml; gRPC server passes sort in go-tangra-ticket-v4/internal/grpcapi/tickets.go
-- [ ] T069 [US5] UI server mode in go-tangra-ticket-v4/ui/src/views/{tickets,mailboxes,rules,tags}/index.vue and stores; release ticket minor
+- [x] T065 [P] [US5] Tests: tickets sort × direction exactly-once incl. priority and assignee, gRPC `List` default unchanged and optional sort honoured in go-tangra-ticket-v4/tests/integration/lists_test.go
+- [x] T066 [P] [US5] Tests: 422 negatives; mailboxes/rules/tags paged in go-tangra-ticket-v4/internal/httpapi/lists_test.go; UI tests in go-tangra-ticket-v4/ui/tests/unit/tickets.spec.ts
+- [x] T067 [US5] go.mod/kit bump; Specs in go-tangra-ticket-v4/internal/store/lists.go; index `(tenant_id, updated_at DESC)` in go-tangra-ticket-v4/internal/store/migrations/0004_list_indexes.sql; optional `sort`/`order` fields in go-tangra-ticket-v4/api/proto/ticket/v1/ticket.proto (regenerate)
+- [x] T068 [US5] Repo/memstore/handlers (tickets.go + mailboxes/rules/tags lists) and OpenAPI in go-tangra-ticket-v4/api/openapi/ticket.yaml; gRPC server passes sort in go-tangra-ticket-v4/internal/grpcapi/tickets.go
+- [x] T069 [US5] UI server mode in go-tangra-ticket-v4/ui/src/views/{tickets,mailboxes,rules,tags}/index.vue and stores; release ticket minor
 
 ### Wave A — hr
 
-- [ ] T070 [P] [US5] Tests: requests/allowances sort × direction incl. `user` (member display-name join) exactly-once; `All:true` callers unaffected in hr-service-v4/tests/integration/lists_test.go
-- [ ] T071 [P] [US5] Tests: 422 negatives, holidays/absence-types paged in hr-service-v4/internal/httpapi/lists_test.go; UI tests in hr-service-v4/ui/tests/unit/lists.spec.ts
-- [ ] T072 [US5] go.mod/kit bump; Specs (user sort → `lower(m.display_name)` via LEFT JOIN hr_members) in hr-service-v4/internal/store/lists.go
-- [ ] T073 [US5] Repo (hr-service-v4/internal/repo/repodb/db.go), memstore, handlers (hr-service-v4/internal/httpapi/routes.go), OpenAPI hr-service-v4/api/openapi/hr.yaml
-- [ ] T074 [US5] UI server mode in hr-service-v4/ui/src/views/{requests/list,allowances/index,holidays/index,absence-types/index}.vue; release hr minor
+- [x] T070 [P] [US5] Tests: requests/allowances sort × direction incl. `user` (member display-name join) exactly-once; `All:true` callers unaffected in hr-service-v4/tests/integration/lists_test.go
+- [x] T071 [P] [US5] Tests: 422 negatives, holidays/absence-types paged in hr-service-v4/internal/httpapi/lists_test.go; UI tests in hr-service-v4/ui/tests/unit/lists.spec.ts
+- [x] T072 [US5] go.mod/kit bump; Specs (user sort → `lower(m.display_name)` via LEFT JOIN hr_members) in hr-service-v4/internal/store/lists.go
+- [x] T073 [US5] Repo (hr-service-v4/internal/repo/repodb/db.go), memstore, handlers (hr-service-v4/internal/httpapi/routes.go), OpenAPI hr-service-v4/api/openapi/hr.yaml
+- [x] T074 [US5] UI server mode in hr-service-v4/ui/src/views/{requests/list,allowances/index,holidays/index,absence-types/index}.vue; release hr minor
 
 ### Wave A — dns
 
-- [ ] T075 [P] [US5] Tests: zones sort × direction exactly-once; records (PowerDNS, in memory) `SortSlice`/`Window` with page_size max 200; templates/supermasters paged in go-tangra-dns-v4/tests/integration/lists_test.go and go-tangra-dns-v4/internal/records/records_test.go
-- [ ] T076 [P] [US5] Tests: 422 negatives, gRPC zones List unchanged in go-tangra-dns-v4/internal/httpapi/lists_test.go; UI tests in go-tangra-dns-v4/ui/tests/unit/zones.spec.ts
-- [ ] T077 [US5] go.mod/kit bump; Specs in go-tangra-dns-v4/internal/store/lists.go; repo/memstore (go-tangra-dns-v4/internal/repo/repodb/db.go), records sorting via `listquery` (go-tangra-dns-v4/internal/records/records.go), handlers zones.go/records.go, OpenAPI go-tangra-dns-v4/api/openapi/dns.yaml
-- [ ] T078 [US5] UI server mode replacing `UiPagination` in go-tangra-dns-v4/ui/src/views/zones/index.vue, records.vue, templates/index.vue, supermasters/index.vue; release dns minor
+- [x] T075 [P] [US5] Tests: zones sort × direction exactly-once; records (PowerDNS, in memory) `SortSlice`/`Window` with page_size max 200; templates/supermasters paged in go-tangra-dns-v4/tests/integration/lists_test.go and go-tangra-dns-v4/internal/records/records_test.go
+- [x] T076 [P] [US5] Tests: 422 negatives, gRPC zones List unchanged in go-tangra-dns-v4/internal/httpapi/lists_test.go; UI tests in go-tangra-dns-v4/ui/tests/unit/zones.spec.ts
+- [x] T077 [US5] go.mod/kit bump; Specs in go-tangra-dns-v4/internal/store/lists.go; repo/memstore (go-tangra-dns-v4/internal/repo/repodb/db.go), records sorting via `listquery` (go-tangra-dns-v4/internal/records/records.go), handlers zones.go/records.go, OpenAPI go-tangra-dns-v4/api/openapi/dns.yaml
+- [x] T078 [US5] UI server mode replacing `UiPagination` in go-tangra-dns-v4/ui/src/views/zones/index.vue, records.vue, templates/index.vue, supermasters/index.vue; release dns minor
 
 ### Wave B — asset
 
-- [ ] T079 [P] [US5] Tests: assets, suppliers, consumables, licenses, insurance, covered assets, assignments — sort × direction exactly-once, filters before count, tenant isolation; gRPC list RPCs and backup cursor walks unchanged in go-tangra-asset-v4/internal/repo/repodb/lists_integration_test.go
-- [ ] T080 [P] [US5] Tests: 422 negatives, legacy `cursor`/`limit` path returns old shape + total, mixed styles 422 in go-tangra-asset-v4/internal/httpapi/lists_test.go; UI tests in go-tangra-asset-v4/ui/tests/unit/lists.spec.ts
-- [ ] T081 [US5] go.mod/kit bump; Specs in go-tangra-asset-v4/internal/store/lists.go; indexes on assets (lower(name), asset_tag, created_at) in go-tangra-asset-v4/internal/store/migrations/0006_list_indexes.sql
-- [ ] T082 [US5] Repo paged/counted variants beside the cursor functions in go-tangra-asset-v4/internal/repo/repodb/db.go (shared `listOpts` helper extended); memstore `SortSlice`/`Window` in go-tangra-asset-v4/internal/memstore/memstore.go
-- [ ] T083 [US5] Handlers `Parse`/`NewPage`/legacy in go-tangra-asset-v4/internal/httpapi/handlers.go; OpenAPI go-tangra-asset-v4/api/openapi/asset.yaml
-- [ ] T084 [US5] UI server mode in go-tangra-asset-v4/ui/src/views/{assets,suppliers,consumables,licenses,insurance}/index.vue, assets/detail.vue (assignments) and stores; asset.* SSE → debounced reload in go-tangra-asset-v4/ui/src/stores/live.ts; release asset minor
+- [x] T079 [P] [US5] Tests: assets, suppliers, consumables, licenses, insurance, covered assets, assignments — sort × direction exactly-once, filters before count, tenant isolation; gRPC list RPCs and backup cursor walks unchanged in go-tangra-asset-v4/internal/repo/repodb/lists_integration_test.go
+- [x] T080 [P] [US5] Tests: 422 negatives, legacy `cursor`/`limit` path returns old shape + total, mixed styles 422 in go-tangra-asset-v4/internal/httpapi/lists_test.go; UI tests in go-tangra-asset-v4/ui/tests/unit/lists.spec.ts
+- [x] T081 [US5] go.mod/kit bump; Specs in go-tangra-asset-v4/internal/store/lists.go; indexes on assets (lower(name), asset_tag, created_at) in go-tangra-asset-v4/internal/store/migrations/0006_list_indexes.sql
+- [x] T082 [US5] Repo paged/counted variants beside the cursor functions in go-tangra-asset-v4/internal/repo/repodb/db.go (shared `listOpts` helper extended); memstore `SortSlice`/`Window` in go-tangra-asset-v4/internal/memstore/memstore.go
+- [x] T083 [US5] Handlers `Parse`/`NewPage`/legacy in go-tangra-asset-v4/internal/httpapi/handlers.go; OpenAPI go-tangra-asset-v4/api/openapi/asset.yaml
+- [x] T084 [US5] UI server mode in go-tangra-asset-v4/ui/src/views/{assets,suppliers,consumables,licenses,insurance}/index.vue, assets/detail.vue (assignments) and stores; asset.* SSE → debounced reload in go-tangra-asset-v4/ui/src/stores/live.ts; release asset minor
 
 ### Wave B — inventory
 
-- [ ] T085 [P] [US5] Tests: hosts, auto-enroll, snapshots (cursor/sort mismatch fixed), changes (size honoured) exactly-once; agents fleet `Window`; asset→`ListHosts` gRPC id-DESC keyset unchanged; `ListHostReports` untouched in go-tangra-inventory-v4/internal/repo/repodb/lists_integration_test.go and go-tangra-inventory-v4/internal/upgrades/fleet_test.go
-- [ ] T086 [P] [US5] Tests: 422 negatives, legacy path, `os_name` and `last_seen_from` filters applied in go-tangra-inventory-v4/internal/httpapi/lists_test.go; UI tests (hosts filters send `os_name`) in go-tangra-inventory-v4/ui/tests/unit/hosts.spec.ts
-- [ ] T087 [US5] go.mod/kit bump; Specs in go-tangra-inventory-v4/internal/store/lists.go; index `(tenant_id, created_at)` on hosts if missing in go-tangra-inventory-v4/internal/store/migrations/0008_list_indexes.sql
-- [ ] T088 [US5] Repo (go-tangra-inventory-v4/internal/repo/repodb/db.go: ListHosts paged variant, ListSnapshotsForHost consistent order, ListChanges limit), fleet `Window` (go-tangra-inventory-v4/internal/upgrades/fleet.go), memstore
-- [ ] T089 [US5] Handlers (go-tangra-inventory-v4/internal/httpapi/handlers.go, upgrades.go) incl. `last_seen_from`; OpenAPI go-tangra-inventory-v4/api/openapi/inventory.yaml
-- [ ] T090 [US5] UI server mode in go-tangra-inventory-v4/ui/src/views/hosts/index.vue (filter param `os_name`), agents/index.vue, agents/AutoEnrollCard.vue, hosts/detail.vue (snapshots, changes) and stores; release inventory minor (signing job needs user approval)
+- [x] T085 [P] [US5] Tests: hosts, auto-enroll, snapshots (cursor/sort mismatch fixed), changes (size honoured) exactly-once; agents fleet `Window`; asset→`ListHosts` gRPC id-DESC keyset unchanged; `ListHostReports` untouched in go-tangra-inventory-v4/internal/repo/repodb/lists_integration_test.go and go-tangra-inventory-v4/internal/upgrades/fleet_test.go
+- [x] T086 [P] [US5] Tests: 422 negatives, legacy path, `os_name` and `last_seen_from` filters applied in go-tangra-inventory-v4/internal/httpapi/lists_test.go; UI tests (hosts filters send `os_name`) in go-tangra-inventory-v4/ui/tests/unit/hosts.spec.ts
+- [x] T087 [US5] go.mod/kit bump; Specs in go-tangra-inventory-v4/internal/store/lists.go; index `(tenant_id, created_at)` on hosts if missing in go-tangra-inventory-v4/internal/store/migrations/0008_list_indexes.sql
+- [x] T088 [US5] Repo (go-tangra-inventory-v4/internal/repo/repodb/db.go: ListHosts paged variant, ListSnapshotsForHost consistent order, ListChanges limit), fleet `Window` (go-tangra-inventory-v4/internal/upgrades/fleet.go), memstore
+- [x] T089 [US5] Handlers (go-tangra-inventory-v4/internal/httpapi/handlers.go, upgrades.go) incl. `last_seen_from`; OpenAPI go-tangra-inventory-v4/api/openapi/inventory.yaml
+- [x] T090 [US5] UI server mode in go-tangra-inventory-v4/ui/src/views/hosts/index.vue (filter param `os_name`), agents/index.vue, agents/AutoEnrollCard.vue, hosts/detail.vue (snapshots, changes) and stores; release inventory minor (signing job needs user approval)
 
 ### Wave B — ipam
 
-- [ ] T091 [P] [US5] Tests: addresses (inet order), devices, subnets (inet order), vlans, scans, group members, device sub-lists exactly-once; gRPC lists + backup cursor walks unchanged in go-tangra-ipam-v4/internal/repo/repodb/lists_integration_test.go
-- [ ] T092 [P] [US5] Tests: 422 negatives, legacy path, `hostname` and `ip_version` filters honoured in go-tangra-ipam-v4/internal/httpapi/lists_test.go; UI tests (live event → reload, no prepend) in go-tangra-ipam-v4/ui/tests/unit/addresses.spec.ts
-- [ ] T093 [US5] go.mod/kit bump; Specs (address/cidr sort on inet columns) in go-tangra-ipam-v4/internal/store/lists.go; index `(tenant_id, created_at)` on scan jobs in go-tangra-ipam-v4/internal/store/migrations/0010_list_indexes.sql
-- [ ] T094 [US5] Repo paged variants in go-tangra-ipam-v4/internal/repo/repodb/db.go (ListAddresses, ListDevices, ListSubnets, ListVlans, ListScanJobs, members, device sub-lists); memstore `paginate` → `Window` in go-tangra-ipam-v4/internal/memstore/memstore.go
-- [ ] T095 [US5] Handlers in go-tangra-ipam-v4/internal/httpapi/handlers.go (read `hostname`, `ip_version`); OpenAPI go-tangra-ipam-v4/api/openapi/ipam.yaml
-- [ ] T096 [US5] UI server mode in go-tangra-ipam-v4/ui/src/views/{addresses,devices,subnets,vlans,scans,groups}/index.vue, devices/detail.vue and stores; addresses/scans SSE → debounced reload in go-tangra-ipam-v4/ui/src/stores/live.ts; release ipam minor
+- [x] T091 [P] [US5] Tests: addresses (inet order), devices, subnets (inet order), vlans, scans, group members, device sub-lists exactly-once; gRPC lists + backup cursor walks unchanged in go-tangra-ipam-v4/internal/repo/repodb/lists_integration_test.go
+- [x] T092 [P] [US5] Tests: 422 negatives, legacy path, `hostname` and `ip_version` filters honoured in go-tangra-ipam-v4/internal/httpapi/lists_test.go; UI tests (live event → reload, no prepend) in go-tangra-ipam-v4/ui/tests/unit/addresses.spec.ts
+- [x] T093 [US5] go.mod/kit bump; Specs (address/cidr sort on inet columns) in go-tangra-ipam-v4/internal/store/lists.go; index `(tenant_id, created_at)` on scan jobs in go-tangra-ipam-v4/internal/store/migrations/0010_list_indexes.sql
+- [x] T094 [US5] Repo paged variants in go-tangra-ipam-v4/internal/repo/repodb/db.go (ListAddresses, ListDevices, ListSubnets, ListVlans, ListScanJobs, members, device sub-lists); memstore `paginate` → `Window` in go-tangra-ipam-v4/internal/memstore/memstore.go
+- [x] T095 [US5] Handlers in go-tangra-ipam-v4/internal/httpapi/handlers.go (read `hostname`, `ip_version`); OpenAPI go-tangra-ipam-v4/api/openapi/ipam.yaml
+- [x] T096 [US5] UI server mode in go-tangra-ipam-v4/ui/src/views/{addresses,devices,subnets,vlans,scans,groups}/index.vue, devices/detail.vue and stores; addresses/scans SSE → debounced reload in go-tangra-ipam-v4/ui/src/stores/live.ts; release ipam minor
 
 ### Wave B — deployer
 
-- [ ] T097 [P] [US5] Tests: configurations, targets (no N+1), jobs with `job_type`/`target_id` filtered in SQL before LIMIT, children/history exactly-once; gRPC `ConfigurationServer.List` unchanged in go-tangra-deployer-v4/internal/repo/repodb/lists_integration_test.go
-- [ ] T098 [P] [US5] Tests: 422 negatives in go-tangra-deployer-v4/internal/httpapi/lists_test.go; UI tests (job SSE patch keeps page) in go-tangra-deployer-v4/ui/tests/unit/jobs.spec.ts
-- [ ] T099 [US5] go.mod/kit bump; Specs in go-tangra-deployer-v4/internal/store/lists.go; index `(tenant_id, created_at DESC)` on jobs in go-tangra-deployer-v4/internal/store/migrations/0004_list_indexes.sql
-- [ ] T100 [US5] Repo: paged/counted lists, job_type/target_id into WHERE, batch-load target configuration ids in go-tangra-deployer-v4/internal/repo/repodb/db.go and go-tangra-deployer-v4/internal/targets/targets.go; memstore
-- [ ] T101 [US5] Handlers go-tangra-deployer-v4/internal/httpapi/handlers.go; OpenAPI go-tangra-deployer-v4/api/openapi/deployer.yaml
-- [ ] T102 [US5] UI server mode in go-tangra-deployer-v4/ui/src/views/{configurations,targets,jobs}/index.vue (+ job detail tables, dashboard recent jobs) and stores; release deployer minor
+- [x] T097 [P] [US5] Tests: configurations, targets (no N+1), jobs with `job_type`/`target_id` filtered in SQL before LIMIT, children/history exactly-once; gRPC `ConfigurationServer.List` unchanged in go-tangra-deployer-v4/internal/repo/repodb/lists_integration_test.go
+- [x] T098 [P] [US5] Tests: 422 negatives in go-tangra-deployer-v4/internal/httpapi/lists_test.go; UI tests (job SSE patch keeps page) in go-tangra-deployer-v4/ui/tests/unit/jobs.spec.ts
+- [x] T099 [US5] go.mod/kit bump; Specs in go-tangra-deployer-v4/internal/store/lists.go; index `(tenant_id, created_at DESC)` on jobs in go-tangra-deployer-v4/internal/store/migrations/0004_list_indexes.sql
+- [x] T100 [US5] Repo: paged/counted lists, job_type/target_id into WHERE, batch-load target configuration ids in go-tangra-deployer-v4/internal/repo/repodb/db.go and go-tangra-deployer-v4/internal/targets/targets.go; memstore
+- [x] T101 [US5] Handlers go-tangra-deployer-v4/internal/httpapi/handlers.go; OpenAPI go-tangra-deployer-v4/api/openapi/deployer.yaml
+- [x] T102 [US5] UI server mode in go-tangra-deployer-v4/ui/src/views/{configurations,targets,jobs}/index.vue (+ job detail tables, dashboard recent jobs) and stores; release deployer minor
 
 ### Wave B — paperless
 
-- [ ] T103 [P] [US5] Tests: documents sort × direction exactly-once with id tie-breaker, more than 100 documents all reachable, filters before count; gRPC `DocumentServer.List` cursor unchanged in go-tangra-paperless-v4/internal/repo/repodb/lists_integration_test.go
-- [ ] T104 [P] [US5] Tests: 422 negatives in go-tangra-paperless-v4/internal/httpapi/lists_test.go; UI tests in go-tangra-paperless-v4/ui/tests/unit/views.spec.ts
-- [ ] T105 [US5] go.mod/kit bump; Spec `documentList` in go-tangra-paperless-v4/internal/store/lists.go; indexes `(tenant_id, created_at DESC, id)`, `(tenant_id, lower(name), id)` in go-tangra-paperless-v4/internal/store/migrations/0005_list_indexes.sql
-- [ ] T106 [US5] Repo paged/counted `ListDocuments` (replace `fmt.Sprintf` ORDER with `req.OrderBy`) in go-tangra-paperless-v4/internal/store/repos.go and go-tangra-paperless-v4/internal/repo/repodb; memstore; handler go-tangra-paperless-v4/internal/httpapi/handlers.go; OpenAPI go-tangra-paperless-v4/api/openapi/paperless.yaml
-- [ ] T107 [US5] UI server mode in go-tangra-paperless-v4/ui/src/views/documents/index.vue and go-tangra-paperless-v4/ui/src/stores/documents.ts; release paperless minor
+- [x] T103 [P] [US5] Tests: documents sort × direction exactly-once with id tie-breaker, more than 100 documents all reachable, filters before count; gRPC `DocumentServer.List` cursor unchanged in go-tangra-paperless-v4/internal/repo/repodb/lists_integration_test.go
+- [x] T104 [P] [US5] Tests: 422 negatives in go-tangra-paperless-v4/internal/httpapi/lists_test.go; UI tests in go-tangra-paperless-v4/ui/tests/unit/views.spec.ts
+- [x] T105 [US5] go.mod/kit bump; Spec `documentList` in go-tangra-paperless-v4/internal/store/lists.go; indexes `(tenant_id, created_at DESC, id)`, `(tenant_id, lower(name), id)` in go-tangra-paperless-v4/internal/store/migrations/0005_list_indexes.sql
+- [x] T106 [US5] Repo paged/counted `ListDocuments` (replace `fmt.Sprintf` ORDER with `req.OrderBy`) in go-tangra-paperless-v4/internal/store/repos.go and go-tangra-paperless-v4/internal/repo/repodb; memstore; handler go-tangra-paperless-v4/internal/httpapi/handlers.go; OpenAPI go-tangra-paperless-v4/api/openapi/paperless.yaml
+- [x] T107 [US5] UI server mode in go-tangra-paperless-v4/ui/src/views/documents/index.vue and go-tangra-paperless-v4/ui/src/stores/documents.ts; release paperless minor
 
 ### Wave C — lcm (visibility into SQL)
 
