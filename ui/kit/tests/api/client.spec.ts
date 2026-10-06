@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createApi, ApiError, csrfToken, describe as describeErr, CSRF_HEADER } from '@/api/client'
+import { createApi, ApiError, csrfToken, describe as describeErr, onUnauthenticated, CSRF_HEADER } from '@/api/client'
 
 function mockFetch(status: number, body: unknown, headers: Record<string, string> = {}) {
   const res = {
@@ -130,5 +130,30 @@ describe('api client (flat error details)', () => {
     await expect(api('POST', 'search', {})).rejects.toMatchObject({ reason: 'invalid_filter', detail: { message: 'unexpected end' } })
     mockFetch(400, { reason: 'invalid_filter', message: 'flat', detail: { message: 'nested' } })
     await expect(api('POST', 'search', {})).rejects.toMatchObject({ detail: { message: 'nested' } })
+  })
+})
+
+describe('onUnauthenticated', () => {
+  it('reports every 401 (calls and uploads) to the listeners, only 401s, and stops after unsubscribe', async () => {
+    const seen: ApiError[] = []
+    const off = onUnauthenticated((e) => seen.push(e))
+    const api = createApi({ base: '/api/x/v1' })
+    mockFetch(401, { reason: 'unauthenticated' })
+    await expect(api('GET', 'things')).rejects.toMatchObject({ status: 401, reason: 'unauthenticated' })
+    await expect(api.upload('files', new File(['x'], 'x.txt'))).rejects.toBeInstanceOf(ApiError)
+    expect(seen.map((e) => e.status)).toEqual([401, 401])
+    mockFetch(403, { reason: 'forbidden' })
+    await expect(api('GET', 'things')).rejects.toMatchObject({ status: 403 })
+    expect(seen.length).toBe(2)
+    off()
+    mockFetch(401, { reason: 'unauthenticated' })
+    await expect(api('GET', 'things')).rejects.toMatchObject({ status: 401 })
+    expect(seen.length).toBe(2)
+  })
+  it('a throwing listener does not change the caller\'s error', async () => {
+    const off = onUnauthenticated(() => { throw new Error('boom') })
+    mockFetch(401, { reason: 'unauthenticated' })
+    await expect(createApi({ base: '/api/x/v1' })('GET', 'x')).rejects.toMatchObject({ status: 401, reason: 'unauthenticated' })
+    off()
   })
 })

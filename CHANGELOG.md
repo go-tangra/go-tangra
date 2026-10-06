@@ -1,5 +1,17 @@
 # Changelog
 
+## 4.4.0 — Session expiry hook for the UI kit
+
+### Added
+
+- `@go-tangra/ui/api`: `onUnauthenticated(fn)` (and the
+  `UnauthenticatedListener` type). Every 401 a `createApi` client receives —
+  calls and uploads — is reported to the listeners before the `ApiError` is
+  thrown; a throwing listener never changes the caller's error. The module is a
+  federation singleton, so the shell registers once and covers every module
+  remote: it confirms the session and sends the person to sign-in.
+- Go module: version bump only (released in lockstep), no changes.
+
 ## 4.3.1 — listquery: index-friendly ORDER BY for not-null fields
 
 ### Changed

@@ -1,7 +1,9 @@
 // The one fetch client every Tangra front-end uses (previously copied into each
 // module). Same-origin calls through the gateway with the double-submit CSRF
 // header on mutations, a closed reason vocabulary on refusals, multipart
-// uploads and binary-route URL building.
+// uploads and binary-route URL building. A 401 from any client is reported to
+// the onUnauthenticated listeners (the shell sends the user to sign in): the
+// module is a federation singleton, so one registration covers every remote.
 import { messages, describeReason } from '@/forms/messages'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -48,6 +50,34 @@ export interface Api {
   readonly base: string
 }
 
+/** Called with every 401 any client of this module receives. */
+export type UnauthenticatedListener = (err: ApiError) => void
+const unauthenticated = new Set<UnauthenticatedListener>()
+
+/** Listens for 401 answers (an ended session); returns the unsubscribe function. */
+export function onUnauthenticated(fn: UnauthenticatedListener): () => void {
+  unauthenticated.add(fn)
+  return () => {
+    unauthenticated.delete(fn)
+  }
+}
+
+/** Builds the error for a refused response, telling the listeners about a 401. */
+function refused(status: number, data: unknown): ApiError {
+  const { reason, detail } = reasonOf(data)
+  const err = new ApiError(status, reason, detail)
+  if (status === 401) {
+    for (const fn of unauthenticated) {
+      try {
+        fn(err)
+      } catch {
+        /* a listener must not change the caller's error */
+      }
+    }
+  }
+  return err
+}
+
 function reasonOf(data: unknown): { reason: string; detail?: Record<string, unknown> } {
   if (typeof data === 'object' && data !== null && 'reason' in data) {
     const d = data as { reason: unknown; detail?: unknown }
@@ -90,10 +120,7 @@ export function createApi(cfg: ApiConfig): Api {
     }
     if (res.status === 204) return undefined as T
     const data: unknown = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      const { reason, detail } = reasonOf(data)
-      throw new ApiError(res.status, reason, detail)
-    }
+    if (!res.ok) throw refused(res.status, data)
     return data as T
   }) as Api
   Object.defineProperty(api, 'base', { value: cfg.base })
@@ -110,10 +137,7 @@ export function createApi(cfg: ApiConfig): Api {
       throw new ApiError(0, 'network')
     }
     const data: unknown = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      const { reason, detail } = reasonOf(data)
-      throw new ApiError(res.status, reason, detail)
-    }
+    if (!res.ok) throw refused(res.status, data)
     return data as T
   }
   api.fileUrl = url
