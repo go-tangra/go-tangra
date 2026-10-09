@@ -138,56 +138,69 @@ func Default() Config {
 // Validate checks every field. It returns the first problem found; messages name
 // the offending field in snake_case so they are greppable.
 func (c Config) Validate() error {
-	if !identity.ValidServiceName(c.ServiceName) {
-		return errors.New("config: service_name must match ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+	if errs := c.ValidateAll(); len(errs) > 0 {
+		return errs[0]
 	}
-	if !identity.ValidTrustDomain(c.TrustDomain) {
-		return errors.New("config: trust_domain must be a lower-case DNS-like name")
-	}
-	if !envRE.MatchString(c.Env) {
-		return errors.New("config: env may contain only letters, digits and '-'")
-	}
-	if err := c.Identity.validate(); err != nil {
-		return err
-	}
-	if err := c.Authz.validate(); err != nil {
-		return err
-	}
-	if err := c.Limits.validate(); err != nil {
-		return err
-	}
-	return c.Admin.validate()
+	return nil
 }
 
-func (i Identity) validate() error {
+// ValidateAll runs the same checks as Validate but keeps going and returns
+// every problem, in the order Validate would meet them (its first element is
+// Validate's error). For tools that report all problems at once (preflight).
+func (c Config) ValidateAll() []error {
+	var errs []error
+	if !identity.ValidServiceName(c.ServiceName) {
+		errs = append(errs, errors.New("config: service_name must match ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"))
+	}
+	if !identity.ValidTrustDomain(c.TrustDomain) {
+		errs = append(errs, errors.New("config: trust_domain must be a lower-case DNS-like name"))
+	}
+	if !envRE.MatchString(c.Env) {
+		errs = append(errs, errors.New("config: env may contain only letters, digits and '-'"))
+	}
+	errs = append(errs, c.Identity.validate()...)
+	if err := c.Authz.validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := c.Limits.validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := c.Admin.validate(); err != nil {
+		errs = append(errs, err)
+	}
+	return errs
+}
+
+func (i Identity) validate() []error {
+	var errs []error
 	switch i.Provider {
 	case ProviderSPIFFE:
 		if i.WorkloadSocket == "" {
-			return errors.New("config: identity.workload_socket is required for the spiffe provider")
+			errs = append(errs, errors.New("config: identity.workload_socket is required for the spiffe provider"))
 		}
 	case ProviderFile:
 		if i.File.Cert == "" || i.File.Key == "" || i.File.Bundle == "" {
-			return errors.New("config: identity.file.cert, identity.file.key and identity.file.bundle are required for the file provider")
+			errs = append(errs, errors.New("config: identity.file.cert, identity.file.key and identity.file.bundle are required for the file provider"))
 		}
 	case ProviderProvided:
 	case "localdev":
-		return errors.New("config: identity.provider=localdev cannot be set from configuration; use freya.WithInsecureLocalDev()")
+		return append(errs, errors.New("config: identity.provider=localdev cannot be set from configuration; use freya.WithInsecureLocalDev()"))
 	default:
-		return fmt.Errorf("config: identity.provider %q is not one of spiffe, file", i.Provider)
+		return append(errs, fmt.Errorf("config: identity.provider %q is not one of spiffe, file", i.Provider))
 	}
 	if i.RenewAt < 0.3 || i.RenewAt > 0.8 {
-		return errors.New("config: identity.renew_at must be between 0.3 and 0.8")
+		errs = append(errs, errors.New("config: identity.renew_at must be between 0.3 and 0.8"))
 	}
 	if i.SkewTolerance < 0 || i.SkewTolerance > 15*time.Minute {
-		return errors.New("config: identity.skew_tolerance must be between 0 and 15m")
+		errs = append(errs, errors.New("config: identity.skew_tolerance must be between 0 and 15m"))
 	}
 	if i.MaxLifetime <= 0 || i.MaxLifetime > 24*time.Hour {
-		return errors.New("config: identity.max_lifetime must be between 1s and 24h")
+		errs = append(errs, errors.New("config: identity.max_lifetime must be between 1s and 24h"))
 	}
 	if i.StartupTimeout <= 0 {
-		return errors.New("config: identity.startup_timeout must be positive")
+		errs = append(errs, errors.New("config: identity.startup_timeout must be positive"))
 	}
-	return nil
+	return errs
 }
 
 func (a Authz) validate() error {
