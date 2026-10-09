@@ -132,7 +132,7 @@ func TCPDial(name, addr string, timeout time.Duration) Check {
 	if timeout <= 0 {
 		timeout = DialTimeout
 	}
-	return Check{Name: name, Run: func(ctx context.Context) Result {
+	return Check{Name: name, Network: true, Run: func(ctx context.Context) Result {
 		if _, _, err := net.SplitHostPort(addr); err != nil {
 			return Failf("%q is not host:port", addr)
 		}
@@ -194,7 +194,7 @@ func HTTPSProbe(name, rawURL string, cfg *tls.Config, timeout time.Duration) Che
 	if timeout <= 0 {
 		timeout = DialTimeout
 	}
-	return Check{Name: name, Run: func(ctx context.Context) Result {
+	return Check{Name: name, Network: true, Run: func(ctx context.Context) Result {
 		u, err := url.Parse(rawURL)
 		if err != nil || u.Scheme != "https" || u.Host == "" {
 			return Failf("%q is not an https URL", rawURL)

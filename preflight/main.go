@@ -12,7 +12,7 @@ import (
 // check, so a broken configuration still yields a full report.
 type Plan func(ctx context.Context, configPath string) []Check
 
-// Main implements `<module> preflight -config <path> [-json]`: it builds the
+// Main implements `<module> preflight -config <path> [-json] [-offline]`: it builds the
 // checks with plan, runs them and writes the report to stdout. It returns
 // the exit code: 0 when nothing failed, 1 when a check failed, 2 on a usage
 // error.
@@ -21,6 +21,7 @@ func Main(ctx context.Context, module string, args []string, stdout, stderr io.W
 	fs.SetOutput(stderr)
 	path := fs.String("config", defaultConfig, "configuration file")
 	asJSON := fs.Bool("json", false, "write the report as JSON")
+	offline := fs.Bool("offline", false, "skip the checks that contact other hosts (core endpoints, database)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -28,7 +29,11 @@ func Main(ctx context.Context, module string, args []string, stdout, stderr io.W
 		_, _ = fmt.Fprintf(stderr, "%s preflight: unexpected arguments %v\n", module, fs.Args())
 		return 2
 	}
-	rep := Report{Module: module, Config: *path, Results: Run(ctx, plan(ctx, *path))}
+	checks := plan(ctx, *path)
+	if *offline {
+		checks = Offline(checks)
+	}
+	rep := Report{Module: module, Config: *path, Results: Run(ctx, checks)}
 	write := rep.WriteText
 	if *asJSON {
 		write = rep.WriteJSON

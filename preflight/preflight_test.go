@@ -163,3 +163,46 @@ func TestHuman(t *testing.T) {
 		}
 	}
 }
+
+// Offline skips only the network checks, in place; everything else runs.
+func TestOffline(t *testing.T) {
+	contacted := false
+	checks := []Check{
+		Static("config", Passf("ok")),
+		{Name: "reach: auth", Network: true, Run: func(context.Context) Result { contacted = true; return Failf("refused") }},
+		Static("file", Failf("missing")),
+	}
+	got := Run(context.Background(), Offline(checks))
+	if contacted {
+		t.Fatal("an offline run must not contact other hosts")
+	}
+	want := []Status{Pass, Skip, Fail}
+	for i, r := range got {
+		if r.Status != want[i] || r.Name != checks[i].Name {
+			t.Fatalf("result %d = %+v, want %s %s", i, r, checks[i].Name, want[i])
+		}
+	}
+	if !strings.Contains(got[1].Detail, "offline") {
+		t.Fatalf("skip detail %q", got[1].Detail)
+	}
+	if !TCPDial("x", "127.0.0.1:1", time.Second).Network || !HTTPSProbe("y", "https://127.0.0.1:1/", nil, time.Second).Network {
+		t.Fatal("the framework's dial and HTTPS checks are network checks")
+	}
+}
+
+func TestMainOffline(t *testing.T) {
+	plan := func(context.Context, string) []Check {
+		return []Check{Static("config", Passf("ok")), {Name: "reach: lcm", Network: true, Run: func(context.Context) Result { return Failf("refused") }}}
+	}
+	var out, errOut bytes.Buffer
+	if code := Main(context.Background(), "demo", []string{"-offline"}, &out, &errOut, "def.yaml", plan); code != 0 {
+		t.Fatalf("exit %d with only a network failure offline: %s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "SKIP  reach: lcm") {
+		t.Fatalf("stdout %q", out.String())
+	}
+	out.Reset()
+	if code := Main(context.Background(), "demo", nil, &out, &errOut, "def.yaml", plan); code != 1 {
+		t.Fatalf("online exit %d, want 1", code)
+	}
+}

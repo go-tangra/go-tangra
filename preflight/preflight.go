@@ -61,6 +61,24 @@ func (r Result) WithFix(format string, a ...any) Result {
 type Check struct {
 	Name string
 	Run  func(ctx context.Context) Result
+	// Network marks a check that contacts another host (a core endpoint, the
+	// database); Offline skips it.
+	Network bool
+}
+
+// Offline replaces the network checks with a SKIP, keeping their place: for
+// validating a configuration where its peers cannot be reached (CI, a host
+// prepared before the network is open). Configuration, files and the locally
+// decoded token are still checked.
+func Offline(checks []Check) []Check {
+	out := make([]Check, len(checks))
+	for i, c := range checks {
+		if c.Network {
+			c = Static(c.Name, Skipf("offline: not contacted"))
+		}
+		out[i] = c
+	}
+	return out
 }
 
 // Static is a check whose outcome is already known (e.g. a configuration
