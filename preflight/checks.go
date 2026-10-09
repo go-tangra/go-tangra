@@ -191,73 +191,97 @@ func (e tlsError) Unwrap() error { return e.err }
 // Any HTTP response passes: the probe checks reachability and trust, not the
 // endpoint's semantics. A cfg that verifies nothing yields a warning.
 func HTTPSProbe(name, rawURL string, cfg *tls.Config, timeout time.Duration) Check {
+	return Check{Name: name, Network: true, Run: func(ctx context.Context) Result {
+		g, fail := httpsGet(ctx, rawURL, cfg, timeout, 0)
+		if fail != nil {
+			return *fail
+		}
+		if g.insecure {
+			return Warnf("%s answered HTTP %d, but its certificate was NOT verified (insecure)", g.addr, g.status).
+				WithFix("development only; production needs a verifiable certificate")
+		}
+		return Passf("%s answered HTTP %d over %s, certificate %s verified", g.addr, g.status, tls.VersionName(g.version), peerName(g.peer))
+	}}
+}
+
+// got is one completed HTTPS GET.
+type got struct {
+	addr     string
+	status   int
+	body     []byte
+	peer     []*x509.Certificate
+	version  uint16
+	insecure bool
+}
+
+// httpsGet sends one GET to rawURL and reads at most maxBody bytes of the
+// answer; a failure comes back as a classified FAIL result.
+func httpsGet(ctx context.Context, rawURL string, cfg *tls.Config, timeout time.Duration, maxBody int64) (got, *Result) {
+	fail := func(r Result) (got, *Result) { return got{}, &r }
 	if timeout <= 0 {
 		timeout = DialTimeout
 	}
-	return Check{Name: name, Network: true, Run: func(ctx context.Context) Result {
-		u, err := url.Parse(rawURL)
-		if err != nil || u.Scheme != "https" || u.Host == "" {
-			return Failf("%q is not an https URL", rawURL)
-		}
-		addr := u.Host
-		if u.Port() == "" {
-			addr = net.JoinHostPort(u.Hostname(), "443")
-		}
-		var tc *tls.Config
-		if cfg != nil {
-			tc = cfg.Clone()
-		} else {
-			tc = &tls.Config{MinVersion: tls.VersionTLS12}
-		}
-		if tc.ServerName == "" {
-			tc.ServerName = u.Hostname()
-		}
-		tc.NextProtos = []string{"http/1.1"}
-		var (
-			peer    []*x509.Certificate
-			version uint16
-		)
-		tr := &http.Transport{
-			DialTLSContext: func(ctx context.Context, network, a string) (net.Conn, error) {
-				d := net.Dialer{Timeout: timeout}
-				raw, err := d.DialContext(ctx, network, a)
-				if err != nil {
-					return nil, connError{err}
-				}
-				conn := tls.Client(raw, tc)
-				hctx, cancel := context.WithTimeout(ctx, timeout)
-				defer cancel()
-				if err := conn.HandshakeContext(hctx); err != nil {
-					_ = raw.Close()
-					return nil, tlsError{err}
-				}
-				cs := conn.ConnectionState()
-				peer, version = cs.PeerCertificates, cs.Version
-				return conn, nil
-			},
-		}
-		defer tr.CloseIdleConnections()
-		client := &http.Client{Transport: tr, Timeout: 2 * timeout,
-			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), http.NoBody)
-		if err != nil {
-			return Failf("%s: %s", rawURL, errText(err))
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			var te tlsError
-			if errors.As(err, &te) {
-				return TLSFailure(addr, te.err)
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return fail(Failf("%q is not an https URL", rawURL))
+	}
+	g := got{addr: u.Host}
+	if u.Port() == "" {
+		g.addr = net.JoinHostPort(u.Hostname(), "443")
+	}
+	var tc *tls.Config
+	if cfg != nil {
+		tc = cfg.Clone()
+	} else {
+		tc = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	if tc.ServerName == "" {
+		tc.ServerName = u.Hostname()
+	}
+	tc.NextProtos = []string{"http/1.1"}
+	tr := &http.Transport{
+		DialTLSContext: func(ctx context.Context, network, a string) (net.Conn, error) {
+			d := net.Dialer{Timeout: timeout}
+			raw, err := d.DialContext(ctx, network, a)
+			if err != nil {
+				return nil, connError{err}
 			}
-			return DialFailure(addr, err, timeout)
+			conn := tls.Client(raw, tc)
+			hctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			if err := conn.HandshakeContext(hctx); err != nil {
+				_ = raw.Close()
+				return nil, tlsError{err}
+			}
+			cs := conn.ConnectionState()
+			g.peer, g.version = cs.PeerCertificates, cs.Version
+			return conn, nil
+		},
+	}
+	defer tr.CloseIdleConnections()
+	client := &http.Client{Transport: tr, Timeout: 2 * timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), http.NoBody)
+	if err != nil {
+		return fail(Failf("%s: %s", rawURL, errText(err)))
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		var te tlsError
+		if errors.As(err, &te) {
+			return fail(TLSFailure(g.addr, te.err))
 		}
-		_ = resp.Body.Close()
-		if tc.InsecureSkipVerify && tc.VerifyConnection == nil && tc.VerifyPeerCertificate == nil {
-			return Warnf("%s answered HTTP %d, but its certificate was NOT verified (insecure)", addr, resp.StatusCode).
-				WithFix("development only; production needs a verifiable certificate")
+		return fail(DialFailure(g.addr, err, timeout))
+	}
+	defer resp.Body.Close()
+	g.status = resp.StatusCode
+	if maxBody > 0 {
+		if g.body, err = io.ReadAll(io.LimitReader(resp.Body, maxBody+1)); err != nil {
+			return fail(Failf("%s: reading the answer: %s", g.addr, errText(err)))
 		}
-		return Passf("%s answered HTTP %d over %s, certificate %s verified", addr, resp.StatusCode, tls.VersionName(version), peerName(peer))
-	}}
+	}
+	g.insecure = tc.InsecureSkipVerify && tc.VerifyConnection == nil && tc.VerifyPeerCertificate == nil
+	return g, nil
 }
 
 // TLSFailure classifies a failed TLS handshake with addr (unknown
