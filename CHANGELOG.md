@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 4.6.0 — preflight: the token issuer is checked
 
 ### Added
 
@@ -9,6 +9,7 @@
   `gateway.issuer` fails preflight instead of every console request later
   answering "session ended". `preflight.IssuerOrigin` (offline) warns when the
   issuer's origin differs from another URL of the portal (the enrolment URL).
+- `@go-tangra/ui` 4.6.0: version bump only (released in lockstep), no changes.
 
 ## 4.5.0 — preflight: every configuration and environment problem before a module starts
 
