@@ -1,0 +1,25 @@
+# Every module image must be pullable without credentials (module hosts pull
+# anonymously). Runs daily, on demand, and when the list changes.
+name: Public images
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/public-images.txt', '.github/scripts/check-public-images.sh', '.github/workflows/public-images.yaml']
+  pull_request:
+    paths: ['.github/public-images.txt', '.github/scripts/check-public-images.sh', '.github/workflows/public-images.yaml']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Anonymous pull
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: .github/scripts/check-public-images.sh

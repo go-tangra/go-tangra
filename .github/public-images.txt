@@ -1,0 +1,19 @@
+# Container images a module host must pull without credentials (ghcr.io/go-tangra/<name>).
+# A new module's package starts private on ghcr: add it here when it ships.
+go-tangra-auth
+go-tangra-portal
+go-tangra-lcm
+go-tangra-warden
+go-tangra-deployer
+go-tangra-notification
+go-tangra-scheduler
+go-tangra-sms-gw
+go-tangra-asterisk
+go-tangra-dns
+go-tangra-ipam
+go-tangra-inventory
+go-tangra-asset
+go-tangra-ticket
+go-tangra-paperless
+go-tangra-signing
+hr-service
