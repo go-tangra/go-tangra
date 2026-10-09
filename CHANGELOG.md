@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `preflight.IssuerJWKS` (network check): fetches `<issuer>/.well-known/jwks.json`
+  and requires the platform's Ed25519 signing keys there, so a wrong
+  `gateway.issuer` fails preflight instead of every console request later
+  answering "session ended". `preflight.IssuerOrigin` (offline) warns when the
+  issuer's origin differs from another URL of the portal (the enrolment URL).
+
 ## 4.5.0 — preflight: every configuration and environment problem before a module starts
 
 ### Added
