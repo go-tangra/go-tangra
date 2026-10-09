@@ -89,6 +89,31 @@ func TestValidateRejects(t *testing.T) {
 	}
 }
 
+func TestValidateAllReportsEveryProblem(t *testing.T) {
+	if errs := valid().ValidateAll(); len(errs) != 0 {
+		t.Fatalf("valid config: %v", errs)
+	}
+	c := valid()
+	c.TrustDomain = ""
+	c.Identity.RenewAt = 0.9
+	c.Identity.MaxLifetime = 0
+	c.Authz.Path = ""
+	c.Admin.Addr = "0.0.0.0:9090"
+	errs := c.ValidateAll()
+	want := []string{"trust_domain", "renew_at", "max_lifetime", "authz.path", "allow_non_loopback"}
+	if len(errs) != len(want) {
+		t.Fatalf("got %d problems, want %d: %v", len(errs), len(want), errs)
+	}
+	for i, w := range want {
+		if !strings.Contains(errs[i].Error(), w) {
+			t.Errorf("problem %d %q does not mention %q", i, errs[i], w)
+		}
+	}
+	if err := c.Validate(); err == nil || err.Error() != errs[0].Error() {
+		t.Fatalf("Validate must return the first problem: %v", err)
+	}
+}
+
 func TestWarnings(t *testing.T) {
 	c := valid()
 	c.Limits.MaxRequestBytes = 4 << 20
