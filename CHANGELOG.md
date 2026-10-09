@@ -1,5 +1,23 @@
 # Changelog
 
+## 4.5.0 — preflight: every configuration and environment problem before a module starts
+
+### Added
+
+- `preflight` package: modules offer `<module> preflight -config <file> [-json]
+  [-offline]`, which runs every check and reports them all at once (checklist
+  with a fix hint per problem, or JSON); exit 0 when nothing failed, 1 when a
+  check failed, 2 on usage errors. It changes nothing, never consumes the
+  enrolment token and never prints secrets. Reusable checks: file readable,
+  directory writable, TLS key pair, TCP dial, HTTPS/TLS probe (connection and
+  TLS failures told apart), and the enrolment token decoded locally (expiry,
+  tenant, whether it names the service's SPIFFE id with a trust-domain hint,
+  audience). `-offline` skips the checks that contact other hosts (marked
+  `Check.Network`), for CI and hosts prepared before their network is open.
+- `config.Config.ValidateAll() []error` collects every validation error;
+  `Validate()` returns the first, unchanged for service start.
+- `@go-tangra/ui` 4.5.0: version bump only (released in lockstep), no changes.
+
 ## 4.4.0 — Session expiry hook for the UI kit
 
 ### Added
