@@ -52,7 +52,9 @@ func TestBatcherFlushesBySizeAndInterval(t *testing.T) {
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, rows := ins.count(); rows == 7 {
+		// Written is counted after InsertBatch returns: wait for both, or
+		// the check below can run between the insert and the count.
+		if _, rows := ins.count(); rows == 7 && b.Written() == 7 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
