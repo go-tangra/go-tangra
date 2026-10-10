@@ -1,5 +1,25 @@
 # Changelog
 
+## 4.7.0 — module catalogue: descriptor, release entry and action
+
+### Added
+
+- `catalogue` package: strict `tangra-module.yaml` (module descriptor) and
+  `catalogue-entry.json` (release entry) types and validation — allow-list
+  scope limited to `/api/<m>`, `/m/<m>`, `/<m>`; host inputs with anchored
+  patterns; placeholders the gateway fills are reserved — deterministic
+  `bundle.zip` packing, hostile-zip checks and X.Y.Z version ordering.
+- `cmd/tangra-catalogue validate|build`: builds a release's catalogue assets.
+- `.github/actions/catalogue-entry`: composite action for module releases —
+  builds the entry and bundle, checks the image is pullable, attests both
+  (GitHub artifact attestation) and attaches them and
+  `catalogue.sigstore.json` to the release.
+- `@go-tangra/ui` 4.7.0: version bump only (released in lockstep), no changes.
+
+### Fixed
+
+- `contrib/audit-timescale`: a timing race in `TestBatcherFlushesBySizeAndInterval`.
+
 ## 4.6.0 — preflight: the token issuer is checked
 
 ### Added
