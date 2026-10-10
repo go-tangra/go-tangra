@@ -1,0 +1,74 @@
+# Publishes a module release's catalogue entry for the gateway's module
+# catalogue (spec 035): validates tangra-module.yaml, checks the image tag is
+# pullable, builds catalogue-entry.json and bundle.zip, attests both with a
+# GitHub artifact attestation (keyless, Sigstore) and attaches them and the
+# attestation bundle (catalogue.sigstore.json) to the release.
+#
+# The calling job needs:
+#   permissions: { contents: write, id-token: write, attestations: write }
+# and must run on the release tag (refs/tags/vX.Y.Z): the gateway accepts the
+# entry only when the attestation names this repository's workflow at that tag.
+name: catalogue-entry
+description: Build, attest and attach a module's catalogue entry to its release
+inputs:
+  descriptor:
+    description: Path of tangra-module.yaml
+    default: tangra-module.yaml
+  permissions-command:
+    description: Shell command that prints the module's permissions as a JSON array
+    required: true
+  tool-version:
+    description: go-tangra version providing tangra-catalogue (a tag)
+    required: true
+  github-token:
+    description: Token with contents:write (release upload)
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - name: Check the release tag
+      shell: bash
+      run: |
+        case "$GITHUB_REF" in refs/tags/v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "::error::run on a vX.Y.Z tag (got $GITHUB_REF)"; exit 1;; esac
+    - name: Build entry and bundle
+      shell: bash
+      env:
+        PERMISSIONS_COMMAND: ${{ inputs.permissions-command }}
+        TOOL_VERSION: ${{ inputs.tool-version }}
+        DESCRIPTOR: ${{ inputs.descriptor }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/catalogue"
+        bash -c "$PERMISSIONS_COMMAND" > "$RUNNER_TEMP/catalogue/permissions.json"
+        go run "github.com/go-tangra/go-tangra/v4/cmd/tangra-catalogue@${TOOL_VERSION}" build \
+          -f "$DESCRIPTOR" -version "$GITHUB_REF_NAME" -repository "$GITHUB_REPOSITORY" \
+          -permissions-file "$RUNNER_TEMP/catalogue/permissions.json" -out "$RUNNER_TEMP/catalogue/dist"
+    - name: Check the image is pullable
+      shell: bash
+      run: |
+        set -euo pipefail
+        image=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$RUNNER_TEMP/catalogue/dist/catalogue-entry.json")
+        ref="$image:${GITHUB_REF_NAME#v}"
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+          if docker manifest inspect "$ref" >/dev/null 2>&1; then echo "$ref is pullable"; exit 0; fi
+          sleep 30
+        done
+        echo "::error::$ref is not pullable anonymously (is the image built and the package public?)"; exit 1
+    - name: Attest
+      id: attest
+      uses: actions/attest-build-provenance@v2
+      with:
+        subject-path: |
+          ${{ runner.temp }}/catalogue/dist/catalogue-entry.json
+          ${{ runner.temp }}/catalogue/dist/bundle.zip
+    - name: Attach to the release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+      run: |
+        set -euo pipefail
+        dist="$RUNNER_TEMP/catalogue/dist"
+        cp "$BUNDLE_PATH" "$dist/catalogue.sigstore.json"
+        gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+        gh release upload "$GITHUB_REF_NAME" --clobber "$dist/catalogue-entry.json" "$dist/bundle.zip" "$dist/catalogue.sigstore.json"
