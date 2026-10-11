@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 4.9.0 — catalogue: optional host inputs
 
 ### Added
 
@@ -9,6 +9,7 @@
   the pattern, and templates render an empty input as `""`. Gateways need
   framework 4.9.0 to read entries that use it (entries are parsed strictly),
   so such modules raise `min_core.gateway`.
+- `@go-tangra/ui` 4.9.0: version bump only (released in lockstep), no changes.
 
 ## 4.8.1 — UI kit: missing nav icons
 
