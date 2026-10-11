@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- `transport/grpc`: streaming RPCs now run the security chain (local
+  identity guard, correlation, tracing, instrumentation, authn, authz).
+  Kratos applies `Middleware` to unary calls only, so until now a streaming
+  RPC was not checked against the policy (any peer with a mesh certificate
+  could open it), was not logged or audited, and its handler found no peer
+  identity in the context. Services that serve streams must release with
+  this version; a stream the policy does not allow is now refused with
+  `PermissionDenied`. Application middleware stays unary only.
+
 ## 4.7.0 — module catalogue: descriptor, release entry and action
 
 ### Added

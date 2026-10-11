@@ -51,6 +51,9 @@ func NewServer(rt transport.Runtime, opts ...ServerOption) (*Server, error) {
 		kgrpc.Address(o.address),
 		kgrpc.Timeout(o.timeout),
 		kgrpc.Middleware(chain...),
+		// Kratos applies Middleware to unary calls only: streaming calls get
+		// the security chain from this interceptor instead.
+		kgrpc.StreamInterceptor(streamSecurity(SecurityChain(rt))),
 		kgrpc.DisableReflection(),
 		// TLSConfig makes Kratos advertise grpcs:// (what discovery expects); the
 		// audited credentials below are applied afterwards and take precedence.
