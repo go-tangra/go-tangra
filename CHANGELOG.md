@@ -1,12 +1,13 @@
 # Changelog
 
-## Unreleased
+## 4.8.1 — UI kit: missing nav icons
 
 ### Fixed
 
 - `@go-tangra/ui`: icon safelist gains `mdi-access-point`, `mdi-chart-bar`,
   `mdi-folder-account-outline`, `mdi-phone` and `mdi-phone-log`, used by the
   asterisk and auth nav entries; they rendered as empty boxes in the shell.
+- `@go-tangra/ui` 4.8.1 carries this fix; the Go packages are unchanged.
 
 ## 4.8.0 — streaming RPCs run the security chain
 
