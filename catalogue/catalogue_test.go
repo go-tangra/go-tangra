@@ -44,6 +44,10 @@ func TestParseDescriptor(t *testing.T) {
 	if d.Module != "sms-gw" || len(d.HostInputs) != 2 || d.Bundle.Dir != "deploy/bundle" || d.MinCore["gateway"] != "4.9.0" {
 		t.Fatalf("%+v", d)
 	}
+	opt, err := ParseDescriptor([]byte(strings.Replace(goodYAML, "    default: 10.0.0.5\n", "    optional: true\n", 1)))
+	if err != nil || !opt.HostInputs[1].Optional || opt.HostInputs[0].Optional {
+		t.Fatalf("optional input: %+v, %v", opt.HostInputs, err)
+	}
 	mut := func(from, to string) string { return strings.Replace(goodYAML, from, to, 1) }
 	for name, doc := range map[string]string{
 		"unknown key":           goodYAML + "extra: 1\n",
@@ -169,6 +173,16 @@ func TestBuildAndParseEntry(t *testing.T) {
 	back, err := ParseEntry(raw)
 	if err != nil || back.Module != "sms-gw" || back.Bundle.SHA256 != e.Bundle.SHA256 {
 		t.Fatalf("%+v %v", back, err)
+	}
+	// An optional input survives the entry round trip.
+	od, _ := ParseDescriptor([]byte(strings.Replace(goodYAML, "    default: 10.0.0.5\n", "    optional: true\n", 1)))
+	oe, _ := BuildEntry(od, "4.3.0", "go-tangra/go-tangra-sms-gw", nil, zipped)
+	oraw, _ := oe.Marshal()
+	if ob, err := ParseEntry(oraw); err != nil || !ob.HostInputs[1].Optional || !strings.Contains(string(oraw), `"optional"`) {
+		t.Fatalf("optional round trip: %v %s", err, oraw)
+	}
+	if strings.Contains(string(raw), "optional") {
+		t.Fatalf("required inputs serialise an optional key: %s", raw)
 	}
 	// The entry checks the bundle it names.
 	if err := back.CheckBundle(zipped); err != nil {

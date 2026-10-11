@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `catalogue.HostInput.Optional` (`optional: true` in `tangra-module.yaml`):
+  the operator may leave the input empty; a non-empty value must still match
+  the pattern, and templates render an empty input as `""`. Gateways need
+  framework 4.9.0 to read entries that use it (entries are parsed strictly),
+  so such modules raise `min_core.gateway`.
+
 ## 4.8.1 — UI kit: missing nav icons
 
 ### Fixed
