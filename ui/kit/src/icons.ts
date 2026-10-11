@@ -7,6 +7,7 @@
 // starts using a new icon.
 
 export const ICONS = [
+  'mdi-access-point', // icon-[mdi--access-point]
   'mdi-account-arrow-left', // icon-[mdi--account-arrow-left]
   'mdi-account-arrow-right', // icon-[mdi--account-arrow-right]
   'mdi-account-circle-outline', // icon-[mdi--account-circle-outline]
@@ -32,6 +33,7 @@ export const ICONS = [
   'mdi-cancel', // icon-[mdi--cancel]
   'mdi-cash', // icon-[mdi--cash]
   'mdi-certificate-outline', // icon-[mdi--certificate-outline]
+  'mdi-chart-bar', // icon-[mdi--chart-bar]
   'mdi-chart-line', // icon-[mdi--chart-line]
   'mdi-chart-timeline-variant', // icon-[mdi--chart-timeline-variant]
   'mdi-check', // icon-[mdi--check]
@@ -88,6 +90,7 @@ export const ICONS = [
   'mdi-filter-outline', // icon-[mdi--filter-outline]
   'mdi-flag', // icon-[mdi--flag]
   'mdi-folder', // icon-[mdi--folder]
+  'mdi-folder-account-outline', // icon-[mdi--folder-account-outline]
   'mdi-folder-move-outline', // icon-[mdi--folder-move-outline]
   'mdi-folder-open-outline', // icon-[mdi--folder-open-outline]
   'mdi-folder-outline', // icon-[mdi--folder-outline]
@@ -134,6 +137,8 @@ export const ICONS = [
   'mdi-paperclip', // icon-[mdi--paperclip]
   'mdi-pencil', // icon-[mdi--pencil]
   'mdi-pencil-outline', // icon-[mdi--pencil-outline]
+  'mdi-phone', // icon-[mdi--phone]
+  'mdi-phone-log', // icon-[mdi--phone-log]
   'mdi-play', // icon-[mdi--play]
   'mdi-play-circle-outline', // icon-[mdi--play-circle-outline]
   'mdi-plus', // icon-[mdi--plus]
@@ -380,4 +385,9 @@ export const ICON_CLASS_SAFELIST = [
   'icon-[mdi--run]',
   'icon-[mdi--stop]',
   'icon-[mdi--stop-circle-outline]',
+  'icon-[mdi--access-point]',
+  'icon-[mdi--chart-bar]',
+  'icon-[mdi--folder-account-outline]',
+  'icon-[mdi--phone]',
+  'icon-[mdi--phone-log]',
 ] as const
