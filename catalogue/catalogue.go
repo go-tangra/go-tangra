@@ -78,12 +78,17 @@ type BundleSpec struct {
 	TLSHosts []string `yaml:"tls_hosts,omitempty" json:"tls_hosts,omitempty"`
 }
 
-// HostInput is a value the operator supplies for the target host.
+// HostInput is a value the operator supplies for the target host. A
+// non-empty value must match Pattern. An Optional input may be left empty
+// (after Default): templates then render it as "". Gateways built before
+// framework 4.9.0 refuse entries that use Optional (unknown field), so a
+// module that does sets min_core.gateway accordingly.
 type HostInput struct {
-	Key     string `yaml:"key" json:"key"`
-	Label   string `yaml:"label" json:"label"`
-	Pattern string `yaml:"pattern" json:"pattern"`
-	Default string `yaml:"default,omitempty" json:"default,omitempty"`
+	Key      string `yaml:"key" json:"key"`
+	Label    string `yaml:"label" json:"label"`
+	Pattern  string `yaml:"pattern" json:"pattern"`
+	Default  string `yaml:"default,omitempty" json:"default,omitempty"`
+	Optional bool   `yaml:"optional,omitempty" json:"optional,omitempty"`
 }
 
 // Entry is catalogue-entry.json: the descriptor of one release.
