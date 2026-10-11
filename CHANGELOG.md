@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 4.8.0 — streaming RPCs run the security chain
 
 ### Security
 
@@ -12,6 +12,10 @@
   identity in the context. Services that serve streams must release with
   this version; a stream the policy does not allow is now refused with
   `PermissionDenied`. Application middleware stays unary only.
+
+### Added
+
+- `@go-tangra/ui` 4.8.0: version bump only (released in lockstep), no changes.
 
 ## 4.7.0 — module catalogue: descriptor, release entry and action
 
