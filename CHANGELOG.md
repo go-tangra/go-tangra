@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.9.1 — UI kit: readable soft buttons in the dark theme
+
+### Fixed
+
+- `@go-tangra/ui`: soft buttons (`btn-soft`) get the same mixed ink as soft
+  badges and alerts. Uncoloured ones, such as `UiPager`'s page and arrow
+  buttons, used the raw neutral colour and were barely visible on the dark
+  base. Disabled soft buttons are unchanged.
+- `@go-tangra/ui` 4.9.1 carries this fix; the Go packages are unchanged.
+
 ## 4.9.0 — catalogue: optional host inputs
 
 ### Added
