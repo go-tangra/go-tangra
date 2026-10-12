@@ -53,4 +53,10 @@ describe('theme.css', () => {
     expect(body).toMatch(/border-color:[^;]*--color-base-content/)
     expect(body).toMatch(/(^|[\s;{])color:[^;]*--color-base-content/)
   })
+  it('inks enabled soft buttons like soft badges, so pager pages read on the dark base', () => {
+    const at = css.search(/\.btn\.btn-soft:not\(:disabled\):not\(\._\)\s*\{/)
+    expect(at, 'soft button rule').toBeGreaterThanOrEqual(0)
+    const [body] = mediaBlocks(css.slice(at), /\.btn\.btn-soft/)
+    expect(body).toMatch(/(^|[\s;{])color:[^;]*--soft-ink-with/)
+  })
 })
