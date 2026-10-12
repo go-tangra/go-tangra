@@ -84,7 +84,7 @@
   --noise: 0;
 }
 
-/* Soft badges/alerts: FlyonUI inks them with the raw colour on a 10 % tint, which
+/* Soft badges/alerts/buttons: FlyonUI inks them with the raw colour on a 10 % tint, which
  * fails WCAG AA for the warm colours. Mix the ink towards black (light) or white
  * (dark) so every soft variant reaches 4.5:1; the tint background stays as is.
  * `:not(._)` adds one class of specificity: every module remote re-emits
@@ -95,6 +95,9 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme]) { --soft-ink-with: white; --soft-ink-keep: 55%; } }
 .badge.badge-soft:not(._) { --badge-fg: color-mix(in oklab, var(--badge-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
 .alert.alert-soft:not(._) { color: color-mix(in oklab, var(--alert-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
+/* Soft buttons (UiPager's page buttons, toolbar buttons): same ink, so an
+ * uncoloured one is not neutral-on-dark. Disabled keeps FlyonUI's look. */
+.btn.btn-soft:not(:disabled):not(._) { color: color-mix(in oklab, var(--btn-color, var(--color-neutral)) var(--soft-ink-keep), var(--soft-ink-with)); }
 
 /* Unchecked switches: FlyonUI draws the off track as neutral at 22 % with a
  * base-100 knob and no border, which vanishes on the dark base (freya-dark
