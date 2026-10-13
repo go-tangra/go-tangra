@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -184,13 +185,13 @@ func (m *Metrics) Handler() http.Handler {
 				name := promName(mt.Name)
 				switch data := mt.Data.(type) {
 				case metricdata.Sum[int64]:
-					if data.IsMonotonic {
-						name += "_total"
-					}
-					fmt.Fprintf(&sb, "# HELP %s %s\n# TYPE %s counter\n", name, mt.Description, name)
-					for _, dp := range sortedInt(data.DataPoints) {
-						fmt.Fprintf(&sb, "%s%s %d\n", name, labels(dp.Attributes), dp.Value)
-					}
+					writeSum(&sb, name, mt.Description, data.IsMonotonic, sortedPoints(data.DataPoints), func(v int64) string { return strconv.FormatInt(v, 10) })
+				case metricdata.Sum[float64]:
+					writeSum(&sb, name, mt.Description, data.IsMonotonic, sortedPoints(data.DataPoints), formatFloat)
+				case metricdata.Gauge[int64]:
+					writePoints(&sb, name, mt.Description, "gauge", sortedPoints(data.DataPoints), func(v int64) string { return strconv.FormatInt(v, 10) })
+				case metricdata.Gauge[float64]:
+					writePoints(&sb, name, mt.Description, "gauge", sortedPoints(data.DataPoints), formatFloat)
 				case metricdata.Histogram[float64]:
 					name += "_seconds"
 					fmt.Fprintf(&sb, "# HELP %s %s\n# TYPE %s histogram\n", name, mt.Description, name)
@@ -213,8 +214,28 @@ func (m *Metrics) Handler() http.Handler {
 
 func promName(n string) string { return strings.NewReplacer(".", "_", "-", "_", "/", "_").Replace(n) }
 
-func sortedInt(dps []metricdata.DataPoint[int64]) []metricdata.DataPoint[int64] {
-	out := append([]metricdata.DataPoint[int64](nil), dps...)
+// writeSum renders a monotonic sum as a counter (with the _total suffix) and
+// an up-down sum as a gauge.
+func writeSum[N int64 | float64](sb *strings.Builder, name, help string, monotonic bool, dps []metricdata.DataPoint[N], format func(N) string) {
+	if !monotonic {
+		writePoints(sb, name, help, "gauge", dps, format)
+		return
+	}
+	writePoints(sb, name+"_total", help, "counter", dps, format)
+}
+
+func writePoints[N int64 | float64](sb *strings.Builder, name, help, kind string, dps []metricdata.DataPoint[N], format func(N) string) {
+	fmt.Fprintf(sb, "# HELP %s %s\n# TYPE %s %s\n", name, help, name, kind)
+	for _, dp := range dps {
+		fmt.Fprintf(sb, "%s%s %s\n", name, labels(dp.Attributes), format(dp.Value))
+	}
+}
+
+// formatFloat writes NaN and ±Inf the way the Prometheus text format expects.
+func formatFloat(v float64) string { return strconv.FormatFloat(v, 'g', -1, 64) }
+
+func sortedPoints[N int64 | float64](dps []metricdata.DataPoint[N]) []metricdata.DataPoint[N] {
+	out := append([]metricdata.DataPoint[N](nil), dps...)
 	sort.Slice(out, func(i, j int) bool { return labels(out[i].Attributes) < labels(out[j].Attributes) })
 	return out
 }

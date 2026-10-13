@@ -120,3 +120,51 @@ func TestMetricsServiceMeter(t *testing.T) {
 		t.Fatalf("service counter missing:\n%s", rec.Body.String())
 	}
 }
+
+// Gauges, float counters and up-down counters on a service meter are rendered
+// too, with the matching TYPE (they used to be dropped silently).
+func TestMetricsServiceGaugesAndFloats(t *testing.T) {
+	m, err := observe.NewMetrics()
+	if err != nil {
+		t.Fatal(err)
+	}
+	meter := m.Meter("example.org/svc")
+	ig, err := meter.Int64ObservableGauge("svc.active")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fg, err := meter.Float64ObservableGauge("svc.rtt_ms")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = meter.RegisterCallback(func(_ context.Context, o metric.Observer) error {
+		o.ObserveInt64(ig, 4)
+		o.ObserveFloat64(fg, 12.5, metric.WithAttributes(attribute.String("peer", "a")))
+		return nil
+	}, ig, fg); err != nil {
+		t.Fatal(err)
+	}
+	fc, err := meter.Float64Counter("svc.bytes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fc.Add(context.Background(), 1.5)
+	ud, err := meter.Int64UpDownCounter("svc.queue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ud.Add(context.Background(), -2)
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
+	body := rec.Body.String()
+	for _, want := range []string{
+		"# TYPE svc_active gauge\n", "svc_active 4\n",
+		"# TYPE svc_rtt_ms gauge\n", `svc_rtt_ms{peer="a"} 12.5` + "\n",
+		"# TYPE svc_bytes_total counter\n", "svc_bytes_total 1.5\n",
+		"# TYPE svc_queue gauge\n", "svc_queue -2\n",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %q in:\n%s", want, body)
+		}
+	}
+}

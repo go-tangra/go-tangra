@@ -1,5 +1,18 @@
 # Changelog
 
+## 4.9.2 — metrics: gauges and float counters are exposed
+
+### Fixed
+
+- `observe.Metrics.Handler` rendered only integer counters and histograms.
+  Gauges (`Int64ObservableGauge`, `Float64ObservableGauge`), float counters
+  and up-down counters created on `Metrics.Meter` were dropped silently, so a
+  service's own gauges never reached `/metrics` (asterisk's `asterisk_*`
+  monitoring series among them). Gauges now render as `gauge`, float counters
+  as `counter` with `_total`, and up-down counters as `gauge` (they were
+  labelled `counter`). Floats use the Prometheus text form (`NaN`, `+Inf`).
+- `@go-tangra/ui` 4.9.2: version bump only (released in lockstep), no changes.
+
 ## 4.9.1 — UI kit: readable soft buttons in the dark theme
 
 ### Fixed
