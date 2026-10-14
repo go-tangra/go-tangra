@@ -63,7 +63,9 @@ describe('theme.css', () => {
     expect(css).toMatch(/\.ui-doc-content h2\s*\{/)
     expect(css).toMatch(/\.ui-doc-content mark,\s*\.ui-doc-snippet mark\s*\{/)
     expect(css).toMatch(/\.ui-doc-content \.chroma \.k\s*\{\s*color:\s*#cf222e/)
-    expect(css).toMatch(/\[data-theme="?freya-dark"?\] \.ui-doc-content \.chroma \.k\s*\{\s*color:\s*#ff7b72/)
-    expect(css).toMatch(/:root:not\(\[data-theme\]\) \.ui-doc-content \.chroma \.k\s*\{\s*color:\s*#ff7b72/)
+    expect(css).toMatch(/\[data-theme="?freya-dark"?\] \.ui-doc-content \.chroma \.k\s*\{[^}]*;\s*color:\s*#ff7b72/)
+    expect(css).toMatch(/:root:not\(\[data-theme\]\) \.ui-doc-content \.chroma \.k\s*\{[^}]*;\s*color:\s*#ff7b72/)
+    // a class only the light style colours must not keep its light ink in dark
+    expect(css).toMatch(/\[data-theme="?freya-dark"?\] \.ui-doc-content \.chroma \.p\s*\{\s*color:\s*inherit/)
   })
 })
