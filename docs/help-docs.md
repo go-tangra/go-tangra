@@ -25,7 +25,9 @@ docs/help/
 - **Pages** are `*.md` files anywhere under `docs/help`. The slug is the path
   without `.md`; every segment must be lowercase `[a-z0-9-]` (no underscores,
   no capitals). `x/index.md` has slug `x`, so `x.md` and `x/index.md` together
-  are a duplicate. A root `index.md` is required.
+  are a duplicate. A root `index.md` is required. Slugs `assets` and
+  `assets/...` are reserved (the gateway serves images there); images
+  themselves may live in an `assets/` folder.
 - **Images** are png, jpg/jpeg, webp or gif, anywhere under `docs/help`, path
   segments lowercase `[a-z0-9_.-]`. The type is checked by content sniffing,
   so a renamed file is caught. **SVG is not allowed** (it can carry script).

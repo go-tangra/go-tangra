@@ -67,6 +67,9 @@ func validSlug(s string) bool {
 	if s == "" || len(s) > 255 {
 		return false
 	}
+	if reservedSlug(s) {
+		return false
+	}
 	for seg := range strings.SplitSeq(s, "/") {
 		if !segmentRE.MatchString(seg) {
 			return false
@@ -74,6 +77,10 @@ func validSlug(s string) bool {
 	}
 	return true
 }
+
+// reservedSlug reports a slug the gateway's asset route (<module>/assets/...)
+// would shadow.
+func reservedSlug(s string) bool { return s == "assets" || strings.HasPrefix(s, "assets/") }
 
 func validAssetPath(p string) bool {
 	if p == "" || len(p) > 255 {
@@ -282,6 +289,10 @@ func (l *loader) file(p string, d fs.DirEntry) {
 
 func (l *loader) page(p string, data []byte) {
 	slug := slugOf(p)
+	if reservedSlug(slug) {
+		l.add(p, 0, "slug %q is reserved: the gateway serves images under assets/", slug)
+		return
+	}
 	if !validSlug(slug) {
 		l.add(p, 0, "page path segments must be lowercase [a-z0-9-] (slug %q)", slug)
 		return

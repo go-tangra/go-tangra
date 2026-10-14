@@ -105,6 +105,7 @@ func TestProblems(t *testing.T) {
 		{"no index", func(f fstest.MapFS) { delete(f, "index.md") }, []string{"index.md: a root index.md is required"}},
 		{"uppercase slug", func(f fstest.MapFS) { f["Guide.md"] = page("title: A\nkind: guide", "x") }, []string{"Guide.md: page path segments"}},
 		{"underscore slug", func(f fstest.MapFS) { f["my_page.md"] = page("title: A\nkind: guide", "x") }, []string{"my_page.md: page path segments"}},
+		{"reserved assets slug", func(f fstest.MapFS) { f["assets/intro.md"] = page("title: A\nkind: guide", "x") }, []string{`assets/intro.md: slug "assets/intro" is reserved`}},
 		{"duplicate slug", func(f fstest.MapFS) { f["guides.md"] = page("title: A\nkind: guide", "x") }, []string{`guides/index.md: duplicate slug "guides" (also guides.md)`}},
 		{"broken page link", func(f fstest.MapFS) { f["a.md"] = page("title: A\nkind: guide", "line\n[x](nope.md)\n") }, []string{"a.md:6: link nope.md: nope.md not found"}},
 		{"link outside", func(f fstest.MapFS) { f["a.md"] = page("title: A\nkind: guide", "[x](../../etc.md)") }, []string{"points outside docs/help"}},
