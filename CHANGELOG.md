@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — module help pages
+
+### Added
+
+- `helpdocs`: modules ship user docs in their binary (`docs/help/**/*.md`
+  with YAML front-matter, png/jpg/webp/gif images). `Load` validates the tree
+  (front-matter, slugs, relative links and images, sniffed image types, no
+  SVG, size limits) and reports every problem; `Bundle` (schema 1) carries
+  the Markdown source and images with a deterministic `Digest`;
+  `NewHandler` serves `GET /docs/v1/bundle` to the gateway only (verified
+  mTLS peer, ETag/304); `Decode` checks a fetched bundle. See
+  [docs/help-docs.md](docs/help-docs.md).
+- `cmd/tangra-docs lint|bundle` and the `.github/actions/docs-lint`
+  composite action.
+
 ## 4.9.2 — metrics: gauges and float counters are exposed
 
 ### Fixed
