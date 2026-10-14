@@ -69,6 +69,8 @@ export type { NavItem, NavGroup } from './components/UiNavDrawer.vue'
 export { default as UiAppBar } from './components/UiAppBar.vue'
 export { default as UiUserMenu } from './components/UiUserMenu.vue'
 export { default as UiRemoteBoundary } from './components/UiRemoteBoundary.vue'
+export { default as UiDocContent } from './components/UiDocContent.vue'
+export { default as UiHelpLink } from './components/UiHelpLink.vue'
 
 export { useBreakpoint, prefersReducedMotion, BREAKPOINTS } from './composables/useBreakpoint'
 export type { Breakpoint } from './composables/useBreakpoint'

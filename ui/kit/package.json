@@ -16,6 +16,7 @@
     "build",
     "bin",
     "src/theme.css",
+    "src/doc-content.css",
     "sources.css",
     "eslint.rules.js"
   ],

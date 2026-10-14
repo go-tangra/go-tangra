@@ -59,4 +59,11 @@ describe('theme.css', () => {
     const [body] = mediaBlocks(css.slice(at), /\.btn\.btn-soft/)
     expect(body).toMatch(/(^|[\s;{])color:[^;]*--soft-ink-with/)
   })
+  it('ships the help page prose and chroma code colours for both themes (UiDocContent)', () => {
+    expect(css).toMatch(/\.ui-doc-content h2\s*\{/)
+    expect(css).toMatch(/\.ui-doc-content mark,\s*\.ui-doc-snippet mark\s*\{/)
+    expect(css).toMatch(/\.ui-doc-content \.chroma \.k\s*\{\s*color:\s*#cf222e/)
+    expect(css).toMatch(/\[data-theme="?freya-dark"?\] \.ui-doc-content \.chroma \.k\s*\{\s*color:\s*#ff7b72/)
+    expect(css).toMatch(/:root:not\(\[data-theme\]\) \.ui-doc-content \.chroma \.k\s*\{\s*color:\s*#ff7b72/)
+  })
 })
