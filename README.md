@@ -158,7 +158,9 @@ audit/              Event schema, redacting log handler, emitter
 observe/            Correlation IDs, tracing, metrics, request log, admin listener
 discovery/          Static name → endpoint map (any Kratos registry works too)
 listquery/          List contract: validated paging, allow-listed sorting, Page[T]
+helpdocs/           Module help pages: load/lint docs/help, bundle + digest, gateway-only handler
 freyatest/          Public test helpers for services (test CA, SVIDs, fixtures)
+cmd/tangra-docs     Lint and inspect a module's help pages (docs/help)
 cmd/freya-devca     Throw-away dev CA + SVIDs for the examples (`make testca`)
 contrib/            Optional modules: audit-timescale, policy-valkey (own go.mod each)
 examples/           two-services demo
@@ -205,4 +207,5 @@ service from a local checkout with `compose.override.yaml`.
 - [docs/configuration.md](docs/configuration.md)
 - [docs/dependencies.md](docs/dependencies.md)
 - [docs/frontend.md](docs/frontend.md)
+- [docs/help-docs.md](docs/help-docs.md) — writing and serving module help pages
 - [SECURITY.md](SECURITY.md), [CHANGELOG.md](CHANGELOG.md)

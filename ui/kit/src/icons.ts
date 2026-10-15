@@ -24,6 +24,7 @@ export const ICONS = [
   'mdi-arrow-right', // icon-[mdi--arrow-right]
   'mdi-autorenew', // icon-[mdi--autorenew]
   'mdi-bell-outline', // icon-[mdi--bell-outline]
+  'mdi-book-open-page-variant-outline', // icon-[mdi--book-open-page-variant-outline]
   'mdi-broadcast', // icon-[mdi--broadcast]
   'mdi-calendar-alert', // icon-[mdi--calendar-alert]
   'mdi-calendar-clock', // icon-[mdi--calendar-clock]
@@ -98,6 +99,7 @@ export const ICONS = [
   'mdi-form-select', // icon-[mdi--form-select]
   'mdi-group', // icon-[mdi--group]
   'mdi-harddisk', // icon-[mdi--harddisk]
+  'mdi-help-circle-outline', // icon-[mdi--help-circle-outline]
   'mdi-history', // icon-[mdi--history]
   'mdi-home-outline', // icon-[mdi--home-outline]
   'mdi-inbox-outline', // icon-[mdi--inbox-outline]
@@ -109,6 +111,7 @@ export const ICONS = [
   'mdi-key-outline', // icon-[mdi--key-outline]
   'mdi-key-plus', // icon-[mdi--key-plus]
   'mdi-key-variant', // icon-[mdi--key-variant]
+  'mdi-keyboard-return', // icon-[mdi--keyboard-return]
   'mdi-lan', // icon-[mdi--lan]
   'mdi-lan-connect', // icon-[mdi--lan-connect]
   'mdi-lan-pending', // icon-[mdi--lan-pending]
@@ -390,4 +393,7 @@ export const ICON_CLASS_SAFELIST = [
   'icon-[mdi--folder-account-outline]',
   'icon-[mdi--phone]',
   'icon-[mdi--phone-log]',
+  'icon-[mdi--book-open-page-variant-outline]',
+  'icon-[mdi--help-circle-outline]',
+  'icon-[mdi--keyboard-return]',
 ] as const

@@ -1,0 +1,290 @@
+/*
+ * UiDocContent: prose for module help pages (gateway-rendered, sanitized HTML)
+ * and the <mark> highlight of search snippets (.ui-doc-snippet). Imported by
+ * theme.css, so it is static CSS compiled into each front-end's stylesheet —
+ * nothing is injected at runtime (the edge CSP has no 'unsafe-inline').
+ * Colours come from the theme tokens; only code highlighting uses fixed colours.
+ */
+@layer components {
+  .ui-doc-content { color: var(--color-base-content); font-size: 1rem; line-height: 1.7; overflow-wrap: break-word; }
+  .ui-doc-content > :first-child { margin-top: 0; }
+  .ui-doc-content > :last-child { margin-bottom: 0; }
+  .ui-doc-content :is(h1, h2, h3, h4, h5, h6) { color: var(--color-base-content); font-weight: 600; line-height: 1.3; scroll-margin-top: 6rem; }
+  .ui-doc-content h1 { font-size: 1.75rem; font-weight: 700; margin: 2rem 0 1rem; }
+  .ui-doc-content h2 { font-size: 1.3rem; margin: 2rem 0 0.75rem; }
+  .ui-doc-content h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  .ui-doc-content :is(h4, h5, h6) { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
+  .ui-doc-content :is(p, ul, ol, dl, blockquote, table, pre, .ui-doc-code) { margin: 0.75rem 0; }
+  .ui-doc-content a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 2px; }
+  .ui-doc-content a:hover { text-decoration-thickness: 2px; }
+  .ui-doc-content :is(strong, b) { font-weight: 600; }
+  .ui-doc-content ul { list-style: disc; padding-inline-start: 1.5rem; }
+  .ui-doc-content ol { list-style: decimal; padding-inline-start: 1.5rem; }
+  .ui-doc-content li { margin: 0.25rem 0; }
+  .ui-doc-content li > :is(ul, ol) { margin: 0.25rem 0; }
+  .ui-doc-content li:has(> input[type="checkbox"]) { list-style: none; margin-inline-start: -1.25rem; }
+  .ui-doc-content input[type="checkbox"] { margin-inline-end: 0.5rem; vertical-align: middle; accent-color: var(--color-primary); }
+  .ui-doc-content dt { font-weight: 600; }
+  .ui-doc-content dd { margin-inline-start: 1.5rem; }
+  .ui-doc-content hr { border: 0; border-top: 1px solid var(--color-base-300); margin: 2rem 0; }
+  .ui-doc-content blockquote {
+    border-inline-start: 4px solid var(--color-info);
+    background: color-mix(in oklab, var(--color-info) 10%, transparent);
+    border-radius: var(--radius-field);
+    padding: 0.75rem 1rem;
+  }
+  .ui-doc-content blockquote > :first-child { margin-top: 0; }
+  .ui-doc-content blockquote > :last-child { margin-bottom: 0; }
+  .ui-doc-content img { max-width: 100%; height: auto; border-radius: var(--radius-field); }
+  .ui-doc-content table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 0.9375rem; }
+  .ui-doc-content :is(th, td) { border: 1px solid var(--color-base-300); padding: 0.4rem 0.75rem; text-align: start; vertical-align: top; }
+  .ui-doc-content :is(th, td)[align="center"] { text-align: center; }
+  .ui-doc-content :is(th, td)[align="right"] { text-align: end; }
+  .ui-doc-content th { background: var(--color-base-200); font-weight: 600; }
+  .ui-doc-content kbd {
+    border: 1px solid var(--color-base-300); border-bottom-width: 2px; border-radius: 0.25rem;
+    background: var(--color-base-200); padding: 0 0.35em; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); font-size: 0.85em;
+  }
+  .ui-doc-content :not(pre) > code {
+    background: var(--color-base-200); border: 1px solid var(--color-base-300); border-radius: 0.375rem;
+    padding: 0.05em 0.35em; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); font-size: 0.875em;
+  }
+  .ui-doc-content pre {
+    background: #f6f8fa; color: #1f2328; border: 1px solid var(--color-base-300); border-radius: var(--radius-box);
+    padding: 1rem; overflow-x: auto; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); font-size: 0.8125rem; line-height: 1.6; tab-size: 4;
+  }
+  .ui-doc-content pre:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+  .ui-doc-content pre code { font-family: inherit; background: none; padding: 0; }
+  .ui-doc-content .chroma .line { display: flex; }
+  .ui-doc-content .ui-doc-code { position: relative; }
+  .ui-doc-content .ui-doc-code > pre { margin: 0; padding-inline-end: 3rem; }
+  .ui-doc-content .ui-doc-copy { position: absolute; top: 0.5rem; inset-inline-end: 0.5rem; }
+  [data-theme="freya-dark"] .ui-doc-content pre { background: #0d1117; color: #e6edf3; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .ui-doc-content pre { background: #0d1117; color: #e6edf3; }
+  }
+  .ui-doc-content mark, .ui-doc-snippet mark {
+    background: color-mix(in oklab, var(--color-warning) 40%, transparent);
+    color: inherit; border-radius: 0.2rem; padding: 0 0.1em;
+  }
+
+  /* Code highlighting: chroma's class names (the gateway renders with
+   * chroma v2 WithClasses, no prefix). Generated from chroma v2.27.0 styles
+   * "github" (light) and "github-dark" (dark) with formatters/html
+   * WriteCSS; background, line-number and line-table rules dropped. The dark
+   * rules reset what the light ones set, so no light colour leaks into dark. */
+  .ui-doc-content .chroma .err { color: #f6f8fa; background-color: #82071e }
+  .ui-doc-content .chroma .k { color: #cf222e }
+  .ui-doc-content .chroma .kc { color: #cf222e }
+  .ui-doc-content .chroma .kd { color: #cf222e }
+  .ui-doc-content .chroma .kn { color: #cf222e }
+  .ui-doc-content .chroma .kp { color: #cf222e }
+  .ui-doc-content .chroma .kr { color: #cf222e }
+  .ui-doc-content .chroma .kt { color: #cf222e }
+  .ui-doc-content .chroma .na { color: #1f2328 }
+  .ui-doc-content .chroma .nc { color: #1f2328 }
+  .ui-doc-content .chroma .no { color: #0550ae }
+  .ui-doc-content .chroma .nd { color: #0550ae }
+  .ui-doc-content .chroma .ni { color: #6639ba }
+  .ui-doc-content .chroma .nl { color: #990000; font-weight: bold }
+  .ui-doc-content .chroma .nn { color: #24292e }
+  .ui-doc-content .chroma .nx { color: #1f2328 }
+  .ui-doc-content .chroma .nt { color: #0550ae }
+  .ui-doc-content .chroma .nb { color: #6639ba }
+  .ui-doc-content .chroma .bp { color: #6a737d }
+  .ui-doc-content .chroma .nv { color: #953800 }
+  .ui-doc-content .chroma .vc { color: #953800 }
+  .ui-doc-content .chroma .vg { color: #953800 }
+  .ui-doc-content .chroma .vi { color: #953800 }
+  .ui-doc-content .chroma .vm { color: #953800 }
+  .ui-doc-content .chroma .nf { color: #6639ba }
+  .ui-doc-content .chroma .fm { color: #6639ba }
+  .ui-doc-content .chroma .s { color: #0a3069 }
+  .ui-doc-content .chroma .sa { color: #0a3069 }
+  .ui-doc-content .chroma .sb { color: #0a3069 }
+  .ui-doc-content .chroma .sc { color: #0a3069 }
+  .ui-doc-content .chroma .dl { color: #0a3069 }
+  .ui-doc-content .chroma .sd { color: #0a3069 }
+  .ui-doc-content .chroma .s2 { color: #0a3069 }
+  .ui-doc-content .chroma .se { color: #0a3069 }
+  .ui-doc-content .chroma .sh { color: #0a3069 }
+  .ui-doc-content .chroma .si { color: #0a3069 }
+  .ui-doc-content .chroma .sx { color: #0a3069 }
+  .ui-doc-content .chroma .sr { color: #0a3069 }
+  .ui-doc-content .chroma .s1 { color: #0a3069 }
+  .ui-doc-content .chroma .ss { color: #032f62 }
+  .ui-doc-content .chroma .m { color: #0550ae }
+  .ui-doc-content .chroma .mb { color: #0550ae }
+  .ui-doc-content .chroma .mf { color: #0550ae }
+  .ui-doc-content .chroma .mh { color: #0550ae }
+  .ui-doc-content .chroma .mi { color: #0550ae }
+  .ui-doc-content .chroma .il { color: #0550ae }
+  .ui-doc-content .chroma .mo { color: #0550ae }
+  .ui-doc-content .chroma .o { color: #0550ae }
+  .ui-doc-content .chroma .ow { color: #0550ae }
+  .ui-doc-content .chroma .or { color: #0550ae }
+  .ui-doc-content .chroma .p { color: #1f2328 }
+  .ui-doc-content .chroma .c { color: #57606a }
+  .ui-doc-content .chroma .ch { color: #57606a }
+  .ui-doc-content .chroma .cm { color: #57606a }
+  .ui-doc-content .chroma .c1 { color: #57606a }
+  .ui-doc-content .chroma .cs { color: #57606a }
+  .ui-doc-content .chroma .cp { color: #57606a }
+  .ui-doc-content .chroma .cpf { color: #57606a }
+  .ui-doc-content .chroma .gd { color: #82071e; background-color: #ffebe9 }
+  .ui-doc-content .chroma .ge { color: #1f2328 }
+  .ui-doc-content .chroma .gi { color: #116329; background-color: #dafbe1 }
+  .ui-doc-content .chroma .go { color: #1f2328 }
+  .ui-doc-content .chroma .gl { text-decoration: underline }
+  .ui-doc-content .chroma .w { color: #ffffff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .err { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #f85149 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .k { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .kc { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .kd { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .kn { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .kp { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .kr { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .kt { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .na { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .nc { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #f0883e; font-weight: bold }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .no { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff; font-weight: bold }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .nd { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #d2a8ff; font-weight: bold }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .ni { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ffa657 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .nl { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff; font-weight: bold }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .nn { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .nx { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .nt { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #7ee787 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .nb { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .bp { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .nv { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .vc { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .vg { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .vi { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .vm { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .nf { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #d2a8ff; font-weight: bold }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .fm { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #d2a8ff; font-weight: bold }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .s { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .sa { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .sb { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .sc { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .dl { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .sd { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .s2 { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .se { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .sh { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .si { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .sx { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .sr { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .s1 { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .ss { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .m { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .mb { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .mf { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .mh { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .mi { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .il { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .mo { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .o { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72; font-weight: bold }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .ow { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72; font-weight: bold }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .or { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72; font-weight: bold }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .p { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .c { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-style: italic }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .ch { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-style: italic }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .cm { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-style: italic }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .c1 { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-style: italic }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .cs { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-weight: bold; font-style: italic }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .cp { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-weight: bold; font-style: italic }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .cpf { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-weight: bold; font-style: italic }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .gd { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ffa198; background-color: #490202 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .ge { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; font-style: italic }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .gi { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #56d364; background-color: #0f5323 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .go { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .gl { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; text-decoration: underline }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .w { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #6e7681 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .ne { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #f0883e; font-weight: bold }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .py { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .l { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .ld { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .gr { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ffa198 }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .gh { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff; font-weight: bold }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .gp { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .gs { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; font-weight: bold }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .gu { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+  [data-theme="freya-dark"] .ui-doc-content .chroma .gt { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .ui-doc-content .chroma .err { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #f85149 }
+    :root:not([data-theme]) .ui-doc-content .chroma .k { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+    :root:not([data-theme]) .ui-doc-content .chroma .kc { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .kd { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+    :root:not([data-theme]) .ui-doc-content .chroma .kn { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+    :root:not([data-theme]) .ui-doc-content .chroma .kp { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .kr { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+    :root:not([data-theme]) .ui-doc-content .chroma .kt { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+    :root:not([data-theme]) .ui-doc-content .chroma .na { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit }
+    :root:not([data-theme]) .ui-doc-content .chroma .nc { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #f0883e; font-weight: bold }
+    :root:not([data-theme]) .ui-doc-content .chroma .no { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff; font-weight: bold }
+    :root:not([data-theme]) .ui-doc-content .chroma .nd { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #d2a8ff; font-weight: bold }
+    :root:not([data-theme]) .ui-doc-content .chroma .ni { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ffa657 }
+    :root:not([data-theme]) .ui-doc-content .chroma .nl { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff; font-weight: bold }
+    :root:not([data-theme]) .ui-doc-content .chroma .nn { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+    :root:not([data-theme]) .ui-doc-content .chroma .nx { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit }
+    :root:not([data-theme]) .ui-doc-content .chroma .nt { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #7ee787 }
+    :root:not([data-theme]) .ui-doc-content .chroma .nb { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit }
+    :root:not([data-theme]) .ui-doc-content .chroma .bp { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit }
+    :root:not([data-theme]) .ui-doc-content .chroma .nv { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .vc { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .vg { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .vi { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .vm { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .nf { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #d2a8ff; font-weight: bold }
+    :root:not([data-theme]) .ui-doc-content .chroma .fm { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #d2a8ff; font-weight: bold }
+    :root:not([data-theme]) .ui-doc-content .chroma .s { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .sa { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .sb { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .sc { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .dl { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .sd { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .s2 { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .se { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .sh { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .si { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .sx { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .sr { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .s1 { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .ss { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .m { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .mb { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .mf { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .mh { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .mi { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .il { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .mo { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .o { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72; font-weight: bold }
+    :root:not([data-theme]) .ui-doc-content .chroma .ow { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72; font-weight: bold }
+    :root:not([data-theme]) .ui-doc-content .chroma .or { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72; font-weight: bold }
+    :root:not([data-theme]) .ui-doc-content .chroma .p { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit }
+    :root:not([data-theme]) .ui-doc-content .chroma .c { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-style: italic }
+    :root:not([data-theme]) .ui-doc-content .chroma .ch { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-style: italic }
+    :root:not([data-theme]) .ui-doc-content .chroma .cm { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-style: italic }
+    :root:not([data-theme]) .ui-doc-content .chroma .c1 { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-style: italic }
+    :root:not([data-theme]) .ui-doc-content .chroma .cs { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-weight: bold; font-style: italic }
+    :root:not([data-theme]) .ui-doc-content .chroma .cp { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-weight: bold; font-style: italic }
+    :root:not([data-theme]) .ui-doc-content .chroma .cpf { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e; font-weight: bold; font-style: italic }
+    :root:not([data-theme]) .ui-doc-content .chroma .gd { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ffa198; background-color: #490202 }
+    :root:not([data-theme]) .ui-doc-content .chroma .ge { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; font-style: italic }
+    :root:not([data-theme]) .ui-doc-content .chroma .gi { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #56d364; background-color: #0f5323 }
+    :root:not([data-theme]) .ui-doc-content .chroma .go { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e }
+    :root:not([data-theme]) .ui-doc-content .chroma .gl { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; text-decoration: underline }
+    :root:not([data-theme]) .ui-doc-content .chroma .w { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #6e7681 }
+    :root:not([data-theme]) .ui-doc-content .chroma .ne { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #f0883e; font-weight: bold }
+    :root:not([data-theme]) .ui-doc-content .chroma .py { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .l { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #a5d6ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .ld { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .gr { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ffa198 }
+    :root:not([data-theme]) .ui-doc-content .chroma .gh { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff; font-weight: bold }
+    :root:not([data-theme]) .ui-doc-content .chroma .gp { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #8b949e }
+    :root:not([data-theme]) .ui-doc-content .chroma .gs { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; font-weight: bold }
+    :root:not([data-theme]) .ui-doc-content .chroma .gu { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #79c0ff }
+    :root:not([data-theme]) .ui-doc-content .chroma .gt { color: inherit; background-color: transparent; font-weight: inherit; font-style: inherit; text-decoration: inherit; color: #ff7b72 }
+  }
+}

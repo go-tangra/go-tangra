@@ -8,6 +8,8 @@
   themes: false;
 }
 @import "flyonui/variants.css";
+/* Help page prose + code highlighting (UiDocContent, search snippets). */
+@import "./doc-content.css";
 @plugin "@iconify/tailwind4";
 
 @plugin "flyonui/theme" {

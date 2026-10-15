@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { UiPage, UiToolbar, UiGrid, UiCard, UiSection, UiAlert, UiBadge, UiStatusChip, UiEmptyState, UiErrorState, UiSkeleton, UiAvatar, UiCopyButton, UiIcon, UiLiveIndicator, UiButton } from '@/index'
+import { UiPage, UiToolbar, UiGrid, UiCard, UiSection, UiAlert, UiBadge, UiStatusChip, UiEmptyState, UiErrorState, UiSkeleton, UiAvatar, UiCopyButton, UiIcon, UiLiveIndicator, UiButton, UiDocContent, UiHelpLink } from '@/index'
 
 const colors = ['primary', 'secondary', 'accent', 'neutral', 'info', 'success', 'warning', 'error'] as const
 const variants = ['solid', 'soft', 'outline', 'text'] as const
 const statuses = ['active', 'assigned', 'pending', 'broken', 'retired', 'custom']
+// Shaped like the gateway's rendered help HTML (chroma classes, sanitized).
+const doc = `<h2 id="how-it-works">How it works</h2><p>The deployer subscribes to <code>certificate.renewed</code>; see <a href="/help/deployer/guides/targets">targets</a> and <mark>marked</mark> text.</p>
+<ol><li>Open <strong>Deployer</strong></li><li>Pick the provider</li></ol>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="c1"># target</span>
+</span></span><span class="line"><span class="cl"><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l">bigip</span>
+</span></span><span class="line"><span class="cl"><span class="nt">rollback</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+</span></span></code></pre>
+<blockquote><p>Self-published events are ignored.</p></blockquote>
+<table><thead><tr><th>Field</th><th>Meaning</th></tr></thead><tbody><tr><td>provider</td><td>device type</td></tr></tbody></table>`
 </script>
 
 <template>
@@ -65,6 +74,11 @@ const statuses = ['active', 'assigned', 'pending', 'broken', 'retired', 'custom'
         <UiIcon name="mdi-laptop" size="xs" /><UiIcon name="mdi-laptop" size="sm" /><UiIcon name="mdi-laptop" /><UiIcon name="mdi-laptop" size="lg" /><UiIcon name="mdi-laptop" size="xl" label="Laptop" />
         <UiLiveIndicator :connected="true" /><UiLiveIndicator :connected="false" />
       </UiToolbar>
+    </UiSection>
+
+    <UiSection title="Help pages" description="UiDocContent (gateway-rendered help HTML) and UiHelpLink">
+      <UiToolbar><UiHelpLink module="deployer" slug="guides/targets" /><UiHelpLink module="deployer" slug="guides/targets" icon-only label="Help: targets" /></UiToolbar>
+      <UiCard><UiDocContent :html="doc" label="Example help page" /></UiCard>
     </UiSection>
   </UiPage>
 </template>

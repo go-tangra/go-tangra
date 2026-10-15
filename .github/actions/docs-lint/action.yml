@@ -1,0 +1,37 @@
+# Lints a module's help pages (docs/help, see docs/help-docs.md) with
+# cmd/tangra-docs: front-matter, slugs, links, images and size limits. Every
+# problem is printed as file:line: message and fails the job. A repository
+# without the directory passes (the module ships no docs).
+#
+# The calling job needs Go set up (actions/setup-go) and the repository
+# checked out.
+name: docs-lint
+description: Lint a go-tangra module's help pages (docs/help)
+inputs:
+  dir:
+    description: Help pages directory
+    default: docs/help
+  tool-version:
+    description: go-tangra version providing tangra-docs (a tag)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Lint help pages
+      shell: bash
+      env:
+        DOCS_DIR: ${{ inputs.dir }}
+        TOOL_VERSION: ${{ inputs.tool-version }}
+      run: |
+        set -euo pipefail
+        if [ ! -d "$DOCS_DIR" ]; then
+          echo "no $DOCS_DIR directory: nothing to lint"
+          exit 0
+        fi
+        report="$RUNNER_TEMP/docs-lint.txt"
+        if ! go run "github.com/go-tangra/go-tangra/v4/cmd/tangra-docs@${TOOL_VERSION}" lint "$DOCS_DIR" 2> "$report"; then
+          cat "$report" >&2
+          # Annotate the pull request: "file:line: message" -> ::error.
+          sed -nE 's/^([^:]+):([0-9]+): (.*)$/::error file=\1,line=\2::\3/p' "$report"
+          exit 1
+        fi

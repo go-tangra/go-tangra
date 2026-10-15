@@ -34,13 +34,21 @@ func TestProviderFetchesAndRotates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case u := <-ch:
-		if u.Err != nil || u.Identity.Serial() == id.Serial() {
-			t.Fatalf("update %+v", u)
+	// The Workload API may re-send the current SVID before rotating it.
+	rotated := time.After(5 * time.Second)
+rotation:
+	for {
+		select {
+		case u := <-ch:
+			if u.Err != nil {
+				t.Fatalf("update %+v", u)
+			}
+			if u.Identity.Serial() != id.Serial() {
+				break rotation
+			}
+		case <-rotated:
+			t.Fatal("no rotation observed")
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("no rotation observed")
 	}
 	cur, _, _ := p.Current(ctx)
 	if cur.Serial() == id.Serial() {
@@ -87,8 +95,19 @@ func TestProviderFailsClosed(t *testing.T) {
 	if err := p.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, open := <-ch; open {
-		t.Fatal("watch channel must close on Close")
+	// An update sent between Watch and Close may still be buffered; the
+	// channel must close after it.
+	closed := time.After(2 * time.Second)
+drain:
+	for {
+		select {
+		case _, open := <-ch:
+			if !open {
+				break drain
+			}
+		case <-closed:
+			t.Fatal("watch channel must close on Close")
+		}
 	}
 	if _, _, err := p.Current(ctx); err == nil {
 		t.Fatal("Current after Close must fail")

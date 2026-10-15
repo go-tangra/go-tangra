@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased — module help pages
+
+### Added
+
+- `helpdocs`: modules ship user docs in their binary (`docs/help/**/*.md`
+  with YAML front-matter, png/jpg/webp/gif images). `Load` validates the tree
+  (front-matter, slugs, relative links and images, sniffed image types, no
+  SVG, size limits) and reports every problem; `Bundle` (schema 1) carries
+  the Markdown source and images with a deterministic `Digest`;
+  `NewHandler` serves `GET /docs/v1/bundle` to the gateway only (verified
+  mTLS peer, ETag/304); `Decode` checks a fetched bundle. See
+  [docs/help-docs.md](docs/help-docs.md).
+- `cmd/tangra-docs lint|bundle` and the `.github/actions/docs-lint`
+  composite action.
+- `@go-tangra/ui` 4.10.0: `UiDocContent` renders a gateway-rendered help
+  page (`html`, sanitized server-side) in a prose container styled by the new
+  `src/doc-content.css` (imported by `theme.css`: headings, lists, tables,
+  code, blockquotes, images, `<mark>`, chroma `github`/`github-dark` code
+  colours for both themes; `.ui-doc-snippet mark` for search snippets). It
+  adds a copy button to every code block, emits `navigate` for `/help/…` links
+  and in-page anchors instead of following them, and scrolls to `hash`.
+  `UiHelpLink` (`module`, `slug`, `anchor`, `label`, `icon-only`) links a
+  module screen to `/help/<module>/<slug>`. Icons `mdi-help-circle-outline`,
+  `mdi-book-open-page-variant-outline` and `mdi-keyboard-return` join the
+  safelist. Front-ends pick the styles up by rebuilding against 4.10.0.
+
 ## 4.9.2 — metrics: gauges and float counters are exposed
 
 ### Fixed
