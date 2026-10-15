@@ -189,11 +189,12 @@ func (p *Provider) poll() {
 	}
 }
 
+// notify sends under p.mu: unsubscribe closes channels under the same lock, so
+// a send never races a close. The sends do not block, so holding it is cheap.
 func (p *Provider) notify(u identity.Update) {
 	p.mu.Lock()
-	subs := append([]chan identity.Update(nil), p.subs...)
-	p.mu.Unlock()
-	for _, ch := range subs {
+	defer p.mu.Unlock()
+	for _, ch := range p.subs {
 		select {
 		case ch <- u:
 		default: // a slow subscriber must not stall rotation

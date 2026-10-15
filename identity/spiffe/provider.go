@@ -179,11 +179,12 @@ func (p *Provider) adopt(c *workloadapi.X509Context) (identity.Update, error) {
 	return u, nil
 }
 
+// notify sends under p.mu: Watch's cancel path and Close close channels under
+// the write lock, so a send never races a close. The sends do not block.
 func (p *Provider) notify(u identity.Update) {
 	p.mu.RLock()
-	subs := append([]chan identity.Update(nil), p.subs...)
-	p.mu.RUnlock()
-	for _, ch := range subs {
+	defer p.mu.RUnlock()
+	for _, ch := range p.subs {
 		select {
 		case ch <- u:
 		default:
