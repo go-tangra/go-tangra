@@ -269,6 +269,32 @@ describe('UiAppShell / UiNavDrawer / UiUserMenu / UiRemoteBoundary', () => {
 })
 
 describe('UiNavDrawer (collapsible groups)', () => {
+  it('highlights a non-exact item on the routes nested under it, an exact item only on its own', async () => {
+    const stub = { template: '<div/>' }
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/', component: stub },
+      { path: '/help', children: [{ path: '', component: stub }, { path: ':module/:slug(.*)*', component: stub }] },
+    ] })
+    await router.push('/help')
+    await router.isReady()
+    const groups = [{ items: [
+      { title: 'Home', path: '/', exact: true, testId: 'nav-home' },
+      { title: 'Help', path: '/help', testId: 'nav-help' },
+      { title: 'Help (exact)', path: '/help', exact: true, testId: 'nav-help-exact' },
+    ] }]
+    const w = mount(UiNavDrawer, { props: { groups }, global: { plugins: [router] } })
+    const on = (id: string) => w.find(`[data-test=${id}]`).classes().includes('menu-active')
+    await nextTick()
+    expect([on('nav-home'), on('nav-help'), on('nav-help-exact')]).toEqual([false, true, true])
+    await router.push('/help/ipam/guides/subnets')
+    await nextTick()
+    expect([on('nav-home'), on('nav-help'), on('nav-help-exact')]).toEqual([false, true, false])
+    await router.push('/')
+    await nextTick()
+    expect([on('nav-home'), on('nav-help'), on('nav-help-exact')]).toEqual([true, false, false])
+    w.unmount()
+  })
+
   it('opens the group owning the current route, toggles manually, renders untitled groups flat', async () => {
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div/>' } }] })
     await router.push('/warden/folders')

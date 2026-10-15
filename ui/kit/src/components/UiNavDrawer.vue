@@ -2,6 +2,10 @@
 // Navigation entries for UiAppShell's nav slot. A group with a title renders
 // as a collapsible menu (open when it owns the current route); a group without
 // one renders its items flat (e.g. "Home" and operator links).
+// An item is highlighted (menu-active) when RouterLink reports it active, or
+// for `exact` items only when exact-active. The two class props must differ:
+// RouterLink builds { [activeClass]: isActive, [exactActiveClass]: isExactActive },
+// so equal names let the exact flag overwrite the active one.
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import UiIcon from './UiIcon.vue'
@@ -41,14 +45,14 @@ const idOf = (g: NavGroup) => 'ui-nav-group-' + keyOf(g).replace(/[^\w-]/g, '-')
         <!-- v-if, not v-show: a hidden element would carry an inline style, which the platform CSP forbids. -->
         <ul v-if="isOpen(g)" :id="idOf(g)" class="mt-1">
           <li v-for="it in g.items" :key="it.path">
-            <RouterLink :to="it.path" class="flex items-center gap-2 px-2" :active-class="it.exact ? '' : 'menu-active'" exact-active-class="menu-active" :data-test="it.testId" @click="emit('navigate')">
+            <RouterLink :to="it.path" class="flex items-center gap-2 px-2" :active-class="it.exact ? '' : 'menu-active'" :exact-active-class="it.exact ? 'menu-active' : ''" :data-test="it.testId" @click="emit('navigate')">
               <UiIcon v-if="it.icon" :name="it.icon" size="sm" /><span class="truncate">{{ it.title }}</span>
             </RouterLink>
           </li>
         </ul>
       </li>
       <li v-for="it in g.title ? [] : g.items" v-else :key="it.path">
-        <RouterLink :to="it.path" class="flex items-center gap-2 px-2" :active-class="it.exact ? '' : 'menu-active'" exact-active-class="menu-active" :data-test="it.testId" @click="emit('navigate')">
+        <RouterLink :to="it.path" class="flex items-center gap-2 px-2" :active-class="it.exact ? '' : 'menu-active'" :exact-active-class="it.exact ? 'menu-active' : ''" :data-test="it.testId" @click="emit('navigate')">
           <UiIcon v-if="it.icon" :name="it.icon" size="sm" /><span class="truncate">{{ it.title }}</span>
         </RouterLink>
       </li>
