@@ -1,6 +1,22 @@
 # Changelog
 
-## Unreleased — module help pages
+## 4.10.1 — a trust bundle change no longer strands modules
+
+### Fixed
+
+- `transport/grpc`: `Pool.Rotate` (run on every trust bundle change) closed
+  each pooled `*grpc.ClientConn` after the grace. Callers keep those for the
+  life of the process (gateway registration, the token verifier, clients
+  built at startup), so after a bundle change they failed with "grpc: the
+  client connection is closing" until restarted — modules dropped off the
+  gateway and stayed off. Rotate now drops only the network connections
+  under the pool (after the same grace); each ClientConn stays open,
+  reconnects with a fresh handshake verified against the current bundle
+  (a peer under a rotated-out root is refused), and long-lived streams are
+  reopened by their callers on the same ClientConn. No API change: modules
+  pick it up by rebuilding against 4.10.1.
+
+## 4.10.0 — module help pages
 
 ### Added
 

@@ -8,6 +8,7 @@ import (
 	"github.com/go-tangra/go-tangra/v4/discovery"
 	"github.com/go-tangra/go-tangra/v4/freyatest/testrt"
 	"github.com/go-tangra/go-tangra/v4/freyatest/testutil"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
@@ -132,38 +133,93 @@ func TestPoolConnSurvivesLeafRenewal(t *testing.T) {
 	}
 }
 
-// TestPoolRotateDrains proves Rotate still drains the pool (the trust-bundle
-// change path): the next Conn dials fresh instead of reusing the old one.
-func TestPoolRotateDrains(t *testing.T) {
+// rotatePool starts inventory, dials it through a pool owned by orders with a
+// short grace, and makes one call so a network connection is open.
+func rotatePool(t *testing.T) (*testrt.Runtime, *Pool, *grpc.ClientConn) {
+	t.Helper()
 	ca := testutil.MustCA("example.org")
 	inv := testrt.New(t, ca, "inventory")
 	srv, _ := NewServer(inv, WithAddress("127.0.0.1:0"))
-	stop := testrt.StartServer(t, srv)
-	defer stop()
+	t.Cleanup(testrt.StartServer(t, srv))
 	ep, _ := srv.Endpoint()
 
 	orders := testrt.New(t, ca, "orders")
+	orders.Lim.RequestTimeout = 200 * time.Millisecond
 	disc, _ := discovery.NewStatic(map[string][]string{"inventory": {ep.Host}})
 	pool := NewPool(orders, disc)
-	defer pool.Close()
+	t.Cleanup(func() { _ = pool.Close() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	c1, err := pool.Conn(ctx, "inventory")
+	conn, err := pool.Conn(ctx, "inventory")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := grpc_health_v1.NewHealthClient(conn).Check(ctx, &grpc_health_v1.HealthCheckRequest{}); err != nil {
+		t.Fatalf("establish call: %v", err)
+	}
+	return orders, pool, conn
+}
+
+// checkUntil calls Check on conn until want(err) holds or the deadline passes.
+func checkUntil(t *testing.T, conn *grpc.ClientConn, want func(error) bool) error {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		_, err := grpc_health_v1.NewHealthClient(conn).Check(ctx, &grpc_health_v1.HealthCheckRequest{})
+		cancel()
+		if want(err) || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// TestPoolRotateKeepsConnAndReconnects is the trust-bundle change path. The
+// *grpc.ClientConn a caller already holds (gateway registration, the token
+// verifier) must keep working: Rotate drops the network connection under it
+// and the same ClientConn reconnects with a fresh, re-verified handshake.
+// Closing the ClientConn left such callers failing with "the client
+// connection is closing" until the process restarted.
+func TestPoolRotateKeepsConnAndReconnects(t *testing.T) {
+	_, pool, c1 := rotatePool(t)
+	before := pool.links.snapshot()
+	if len(before) != 1 {
+		t.Fatalf("want 1 open link, got %d", len(before))
 	}
 
 	pool.Rotate()
+	time.Sleep(400 * time.Millisecond) // past the grace
 
-	c2, err := pool.Conn(ctx, "inventory")
+	c2, err := pool.Conn(context.Background(), "inventory")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c1 == c2 {
-		t.Fatal("Rotate must drain the pool so the next Conn dials fresh")
+	if c1 != c2 {
+		t.Fatal("Rotate must keep the pooled ClientConn: callers hold it")
 	}
-	if _, err := grpc_health_v1.NewHealthClient(c2).Check(ctx, &grpc_health_v1.HealthCheckRequest{}); err != nil {
-		t.Fatalf("fresh conn after Rotate must work: %v", err)
+	if err := checkUntil(t, c1, func(err error) bool { return err == nil }); err != nil {
+		t.Fatalf("held conn must work again after Rotate: %v", err)
+	}
+	after := pool.links.snapshot()
+	if len(after) != 1 || after[0] == before[0] {
+		t.Fatal("Rotate must replace the network connection (a fresh handshake)")
+	}
+}
+
+// TestPoolRotateRefusesRootRotatedOut proves the reconnect is verified against
+// the new bundle: once the peer's root is no longer trusted, the held conn is
+// refused instead of riding the old handshake.
+func TestPoolRotateRefusesRootRotatedOut(t *testing.T) {
+	orders, pool, c1 := rotatePool(t)
+	orders.Prov.SetRoots(testutil.MustCA("example.org").Cert)
+
+	pool.Rotate()
+	time.Sleep(400 * time.Millisecond)
+
+	err := checkUntil(t, c1, func(err error) bool { return status.Code(err) == codes.Unavailable })
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("peer under a rotated-out root must be refused, got %v", err)
 	}
 }

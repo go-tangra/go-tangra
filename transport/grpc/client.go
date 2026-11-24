@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -19,18 +20,71 @@ import (
 
 // Pool hands out one mutually authenticated connection per callee logical name.
 // The callee is verified by SPIFFE ID, never by the address discovery returned.
+//
+// A *grpc.ClientConn the pool hands out stays valid until Close: callers keep
+// it for the life of the process (registration leases, token verifiers,
+// generated clients built once at startup), so the pool never closes one
+// behind their back. Rotate re-verifies peers by dropping the network
+// connections underneath instead (see Rotate).
 type Pool struct {
 	rt     transport.Runtime
 	disc   registry.Discovery
 	mu     sync.Mutex
 	conns  map[string]*grpc.ClientConn
 	closed bool
+	links  *links
 }
 
 // NewPool creates a pool resolving names through disc (may be nil: every Conn
 // then fails until discovery is configured).
 func NewPool(rt transport.Runtime, disc registry.Discovery) *Pool {
-	return &Pool{rt: rt, disc: disc, conns: map[string]*grpc.ClientConn{}}
+	return &Pool{rt: rt, disc: disc, conns: map[string]*grpc.ClientConn{}, links: &links{set: map[*link]struct{}{}}}
+}
+
+// links tracks the pool's live network connections so Rotate can drop them
+// without closing the *grpc.ClientConn that owns them.
+type links struct {
+	mu  sync.Mutex
+	set map[*link]struct{}
+}
+
+type link struct {
+	net.Conn
+	owner *links
+	once  sync.Once
+}
+
+func (l *link) Close() error {
+	l.once.Do(func() {
+		l.owner.mu.Lock()
+		delete(l.owner.set, l)
+		l.owner.mu.Unlock()
+	})
+	return l.Conn.Close()
+}
+
+func (ls *links) dial(ctx context.Context, addr string) (net.Conn, error) {
+	var d net.Dialer
+	c, err := d.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	l := &link{Conn: c, owner: ls}
+	ls.mu.Lock()
+	ls.set[l] = struct{}{}
+	ls.mu.Unlock()
+	return l, nil
+}
+
+// snapshot returns the connections open now.
+func (ls *links) snapshot() []*link {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	out := make([]*link, 0, len(ls.set))
+	for l := range ls.set {
+		out = append(out, l)
+	}
+	return out
 }
 
 // Conn returns the pooled connection to service, dialing on first use.
@@ -79,7 +133,7 @@ func (p *Pool) Conn(ctx context.Context, service string) (*grpc.ClientConn, erro
 		kgrpc.WithOptions(grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(int(lim.MaxRequestBytes)),
 			grpc.MaxCallSendMsgSize(int(lim.MaxRequestBytes)),
-		)),
+		), grpc.WithContextDialer(p.links.dial)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("client: %w", err)
@@ -88,24 +142,27 @@ func (p *Pool) Conn(ctx context.Context, service string) (*grpc.ClientConn, erro
 	return conn, nil
 }
 
-// Rotate drains the pool: existing connections are closed after the request
-// timeout (so in-flight calls finish) and the next Conn dials fresh. It is
-// used ONLY when the trust bundle changes (a root added or removed) so peers
-// are re-verified against the new root set. Leaf renewal must NOT call this:
-// tlsconf serves the renewed cert per-handshake, so closing live connections
-// would needlessly drop long-lived streams on every rotation.
+// Rotate makes every peer be re-verified against the current trust bundle. It
+// is used ONLY when the trust bundle changes (a root added or removed). Leaf
+// renewal must NOT call this: tlsconf serves the renewed cert per-handshake.
+//
+// The network connections open now are dropped after the request timeout (so
+// in-flight calls finish); each *grpc.ClientConn stays open and reconnects
+// with a fresh handshake, which tlsconf verifies against the bundle current
+// at that moment. Closing the *grpc.ClientConn instead (as before) left every
+// caller that kept it — gateway registration, the token verifier — retrying a
+// closed connection ("the client connection is closing") until restarted.
+// Long-lived streams on the old links end with Unavailable and their callers
+// open them again on the same ClientConn.
 func (p *Pool) Rotate() {
-	p.mu.Lock()
-	old := p.conns
-	p.conns = map[string]*grpc.ClientConn{}
-	p.mu.Unlock()
+	old := p.links.snapshot()
 	if len(old) == 0 {
 		return
 	}
 	grace := p.rt.Limits().RequestTimeout
 	time.AfterFunc(grace, func() {
-		for _, c := range old {
-			_ = c.Close()
+		for _, l := range old {
+			_ = l.Close()
 		}
 	})
 }
