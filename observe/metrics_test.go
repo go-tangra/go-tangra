@@ -3,9 +3,11 @@ package observe_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	kerrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/transport"
@@ -166,5 +168,41 @@ func TestMetricsServiceGaugesAndFloats(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %q in:\n%s", want, body)
 		}
+	}
+}
+
+// The request log keeps an Info log for what needs attention: a fast success
+// (health probes, lease renewals, polling) is Debug; failures, refusals and
+// slow calls are Info; LogAll restores a line per call.
+func TestRequestLogLevels(t *testing.T) {
+	var buf strings.Builder
+	log := slog.New(slog.NewJSONHandler(&buf, nil)) // Info and above
+	run := func(cfg observe.InstrumentConfig, h func(context.Context, any) (any, error)) string {
+		buf.Reset()
+		cfg.Logger, cfg.ServiceName = log, "inventory"
+		ctx := transport.NewServerContext(context.Background(), tr{req: hdr{}, rep: hdr{}, kind: transport.KindGRPC})
+		_, _ = observe.Instrument(cfg)(h)(ctx, nil)
+		return buf.String()
+	}
+	ok := func(context.Context, any) (any, error) { return "ok", nil }
+	if out := run(observe.InstrumentConfig{}, ok); out != "" {
+		t.Fatalf("fast success must not reach an Info log: %s", out)
+	}
+	if out := run(observe.InstrumentConfig{}, func(context.Context, any) (any, error) { return nil, kerrors.Forbidden("denied", "") }); !strings.Contains(out, `"outcome":"authz_refused"`) {
+		t.Fatalf("refusal must be logged: %q", out)
+	}
+	if out := run(observe.InstrumentConfig{}, func(context.Context, any) (any, error) { return nil, errors.New("boom") }); !strings.Contains(out, `"outcome":"error"`) {
+		t.Fatalf("error must be logged: %q", out)
+	}
+	slow := func(context.Context, any) (any, error) { time.Sleep(5 * time.Millisecond); return "ok", nil }
+	if out := run(observe.InstrumentConfig{SlowCall: time.Millisecond}, slow); !strings.Contains(out, `"level":"INFO","msg":"request"`) {
+		t.Fatalf("slow success must be logged at Info: %q", out)
+	}
+	if out := run(observe.InstrumentConfig{LogAll: true}, ok); !strings.Contains(out, `"outcome":"ok"`) {
+		t.Fatalf("LogAll must log a fast success: %q", out)
+	}
+	t.Setenv("FREYA_REQUEST_LOG", "all")
+	if out := run(observe.InstrumentConfig{}, ok); !strings.Contains(out, `"outcome":"ok"`) {
+		t.Fatalf("FREYA_REQUEST_LOG=all must log a fast success: %q", out)
 	}
 }

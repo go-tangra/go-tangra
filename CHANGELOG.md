@@ -1,5 +1,17 @@
 # Changelog
 
+## 4.10.2 — a quieter request log
+
+### Changed
+
+- `observe.Instrument`: the per-call `request` line is logged at Debug for a
+  call that succeeded within `InstrumentConfig.SlowCall` (default 1 s), and
+  at Info for failures, refusals and slow calls. Health probes, lease
+  renewals and revocation polling were most of every module's log (about
+  80 % of prod lines). Metrics still count every call. Set
+  `FREYA_REQUEST_LOG=all` (or `InstrumentConfig.LogAll`) to log a line per
+  call at Info as before.
+
 ## 4.10.1 — a trust bundle change no longer strands modules
 
 ### Fixed
