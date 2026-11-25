@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -78,8 +79,17 @@ func (m *Metrics) AuditDropped(n int64) { m.dropped.Add(context.Background(), n)
 type InstrumentConfig struct {
 	Metrics     *Metrics
 	ServiceName string
-	// Logger receives one "request" line per call; nil disables the request log.
+	// Logger receives the per-call "request" line; nil disables the request log.
+	// A call that succeeded within SlowCall is logged at Debug, so health
+	// probes, lease renewals and polling stay out of an Info log; failures,
+	// refusals and slow calls are logged at Info.
 	Logger *slog.Logger
+	// SlowCall is the duration from which a successful call is logged at
+	// Info; zero means one second.
+	SlowCall time.Duration
+	// LogAll logs every call at Info (as before 4.10.2). The environment
+	// variable FREYA_REQUEST_LOG=all sets it for a running deployment.
+	LogAll bool
 	// Peer extracts the verified peer from the context (supplied by the transport
 	// package to avoid an import cycle with authn). nil = unknown.
 	Peer func(ctx context.Context) (service, spiffeID string, ok bool)
@@ -87,9 +97,15 @@ type InstrumentConfig struct {
 
 // Instrument records duration, outcome and refusal counters for every call and
 // writes the per-hop request log line (caller, callee, operation, outcome,
-// duration, correlation ID, trace ID). It runs before authn so refusals are
+// duration, correlation ID, trace ID) — at Debug for a fast success, at Info
+// otherwise (see InstrumentConfig.Logger). It runs before authn so refusals are
 // counted; the peer is read after the handler chain has run.
 func Instrument(cfg InstrumentConfig) middleware.Middleware {
+	logAll := cfg.LogAll || os.Getenv("FREYA_REQUEST_LOG") == "all"
+	slow := cfg.SlowCall
+	if slow <= 0 {
+		slow = time.Second
+	}
 	return func(next middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {
 			start := time.Now()
@@ -121,8 +137,12 @@ func Instrument(cfg InstrumentConfig) middleware.Middleware {
 					m.authz.Add(ctx, 1, metric.WithAttributes(attribute.String("peer", peerService), attribute.String("operation", op)))
 				}
 			}
-			if cfg.Logger != nil {
-				cfg.Logger.LogAttrs(ctx, slog.LevelInfo, "request",
+			level := slog.LevelInfo
+			if outcome == "ok" && dur < slow && !logAll {
+				level = slog.LevelDebug
+			}
+			if cfg.Logger != nil && cfg.Logger.Enabled(ctx, level) {
+				cfg.Logger.LogAttrs(ctx, level, "request",
 					slog.String("caller", peerService), slog.String("caller_id", peerID), slog.String("callee", cfg.ServiceName),
 					slog.String("operation", op), slog.String("outcome", outcome), slog.Float64("duration_ms", float64(dur)/1e6),
 					slog.String("correlation_id", CorrelationID(ctx)), slog.String("trace_id", TraceID(ctx)))
